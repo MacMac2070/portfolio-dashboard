@@ -211,6 +211,13 @@ export function direction(value) {
   return value > 0 ? "up" : "down";
 }
 
+/**
+ * Text arrows. No longer used by the chips — those draw lucide's trending-up /
+ * trending-down through a CSS mask keyed on their direction modifier, so the
+ * glyph never enters the DOM and cannot be clobbered by the in-place patch on
+ * the 3s poll. Kept because `direction()` returns these three keys and a
+ * text-only context (a title attribute, an aria-label) still needs a glyph.
+ */
 export const ARROW = { up: "↗", down: "↘", flat: "→" };
 
 /** "25 Jul 2026, 22:20" */

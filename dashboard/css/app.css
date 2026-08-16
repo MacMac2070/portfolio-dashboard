@@ -1038,6 +1038,37 @@
   font-variant-numeric: tabular-nums;
   font-feature-settings: var(--ff-tabular);
 }
+/* ---- price flash ----
+ * A tint behind the Current Price cell when the quote moves, fading out over
+ * 600ms. Only opacity animates: the tint is a pseudo-element, so nothing here
+ * touches layout or paints the cell's own background.
+ *
+ * `isolation: isolate` matters — it gives the cell its own stacking context so
+ * the z-index:-1 tint sits behind the digits but cannot fall behind the row,
+ * where the hover wash would swallow it. */
+.pstack__main { position: relative; isolation: isolate; }
+.pflash--up::after,
+.pflash--down::after {
+  content: "";
+  position: absolute;
+  inset: -3px -5px;
+  border-radius: 4px;
+  background: var(--flash-tint);
+  pointer-events: none;
+  z-index: -1;
+  animation: priceFlash 600ms var(--ease-spring);
+}
+.pflash--up { --flash-tint: var(--pos-bg); }
+.pflash--down { --flash-tint: var(--neg-bg); }
+
+@keyframes priceFlash { from { opacity: 1; } to { opacity: 0; } }
+
+/* The figure updates either way; only the flourish stands down. */
+@media (prefers-reduced-motion: reduce) {
+  .pflash--up::after,
+  .pflash--down::after { animation: none; opacity: 0; }
+}
+
 /* The currency CODE, not a figure — stays on the UI face with its letterspacing. */
 .pstack__ccy { font: 500 9px/1 var(--font-ui); letter-spacing: 0.07em; color: var(--text-muted); }
 .pstack__ret {
@@ -1129,8 +1160,13 @@
   font-variant-numeric: tabular-nums;
   font-feature-settings: var(--ff-tabular);
 }
-.dchip--up { color: var(--gain-soft); background: rgba(63, 165, 136, 0.13); }
-.dchip--down { color: var(--loss-soft); background: rgba(196, 100, 109, 0.14); }
+/* Tints come from the tokens rather than their own rgba(). They used to be
+ * hardcoded, and --loss-soft's tint had been left on the pre-AA-lift #C4626B
+ * long after the text colour moved off it — the two had silently drifted
+ * apart. Pointing both at --pos-bg / --neg-bg means they cannot drift again,
+ * and it is what gives these chips a light-mode value. */
+.dchip--up { color: var(--gain-soft); background: var(--pos-bg); }
+.dchip--down { color: var(--loss-soft); background: var(--neg-bg); }
 .dchip--flat { color: var(--text-muted); background: rgba(255, 255, 255, 0.06); }
 
 .hempty {
@@ -1584,8 +1620,12 @@
   color: var(--text-faint);
 }
 
-/* Sparklines take the softer pair here, as the design does locally, so the line
- * sits with the delta chips instead of shouting over them. */
+/* This used to re-point --pos/--neg at the softer --gain-soft/--loss-soft pair
+ * so the line sat with the delta chips instead of shouting over them. There is
+ * one P&L pair now and --gain-soft is itself an alias of --pos, so the override
+ * is not merely redundant — it would be a custom-property cycle, which CSS
+ * treats as invalid and which would leave these sparklines with no stroke at
+ * all. Only the --flat softening is still doing work. */
 /* The svg is taken out of flow on purpose. A percentage-height SVG inside a
  * flex item with an `auto` basis makes the item's height depend on the svg and
  * the svg's on the item; the browser resolves that by thrashing layout until
@@ -1596,8 +1636,6 @@
   display: block;
   flex: 1 1 auto;
   min-height: 28px;
-  --pos: var(--gain-soft);
-  --neg: var(--loss-soft);
   --flat: var(--text-faint);
 }
 .mspark svg { position: absolute; inset: 0; width: 100%; height: 100%; }

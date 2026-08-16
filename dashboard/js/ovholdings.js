@@ -34,8 +34,37 @@ let structureKey = "";   // the set of positions currently rendered
 
 const dirColor = (v) => (v > 0 ? "var(--gain-soft)" : v < 0 ? "var(--loss-soft)" : "var(--text-muted)");
 
+/** Writes only on change, and reports whether it wrote — the flash below keys
+ *  off that, so a poll that returns an unchanged price stays visually silent. */
 function setText(node, value) {
-  if (node && node.textContent !== value) node.textContent = value;
+  if (!node || node.textContent === value) return false;
+  node.textContent = value;
+  return true;
+}
+
+/* ---------------- price flash ----------------
+ *
+ * Adapted from shadcn-fintech's holdings-table.tsx, which flashes the Current
+ * Price cell on every tick with a Motion span keyed by `${id}-${price}`.
+ *
+ * Two differences here. There is no key to change, so the animation is
+ * restarted by removing the class and forcing a reflow before re-adding it.
+ * And the tint animates as the OPACITY of a pseudo-element sitting behind the
+ * text, not as background-color on the cell — this codebase animates transform
+ * and opacity only, and opacity is the compositor-friendly half of that rule.
+ *
+ * Direction needs the previous price, which the payload does not carry, so it
+ * is remembered per contract. Keyed on con_id rather than symbol because that
+ * is what the row is addressed by everywhere else in this file.
+ */
+const lastPrice = new Map();
+const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+function flash(node, dir) {
+  if (!node || reduceMotion.matches) return;
+  node.classList.remove("pflash--up", "pflash--down");
+  void node.offsetWidth;                 // reflow, so the animation re-fires
+  node.classList.add(`pflash--${dir}`);
 }
 
 /** Static labels, not buttons: this table has no sort. */
@@ -110,7 +139,16 @@ function patch(host, rows) {
 
     const cells = row.querySelectorAll(".pstack");
     // 1: last price + currency, 2: qty + avg cost, 3: value + cost, 4: P/L + return
-    setText(cells[0]?.querySelector(".pstack__main"), price(r.price));
+    const priceCell = cells[0]?.querySelector(".pstack__main");
+    const prev = lastPrice.get(r.con_id);
+    if (Number.isFinite(r.price)) lastPrice.set(r.con_id, r.price);
+    // Flash only on a real move. `wrote` alone is not enough: price() rounds,
+    // so a sub-precision tick can leave the text identical, and the first
+    // patch after a rebuild has no previous price to compare against.
+    if (setText(priceCell, price(r.price))
+        && Number.isFinite(prev) && Number.isFinite(r.price) && r.price !== prev) {
+      flash(priceCell, r.price > prev ? "up" : "down");
+    }
 
     const chip = row.querySelector(".dchip");
     if (chip) {

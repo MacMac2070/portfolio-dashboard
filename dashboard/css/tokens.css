@@ -68,6 +68,20 @@
   --tracking-label:  0.09em;
   --leading-body: 1.7;
 
+  /* ---- trend icons ----
+   * lucide's trending-up / trending-down, inlined as data URIs and drawn
+   * through a CSS mask rather than as markup. Two reasons for the mask:
+   * `background-color: currentColor` makes them inherit the chip's P&L colour
+   * with no second place to keep in sync, and they need no DOM node — the
+   * delta chips are patched in place on a 3s poll through a textContent guard
+   * (see ovholdings.patch), and an element child inside the chip would be
+   * wiped on every tick.
+   *
+   * stroke-width is 2.5 rather than lucide's native 2: these render at 11px
+   * from a 24px viewBox, where a 2 would scale to 0.92px and go muddy. */
+  --icon-trend-up: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 7h6v6'/%3E%3Cpath d='m22 7-8.5 8.5-5-5L2 17'/%3E%3C/svg%3E");
+  --icon-trend-down: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 17h6v-6'/%3E%3Cpath d='m22 17-8.5-8.5-5 5L2 7'/%3E%3C/svg%3E");
+
   /* ---- layout ---- */
   --sidebar-w: 260px;
   --content-pad: 32px;
@@ -139,11 +153,21 @@
   --text-faint:    #828D9B;
   --text-disabled: #788391;   /* lifted for AA — see note above */
 
-  --gain-soft: #3FA588;
-  --loss-soft: #c76d75;       /* lifted for AA — see note above */
+  /* Gain and loss, on the Holdings/stock/market surfaces.
+   *
+   * These used to be their own hexes (#3FA588 / #c76d75), a softer pair than
+   * Overview's. There are no longer two P&L palettes: one convention reads the
+   * same wherever you meet a figure, and a person should not have to learn that
+   * the green on Overview and the green on the stock page mean the same thing.
+   * So these are now aliases, and --pos/--neg in the theme blocks below are the
+   * single source of truth. They also gain a light-mode value for free, which
+   * as their own hexes they never had. */
+  --gain-soft: var(--pos);
+  --loss-soft: var(--neg);
   /* The neutral of that pair: the analyst "Hold" bar, and anything else that is
-   * neither a gain nor a loss. A token because it sits beside the two above in
-   * the same chart and has to theme with them. */
+   * neither a gain nor a loss. Not a P&L colour, so it keeps its own hex — it
+   * only has to stay distinct from the two above, which violet against emerald
+   * and rose comfortably is. */
   --hold-soft: #8A7BC8;
 
   /* Statement trend series. Three hues in one lightness band, so they separate
@@ -186,11 +210,22 @@
   --brand-pale:   #c0adf4;
   --brand-glow:   rgba(124, 85, 232, 0.45);
 
-  --pos:          #16c784;
-  --neg:          #eb4650;   /* reference #ea3943 +3% L: AA on chip too */
+  /* P&L. Tailwind emerald-400 / rose-400, from the shadcn-fintech reference.
+   * Measured against every surface they land on here — --bg-page, --surface,
+   * --ink-panel, --surface-2, --ink-raised — they run 9.22-10.19:1 and
+   * 6.59-7.28:1, comfortably past AA and better than the pair they replace
+   * (#16c784 at 8.05-8.89, #eb4650 at 4.66-5.15, the latter only just clearing
+   * on the darkest surface).
+   *
+   * Reserved for P&L alone. The brand violet stays on nav, brand and chart
+   * line colour; these two never appear as decoration. */
+  --pos:          #34d399;   /* emerald-400 */
+  --neg:          #fb7185;   /* rose-400    */
   --flat:         #7a8490;
-  --pos-bg:       rgba(22, 199, 132, 0.13);
-  --neg-bg:       rgba(234, 57, 67, 0.14);
+  /* Chip tints, composited over the card beneath. Text-on-own-chip measures
+   * 7.40-7.78:1 (gain) and 5.48-5.79:1 (loss). */
+  --pos-bg:       rgba(52, 211, 153, 0.13);
+  --neg-bg:       rgba(251, 113, 133, 0.14);
 
   /* layered, colour-tinted elevation — never a flat drop shadow */
   --shadow-card:
@@ -228,12 +263,24 @@
   --brand-pale:   #5a2fd0;
   --brand-glow:   rgba(102, 53, 224, 0.28);
 
-  /* darkened so both still clear WCAG AA on a white surface */
-  --pos:          #087c50;   /* AA on white 5.24 and on its chip 4.62 */
-  --neg:          #c8202c;
+  /* Light mode takes emerald/rose one stop darker than the reference's -600.
+   * Measured, -600 does not clear AA here: emerald-600 #059669 lands at
+   * 3.77 / 3.60 / 3.48 on --surface / --surface-2 / --bg-page, and rose-600
+   * #e11d48 at 4.70 / 4.49 / 4.34 — so both fail on at least one real surface,
+   * and both fail again on their own chip (3.33 and 4.00).
+   *
+   * -700 clears everywhere text actually sits: 5.07-5.48 and 5.81-6.29 on the
+   * surfaces, 4.55-4.78 and 5.07-5.28 on the chips. Same hue, minimum lift —
+   * the practice this file already applies to --text-disabled.
+   *
+   * (emerald-700 on a chip over --bg-page measures 4.41, but no chip lands
+   * there: every .chip and .dchip sits inside a card, on --surface or
+   * --surface-2.) */
+  --pos:          #047857;   /* emerald-700 */
+  --neg:          #be123c;   /* rose-700    */
   --flat:         #5b6673;
-  --pos-bg:       rgba(8, 124, 80, 0.10);
-  --neg-bg:       rgba(200, 32, 44, 0.10);
+  --pos-bg:       rgba(4, 120, 87, 0.10);
+  --neg-bg:       rgba(190, 18, 60, 0.10);
 
   --cat-1: #2f6fd0; --cat-2: #b87816; --cat-3: #12855f;
   --cat-4: #7343c9; --cat-5: #1c7f8c; --cat-6: #bc3a5c; --cat-7: #566070;
@@ -260,8 +307,8 @@
     --text: #10141a; --text-2: #5b6673; --text-3: #6c7785;
     --brand: #6635e0; --brand-soft: #7c55e8; --brand-pale: #5a2fd0;
     --brand-glow: rgba(102,53,224,.28);
-    --pos: #087c50; --neg: #c8202c; --flat: #5b6673;
-    --pos-bg: rgba(8,124,80,.10); --neg-bg: rgba(200,32,44,.10);
+    --pos: #047857; --neg: #be123c; --flat: #5b6673;
+    --pos-bg: rgba(4,120,87,.10); --neg-bg: rgba(190,18,60,.10);
     --cat-1: #2f6fd0; --cat-2: #b87816; --cat-3: #12855f;
     --cat-4: #7343c9; --cat-5: #1c7f8c; --cat-6: #bc3a5c; --cat-7: #566070;
     --shadow-card: 0 1px 2px rgba(16,20,26,.06), 0 4px 12px rgba(16,20,26,.05);

@@ -7,7 +7,7 @@
 
 import {
   money, moneyCompact, moneySigned, pctSigned, pct, qty,
-  direction, ARROW, stamp, clock, initials,
+  direction, stamp, clock, initials,
 } from "./format.js";
 import { sparkline, donut, equityCurve, countUp } from "./charts.js";
 import * as holdings from "./holdings.js";
@@ -107,8 +107,10 @@ function paintChip(node, value, { digits = 2 } = {}) {
   if (!node) return;
   const dir = direction(value);
   node.className = `chip kpi__chip chip--${dir === "up" ? "pos" : dir === "down" ? "neg" : "flat"}`;
+  // The arrow is drawn by CSS from a masked lucide icon keyed on the chip's
+  // direction modifier, so the span is an empty box rather than a glyph.
   node.innerHTML =
-    `<span class="chip__arrow" aria-hidden="true">${ARROW[dir]}</span>` +
+    `<i class="chip__arrow" aria-hidden="true"></i>` +
     `<span>${pctSigned(value, digits)}</span>`;
 }
 
@@ -230,7 +232,7 @@ function moverRow(p) {
       <span class="mover__ticker">${p.symbol}</span>
       <svg class="mover__spark" data-spark="${p.con_id}" aria-hidden="true"></svg>
       <span class="chip ${chipClass} mover__chip">
-        <span class="chip__arrow" aria-hidden="true">${ARROW[dir]}</span>${pctSigned(p.day_change_pct)}
+        <i class="chip__arrow" aria-hidden="true"></i>${pctSigned(p.day_change_pct)}
       </span>
     </div>`;
 }
@@ -358,7 +360,7 @@ function applyLive(data) {
       const chip = row.querySelector(".mover__chip");
       setClass(chip, `chip chip--${cls(dir)} mover__chip`);
       chip.innerHTML =
-        `<span class="chip__arrow" aria-hidden="true">${ARROW[dir]}</span>${pctSigned(p.day_change_pct)}`;
+        `<i class="chip__arrow" aria-hidden="true"></i>${pctSigned(p.day_change_pct)}`;
     }
   }
 

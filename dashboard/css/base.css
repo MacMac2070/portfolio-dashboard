@@ -85,11 +85,34 @@ svg { display: block; }
 }
 
 /* ---------- gain / loss ----------
- * Colour is never the only signal: .delta always renders a sign, and .chip
- * additionally renders a directional arrow. */
+ * Colour is never the only signal: every figure carries its sign, baked in by
+ * moneySigned/pctSigned in format.js, and the chips additionally carry a
+ * lucide trend icon. Emerald and rose are the P&L pair app-wide; the brand
+ * violet is never used to mean up or down. */
 .pos { color: var(--pos); }
 .neg { color: var(--neg); }
 .flat { color: var(--flat); }
+
+/* The trend glyph, shared by .chip__arrow and the .dchip families. Masked so
+ * it takes the chip's own colour from currentColor. --trend-icon is set by the
+ * direction modifier; where none is set the box collapses, which is what makes
+ * the flat state iconless without a separate rule per chip type. */
+.chip__arrow,
+.dchip--up::before,
+.dchip--down::before {
+  content: "";
+  width: 11px;
+  height: 11px;
+  flex: none;
+  background-color: currentColor;
+  -webkit-mask: var(--trend-icon) center / contain no-repeat;
+  mask: var(--trend-icon) center / contain no-repeat;
+}
+.chip--pos, .dchip--up { --trend-icon: var(--icon-trend-up); }
+.chip--neg, .dchip--down { --trend-icon: var(--icon-trend-down); }
+/* Flat is neither: the em dash or the 0.00% carries it, and an arrow pointing
+ * sideways would be inventing a direction the data does not have. */
+.chip--flat .chip__arrow { display: none; }
 
 .chip {
   display: inline-flex;
@@ -105,7 +128,6 @@ svg { display: block; }
 .chip--pos { color: var(--pos); background: var(--pos-bg); }
 .chip--neg { color: var(--neg); background: var(--neg-bg); }
 .chip--flat { color: var(--flat); background: rgba(122, 132, 144, 0.12); }
-.chip__arrow { font-size: 11px; line-height: 1; }
 
 /* ---------- skeleton ---------- */
 
