@@ -266,12 +266,16 @@
 .kpi__label svg { width: 15px; height: 15px; color: var(--text-3); flex: none; }
 
 .kpi__value {
-  font-family: var(--font-display);
+  font-family: var(--font-figure);
   font-weight: 700;
   font-size: var(--t-kpi);
-  letter-spacing: var(--tracking-tight);
+  /* Monospace is already generously spaced; the display face's −0.03em was
+   * closing gaps this face does not have. Half of it keeps the tile compact
+   * without fusing the digits. */
+  letter-spacing: -0.015em;
   line-height: 1.05;
   font-variant-numeric: tabular-nums;
+  font-feature-settings: var(--ff-tabular);
 }
 
 .kpi__chip { align-self: flex-start; }
@@ -353,7 +357,13 @@
 .plot svg { width: 100%; height: 100%; display: block; }
 
 .plot__grid { stroke: var(--border); stroke-width: 1; }
-.plot__axis { fill: var(--text-3); font-size: 10px; font-variant-numeric: tabular-nums; }
+.plot__axis {
+  fill: var(--text-3);
+  font-family: var(--font-figure);
+  font-size: 9.5px;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: var(--ff-tabular);
+}
 .plot__line { fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
 /* draw-on: transform/opacity only via stroke-dashoffset on a transform-safe prop */
@@ -377,12 +387,13 @@
 }
 .chart-card__stat { display: grid; gap: 2px; }
 .chart-card__stat b {
-  font-family: var(--font-display);
-  font-size: clamp(17px, 2.5vh, 26px);
+  font-family: var(--font-figure);
+  font-size: clamp(15.5px, 2.3vh, 24px);
   font-weight: 700;
-  letter-spacing: var(--tracking-tight);
+  letter-spacing: -0.015em;
   line-height: 1.15;
   font-variant-numeric: tabular-nums;
+  font-feature-settings: var(--ff-tabular);
 }
 
 /* "collecting history" — shown until the daily job has enough points */
@@ -439,12 +450,13 @@
 .alloc:has(.donut__seg:hover) .donut__seg:not(:hover) { opacity: 0.45; }
 
 .donut__value {
-  font-family: var(--font-display);
+  font-family: var(--font-figure);
   font-size: var(--t-donut);
   font-weight: 700;
-  letter-spacing: var(--tracking-tight);
+  letter-spacing: -0.015em;
   fill: var(--text);
   font-variant-numeric: tabular-nums;
+  font-feature-settings: var(--ff-tabular);
 }
 .donut__caption { fill: var(--text-2); font-size: 13px; }
 
@@ -464,15 +476,18 @@
 .legend__dot { width: 10px; height: 10px; border-radius: 3px; }
 .legend__name { font-size: clamp(12px, 1.85vh, 16px); color: var(--text); line-height: 1.3; }
 .legend__pct {
-  font-size: clamp(11px, 1.6vh, 14px);
+  font-family: var(--font-figure);
+  font-size: clamp(10.5px, 1.5vh, 13px);
   color: var(--text-2);
   font-variant-numeric: tabular-nums;
+  font-feature-settings: var(--ff-tabular);
 }
 .legend__val {
-  font-family: var(--font-display);
+  font-family: var(--font-figure);
   font-weight: 600;
-  font-size: clamp(12px, 1.85vh, 16px);
+  font-size: clamp(11.5px, 1.75vh, 15px);
   font-variant-numeric: tabular-nums;
+  font-feature-settings: var(--ff-tabular);
   text-align: right;
   min-width: 86px;
 }
@@ -567,16 +582,19 @@
 .ccy__code { font-size: clamp(12px, 1.8vh, 16px); font-weight: 500; color: var(--text-2); }
 .ccy__pct {
   justify-self: end;
-  font-size: clamp(11px, 1.7vh, 14px);
+  font-family: var(--font-figure);
+  font-size: clamp(10.5px, 1.6vh, 13px);
   color: var(--text-2);
   font-variant-numeric: tabular-nums;
+  font-feature-settings: var(--ff-tabular);
 }
 .ccy__val {
-  font-family: var(--font-display);
+  font-family: var(--font-figure);
   font-weight: 700;
-  font-size: clamp(13px, 2.1vh, 17px);
-  letter-spacing: var(--tracking-tight);
+  font-size: clamp(12px, 1.95vh, 16px);
+  letter-spacing: -0.015em;
   font-variant-numeric: tabular-nums;
+  font-feature-settings: var(--ff-tabular);
 }
 
 .bar { height: clamp(3px, 0.6vh, 5px); border-radius: var(--r-pill); background: var(--track); overflow: hidden; }
@@ -612,12 +630,13 @@
 .conc__row:first-child { border-top: 0; }
 .conc__label { font-size: clamp(11px, 1.7vh, 15px); color: var(--text-2); line-height: 1.2; }
 .conc__value {
-  font-family: var(--font-display);
+  font-family: var(--font-figure);
   font-weight: 700;
-  font-size: clamp(14px, 2.15vh, 24px);
+  font-size: clamp(13px, 2vh, 22px);
   line-height: 1.15;
-  letter-spacing: var(--tracking-tight);
+  letter-spacing: -0.015em;
   font-variant-numeric: tabular-nums;
+  font-feature-settings: var(--ff-tabular);
   text-align: right;
 }
 .conc__value--brand { color: var(--brand-pale); }
@@ -693,7 +712,7 @@
 }
 .sector-pill[aria-current="page"] .sector-pill__rule { background: rgba(160, 136, 255, 0.5); }
 .sector-pill__day {
-  font: 700 10.5px/1 var(--font-display);
+  font: 600 10px/1 var(--font-figure);
   letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
 }
@@ -754,18 +773,20 @@
   white-space: nowrap;
 }
 .hstat__value {
-  font: 800 26px/1 var(--font-display);
-  letter-spacing: -0.038em;
+  font: 700 23px/1 var(--font-figure);
+  letter-spacing: -0.02em;
   color: #f5f7fa;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+  font-feature-settings: var(--ff-tabular);
 }
 .hstat__row { display: flex; align-items: center; gap: 9px; }
 .hstat__figure {
-  font: 700 21px/1 var(--font-display);
-  letter-spacing: -0.032em;
+  font: 700 19px/1 var(--font-figure);
+  letter-spacing: -0.018em;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+  font-feature-settings: var(--ff-tabular);
 }
 
 /* ---- breadth strip ---- */
@@ -798,9 +819,10 @@
 .breadth__rule { width: 1px; height: 13px; flex: none; background: rgba(255, 255, 255, 0.09); }
 .breadth__item { font: 500 10.5px/1 var(--font-ui); color: var(--text-muted); white-space: nowrap; }
 .breadth__figure {
-  font: 700 11px/1 var(--font-display);
-  letter-spacing: -0.02em;
+  font: 600 10.5px/1 var(--font-figure);
+  letter-spacing: -0.005em;
   font-variant-numeric: tabular-nums;
+  font-feature-settings: var(--ff-tabular);
 }
 .breadth__tk { font: 700 11px/1 var(--font-ui); letter-spacing: 0.03em; color: var(--text-primary); }
 .breadth__note {
@@ -996,26 +1018,38 @@
 
 .pstack { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; white-space: nowrap; }
 .pstack--wide { gap: 3px; }
+/* 12.5px rather than the display face's 13px: Geist Mono runs wider per glyph,
+ * and the widest real cell (`4,134.00`) has to clear column 3 unchanged. */
 .pstack__main {
-  font: 700 13px/1 var(--font-display);
-  letter-spacing: -0.025em;
+  font: 600 12.5px/1 var(--font-figure);
+  letter-spacing: -0.01em;
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
+  font-feature-settings: var(--ff-tabular);
 }
-.pstack__main--lg { font-size: 13.5px; letter-spacing: -0.028em; }
-.pstack__main--body { font-size: 12.5px; letter-spacing: -0.022em; color: var(--text-body); }
+.pstack__main--lg { font-size: 13px; letter-spacing: -0.012em; }
+.pstack__main--body { font-size: 12px; letter-spacing: -0.008em; color: var(--text-body); }
+/* The sub-line carries figures too — the average cost and the cost basis — so
+ * it takes the figure face like the main line above it. 9px rather than 9.5:
+ * mono is wider, and this line sits under the widest cell in the row. */
 .pstack__sub {
-  font: 500 9.5px/1 var(--font-ui);
+  font: 400 9px/1 var(--font-figure);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
+  font-feature-settings: var(--ff-tabular);
 }
+/* The currency CODE, not a figure — stays on the UI face with its letterspacing. */
 .pstack__ccy { font: 500 9px/1 var(--font-ui); letter-spacing: 0.07em; color: var(--text-muted); }
-.pstack__ret { font: 600 9.5px/1 var(--font-ui); font-variant-numeric: tabular-nums; }
+.pstack__ret {
+  font: 500 9px/1 var(--font-figure);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: var(--ff-tabular);
+}
 
 .pweight {
   text-align: right;
-  font: 600 12.5px/1 var(--font-display);
-  letter-spacing: -0.022em;
+  font: 500 12px/1 var(--font-figure);
+  letter-spacing: -0.008em;
   color: var(--text-body);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
@@ -1026,8 +1060,8 @@
    sign carries the direction so it is never colour alone. */
 .pdaypl {
   text-align: right;
-  font: 600 12.5px/1 var(--font-display);
-  letter-spacing: -0.022em;
+  font: 500 12px/1 var(--font-figure);
+  letter-spacing: -0.008em;
   font-variant-numeric: tabular-nums;
   font-feature-settings: var(--ff-tabular);
 }
@@ -1090,9 +1124,10 @@
   gap: 3px;
   padding: 2px 6px;
   border-radius: 5px;
-  font: 700 10.5px/1 var(--font-display);
-  letter-spacing: -0.01em;
+  font: 600 10px/1 var(--font-figure);
+  letter-spacing: 0;
   font-variant-numeric: tabular-nums;
+  font-feature-settings: var(--ff-tabular);
 }
 .dchip--up { color: var(--gain-soft); background: rgba(63, 165, 136, 0.13); }
 .dchip--down { color: var(--loss-soft); background: rgba(196, 100, 109, 0.14); }
@@ -1171,7 +1206,13 @@
 }
 .tip[data-open="true"] { display: block; }
 .tip__date { color: var(--text-2); font-size: 12px; }
-.tip__val { font-family: var(--font-display); font-weight: 700; font-size: 15px; }
+.tip__val {
+  font-family: var(--font-figure);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: -0.015em;
+  font-feature-settings: var(--ff-tabular);
+}
 
 /* ============ responsive ============ */
 
@@ -2381,7 +2422,7 @@ a.prow--pos:active { background: rgba(124, 85, 232, 0.18); }
 .fintable tbody th[data-indent="1"] { padding-left: 24px; }
 .fintable td {
   text-align: right;
-  font: 600 11.5px/1.3 var(--font-figure); letter-spacing: -0.018em;
+  font: 500 11px/1.3 var(--font-figure); letter-spacing: -0.005em;
   color: var(--text-body);
 }
 .fintable tr[data-emphasis="0"] th { color: var(--text-primary); font-weight: 600; }

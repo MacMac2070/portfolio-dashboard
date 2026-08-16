@@ -178,7 +178,14 @@ export function equityCurve(svg, points, { tooltip, formatValue, formatDate } = 
   const h = Math.max(90, Math.round(box.height) || 260);
 
   // Chrome enough for labels, but proportionally less when the plot is short.
-  const padL = 52, padR = 12;
+  //
+  // padL sizes the y-label gutter. The labels are monospace now (--font-figure,
+  // 9.5px, ~5.7px per glyph) and right-anchored at padL - 8, so the gutter has
+  // to fit the widest label the axis can ever print. At 52 that was 44px of
+  // usable space: "£55,073" fits at 39.9px, but "£100,000" would not, and this
+  // axis auto-scales with the portfolio. 60 buys room to "£1,000,000" and costs
+  // 8px of plot width.
+  const padL = 60, padR = 12;
   const padT = Math.min(14, h * 0.06);
   const padB = Math.min(26, h * 0.12) + 10;
 
@@ -330,7 +337,11 @@ export function priceChart(svg, {
   const w = Math.max(320, Math.round(box.width) || 780);
   const h = Math.max(120, Math.round(box.height) || 292);
 
-  const padL = 54, padR = 14;
+  // Same monospace-gutter arithmetic as equityCurve above. The widest label
+  // this axis prints is a four-figure native price with a two-glyph symbol —
+  // "HK$4,296" at 45.6px — which left 0.4px of clearance in the old 46px
+  // gutter. 60 restores a real margin.
+  const padL = 60, padR = 14;
   const padT = Math.min(16, h * 0.06);
   const padB = Math.min(26, h * 0.1) + 12;
 

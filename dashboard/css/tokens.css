@@ -29,11 +29,22 @@
   --font-display: "Archivo", "Inter", system-ui, sans-serif;
   --font-body: "Inter", system-ui, -apple-system, sans-serif;
 
-  /* The figure face. Archivo like --font-display, but a separate token because
-   * it is a separate job: --font-display sets titles and prose headings, this
-   * sets numbers. They coincide today; a future change to heading type must not
-   * silently re-cut every price on the screen. Always pair with --ff-tabular. */
-  --font-figure: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  /* The figure face. A separate token from --font-display because it is a
+   * separate job: --font-display sets titles and prose headings, this sets
+   * numbers. They used to coincide; they no longer do, which is precisely the
+   * split this token existed to make possible.
+   *
+   * Geist Mono, from the shadcn-fintech reference. Monospace is the strongest
+   * available guarantee of column alignment: every glyph is one advance wide,
+   * including the currency symbols and the U+2212 minus that format.js emits —
+   * neither of which proportional tabular figures cover. Still paired with
+   * --ff-tabular, because the lining-figures half of that token is not implied
+   * by monospacing.
+   *
+   * This face is wider per glyph than Archivo was at the same size. Where a
+   * figure had to fit a fixed column, the size was re-tuned rather than the
+   * column widened — see .kpi__value and .pstack__main. */
+  --font-figure: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
   /* Tabular, lining figures. `font-variant-numeric: tabular-nums` alone leaves
    * old-style figures on faces that default to them, so the raw features are
