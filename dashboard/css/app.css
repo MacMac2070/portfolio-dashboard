@@ -1,0 +1,2517 @@
+/* Layout and components.
+ * Proportions measured from Design.pdf: sidebar 384/2119 of width, KPI columns
+ * 1.71:1:1:1:1, mid row 1.05:1, bottom row 1.3:1:1.
+ */
+
+/* ============ shell ============ */
+
+/* The Overview is viewport-locked rather than a document that flows: the whole
+ * dashboard reads at once, as it does on the reference sheet. Design.pdf is one
+ * tall page with no viewport, so reproducing it at 1:1 needs 1349px of height
+ * against a real 801px browser — the rows therefore take the reference's
+ * proportions as fr units and the type scales with vh.
+ *
+ * `min-height: 0` appears on every level of this chain deliberately. Grid and
+ * flex children default to min-height:auto and refuse to shrink below their
+ * content, which makes the whole fit silently fail and the page scroll again. */
+.shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ============ sidebar ============ */
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+  padding: var(--s-5) var(--s-4);
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: 0 var(--s-2) 0 var(--s-1);
+}
+
+.brand__mark {
+  display: grid;
+  place-items: center;
+  width: 34px; height: 34px;
+  border-radius: var(--r-md);
+  background: linear-gradient(150deg, var(--brand-soft), var(--brand));
+  color: #fff;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 16px;
+  box-shadow: 0 2px 10px var(--brand-glow);
+}
+
+.brand__name { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+
+.brand__collapse {
+  margin-left: auto;
+  display: grid; place-items: center;
+  width: 28px; height: 28px;
+  border-radius: var(--r-sm);
+  color: var(--text-3);
+  transition: color var(--dur-fast) var(--ease-spring),
+              background-color var(--dur-fast) var(--ease-spring);
+}
+.brand__collapse:hover { color: var(--text); background: var(--border); }
+.brand__collapse:active { transform: scale(0.94); }
+
+.nav-group { display: grid; gap: 2px; }
+.nav-group__label { padding: 0 var(--s-3) var(--s-2); }
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: 9px var(--s-3);
+  border-radius: var(--r-md);
+  color: var(--text-2);
+  font-size: var(--t-body);
+  font-weight: 500;
+  transition: color var(--dur-fast) var(--ease-spring),
+              background-color var(--dur-fast) var(--ease-spring),
+              transform var(--dur-fast) var(--ease-spring);
+}
+.nav-item svg { width: 18px; height: 18px; flex: none; }
+.nav-item:hover { color: var(--text); background: rgba(255, 255, 255, 0.045); }
+.nav-item:active { transform: translateX(1px); }
+
+.nav-item[aria-current="page"] {
+  color: #fff;
+  background: linear-gradient(180deg, var(--brand-soft), var(--brand));
+  box-shadow: 0 2px 12px var(--brand-glow);
+}
+
+.sidebar__foot { margin-top: auto; display: grid; gap: 2px; }
+
+/* ============ main ============ */
+
+.main {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--s-5);
+  padding: var(--s-4) var(--content-pad) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.tabs { display: flex; gap: var(--s-5); }
+
+.tab {
+  position: relative;
+  padding: var(--s-2) 0 14px;
+  color: var(--text-2);
+  font-size: 15px;
+  font-weight: 500;
+  transition: color var(--dur-fast) var(--ease-spring);
+}
+.tab::after {
+  content: "";
+  position: absolute; inset: auto 0 -1px;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--brand-soft);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--dur-mid) var(--ease-spring);
+}
+.tab:hover { color: var(--text); }
+.tab[aria-selected="true"] { color: var(--text); font-weight: 600; }
+.tab[aria-selected="true"]::after { transform: scaleX(1); }
+
+.topbar__meta {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  padding-bottom: 14px;
+}
+
+.feed {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.feed__dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--pos);
+  box-shadow: 0 0 0 3px rgba(22, 199, 132, 0.16);
+}
+.feed[data-state="stale"] .feed__dot { background: var(--neg); box-shadow: 0 0 0 3px var(--neg-bg); }
+.feed[data-state="stale"] { color: var(--neg); }
+
+.venue-chip {
+  padding: 5px var(--s-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--text-2);
+}
+
+.views {
+  flex: 1;
+  min-height: 0;
+  padding: var(--s-4) var(--content-pad);
+}
+.view[hidden] { display: none; }
+
+/* Reference row proportions, measured off Design.pdf:
+ * KPI 19.6% · chart+allocation 46.9% · bottom row 33.5%
+ *
+ * `:not([hidden])` is load-bearing. An id selector outranks `.view[hidden]`,
+ * so a bare `#view-overview { display: grid }` wins over the hide rule and the
+ * tab refuses to close — Overview and Holdings then render stacked. */
+/* The view scrolls; `.ov-screen` is the viewport-locked screenful inside it.
+ * The grid moved down one level so the fr tracks still resolve against exactly
+ * one screen — an extra track here, explicit or implicit, would have taken its
+ * share out of the same 100% and shrunk all three rows.
+ *
+ * The scrollbar is hidden rather than styled, which is the opposite of what
+ * #view-stock and #view-financials do — and the reason is measured, not
+ * stylistic. A classic scrollbar takes 15px out of the content box here, and
+ * every card above the fold then reflows narrower: the KPI row went 1146 ->
+ * 1131 in testing. This screen has to look exactly as it did before it could
+ * scroll at all, so the bar goes and `.ov-cue` carries the affordance instead.
+ * Wheel, trackpad, keyboard and scrollIntoView all still work. */
+#view-overview:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  gap: var(--row-gap);
+  scrollbar-width: none;          /* Firefox */
+}
+#view-overview::-webkit-scrollbar { width: 0; height: 0; }
+
+.ov-screen {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-rows: 1.96fr 4.69fr 3.35fr;
+  gap: var(--row-gap);
+  height: 100%;
+  min-height: 0;
+}
+.ov-screen > * { min-height: 0; }
+
+/* The banner is out of flow when hidden, so it must not claim a grid row. */
+.ov-screen > .stale-banner { display: none; }
+[data-state="stale"] .ov-screen {
+  grid-template-rows: auto 1.96fr 4.69fr 3.35fr;
+}
+[data-state="stale"] .ov-screen > .stale-banner { display: flex; margin-bottom: 0; }
+
+#view-holdings:not([hidden]),
+#view-transactions:not([hidden]),
+#view-market:not([hidden]),
+#view-stock:not([hidden]),
+#view-financials:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+#view-holdings .hgroup { flex: 1; min-height: 0; }
+
+/* ============ KPI row ============ */
+
+.kpi-row {
+  display: grid;
+  grid-template-columns: 1.71fr repeat(4, 1fr);
+  gap: var(--grid-gap);
+  min-height: 0;
+}
+
+.kpi {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: var(--s-2);
+  min-height: 0;
+  padding: var(--s-4);
+  overflow: hidden;
+}
+
+.kpi__label {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.kpi__label svg { width: 15px; height: 15px; color: var(--text-3); flex: none; }
+
+.kpi__value {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--t-kpi);
+  letter-spacing: var(--tracking-tight);
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpi__chip { align-self: flex-start; }
+
+.kpi--hero {
+  background: var(--surface-2);
+  border-color: rgba(124, 85, 232, 0.42);
+  box-shadow: var(--shadow-hero);
+}
+.kpi--hero .kpi__value { font-size: var(--t-hero); }
+
+/* ============ mid row ============ */
+
+.mid-row {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  gap: var(--grid-gap);
+  min-height: 0;
+}
+.mid-row > * { min-height: 0; }
+
+.card__head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  padding: clamp(10px, 1.6vh, 16px) var(--s-5) 0;
+  flex: none;
+}
+.card__head .card-title, .card__head .eyebrow { margin-right: auto; }
+
+.link-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--t-body);
+  color: var(--text-2);
+  transition: color var(--dur-fast) var(--ease-spring);
+}
+.link-all:hover { color: var(--text); }
+.link-all span { transition: transform var(--dur-fast) var(--ease-spring); }
+.link-all:hover span { transform: translateX(3px); }
+
+/* ---- range switch ---- */
+
+.ranges { display: flex; gap: var(--s-1); }
+
+.range {
+  padding: 5px 11px;
+  border-radius: var(--r-sm);
+  font-size: var(--t-sm);
+  font-weight: 500;
+  color: var(--text-2);
+  transition: color var(--dur-fast) var(--ease-spring),
+              background-color var(--dur-fast) var(--ease-spring);
+}
+.range:hover { color: var(--text); background: rgba(255, 255, 255, 0.05); }
+.range:active { transform: scale(0.96); }
+.range[aria-pressed="true"] {
+  color: var(--text);
+  background: rgba(124, 85, 232, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(124, 85, 232, 0.36);
+}
+
+/* ---- equity curve ---- */
+
+.chart-card { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+
+.chart-card__sub {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-5) 0;
+  flex: none;
+}
+.chart-card__note { font-size: var(--t-sm); color: var(--text-3); }
+
+/* The plot absorbs whatever the card has left after head, sub and footer. */
+.plot { flex: 1; min-height: 0; padding: var(--s-2) var(--s-5) 0; }
+.plot svg { width: 100%; height: 100%; display: block; }
+
+.plot__grid { stroke: var(--border); stroke-width: 1; }
+.plot__axis { fill: var(--text-3); font-size: 10px; font-variant-numeric: tabular-nums; }
+.plot__line { fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* draw-on: transform/opacity only via stroke-dashoffset on a transform-safe prop */
+.plot__line--draw {
+  stroke-dasharray: var(--len);
+  stroke-dashoffset: var(--len);
+  animation: draw 900ms var(--ease-spring) forwards;
+}
+@keyframes draw { to { stroke-dashoffset: 0; } }
+
+.plot__crosshair { stroke: var(--border-strong); stroke-width: 1; stroke-dasharray: 3 3; }
+.plot__dot { stroke: var(--surface); stroke-width: 2; }
+
+.chart-card__foot {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s-4);
+  padding: var(--s-3) var(--s-5);
+  border-top: 1px solid var(--border);
+  flex: none;
+}
+.chart-card__stat { display: grid; gap: 2px; }
+.chart-card__stat b {
+  font-family: var(--font-display);
+  font-size: clamp(17px, 2.5vh, 26px);
+  font-weight: 700;
+  letter-spacing: var(--tracking-tight);
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+
+/* "collecting history" — shown until the daily job has enough points */
+.collecting {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--s-2);
+  height: 100%;
+  min-height: 0;
+  padding: var(--s-3);
+  text-align: center;
+  overflow: hidden;
+}
+.collecting svg { width: 28px; height: 28px; color: var(--text-3); flex: none; }
+.collecting h3 { font-size: clamp(14px, 2.1vh, 20px); font-weight: 600; }
+.collecting p {
+  max-width: 46ch;
+  font-size: clamp(11px, 1.6vh, 13px);
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
+/* ============ allocation ============ */
+
+/* head / donut / legend. The donut takes the 1fr so it shrinks first — the six
+ * legend rows carry the actual numbers and must never be the thing that gets
+ * clipped. */
+.alloc {
+  display: grid;
+  /* A hard floor on the donut row: with minmax(0,1fr) the legend's natural
+   * height eats the whole card and the ring silently disappears. */
+  grid-template-rows: auto minmax(104px, 1fr) auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.alloc__figure {
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  padding: var(--s-1) 0;
+}
+.alloc__figure svg {
+  width: auto;
+  height: 100%;
+  max-height: 240px;
+  aspect-ratio: 1;
+}
+
+.donut__seg {
+  transition: opacity var(--dur-fast) var(--ease-spring);
+  transform-origin: center;
+}
+.alloc:has(.donut__seg:hover) .donut__seg:not(:hover) { opacity: 0.45; }
+
+.donut__value {
+  font-family: var(--font-display);
+  font-size: var(--t-donut);
+  font-weight: 700;
+  letter-spacing: var(--tracking-tight);
+  fill: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.donut__caption { fill: var(--text-2); font-size: 13px; }
+
+.legend { display: grid; gap: 0; padding: 0 var(--s-5) var(--s-3); line-height: 1.25; }
+
+.legend__row {
+  display: grid;
+  grid-template-columns: 10px 1fr auto auto;
+  align-items: center;
+  gap: var(--s-3);
+  padding: clamp(1px, 0.18vh, 7px) var(--s-2);
+  border-radius: var(--r-sm);
+  transition: background-color var(--dur-fast) var(--ease-spring);
+}
+.legend__row:hover { background: rgba(255, 255, 255, 0.04); }
+
+.legend__dot { width: 10px; height: 10px; border-radius: 3px; }
+.legend__name { font-size: clamp(12px, 1.85vh, 16px); color: var(--text); line-height: 1.3; }
+.legend__pct {
+  font-size: clamp(11px, 1.6vh, 14px);
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.legend__val {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: clamp(12px, 1.85vh, 16px);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  min-width: 86px;
+}
+
+/* ============ bottom row ============ */
+
+.bottom-row {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr 1fr;
+  gap: var(--grid-gap);
+  min-height: 0;
+}
+.bottom-row > * { min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+
+/* ---- top movers ---- */
+
+.movers__cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-5);
+  align-content: start;
+  min-height: 0;
+  padding: var(--s-2) var(--s-5) var(--s-4);
+  overflow: hidden;
+}
+.movers__head { padding-bottom: var(--s-1); }
+.movers__head--up { color: var(--pos); }
+.movers__head--down { color: var(--neg); }
+
+/* Four things share a ~200px column: avatar, ticker, sparkline, change chip.
+ * The reference tried the same and they collided — the chips ended up on top
+ * of the tickers and INTC's ran off the card. Sizing every part to a hard
+ * minimum and letting only the sparkline flex keeps the intended layout while
+ * guaranteeing nothing overlaps. */
+.mover {
+  display: grid;
+  grid-template-columns: 28px minmax(42px, auto) minmax(34px, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  padding: clamp(2px, 0.7vh, 8px) 0;
+  border-top: 1px solid var(--border);
+  line-height: 1.2;
+}
+.mover:first-of-type { border-top: 0; }
+
+.avatar {
+  display: grid; place-items: center;
+  width: 28px; height: 28px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+
+.mover__ticker {
+  font-size: var(--t-sm);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.mover__spark { width: 100%; height: 24px; min-width: 0; }
+
+.mover__chip {
+  justify-self: end;
+  padding: 3px 6px;
+  font-size: 12px;
+  gap: 2px;
+}
+
+/* ---- currency exposure ---- */
+
+.ccy {
+  display: grid;
+  gap: clamp(1px, 0.28vh, 16px);
+  align-content: start;
+  min-height: 0;
+  padding: var(--s-1) var(--s-5) var(--s-3);
+  overflow: hidden;
+}
+
+.ccy__row { display: grid; gap: clamp(1px, 0.35vh, 7px); }
+/* Body line-height is 1.7 for reading prose; these are single-line data rows,
+ * where it silently adds ~14px each and pushes the last two off the card. */
+.ccy__top {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: var(--s-3);
+  line-height: 1.2;
+}
+.ccy__code { font-size: clamp(12px, 1.8vh, 16px); font-weight: 500; color: var(--text-2); }
+.ccy__pct {
+  justify-self: end;
+  font-size: clamp(11px, 1.7vh, 14px);
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.ccy__val {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(13px, 2.1vh, 17px);
+  letter-spacing: var(--tracking-tight);
+  font-variant-numeric: tabular-nums;
+}
+
+.bar { height: clamp(3px, 0.6vh, 5px); border-radius: var(--r-pill); background: var(--track); overflow: hidden; }
+.bar__fill {
+  height: 100%;
+  border-radius: var(--r-pill);
+  background: var(--brand-soft);
+  transform-origin: left;
+  transform: scaleX(0);
+  animation: bar-grow var(--dur-slow) var(--ease-spring) forwards;
+}
+@keyframes bar-grow { to { transform: scaleX(1); } }
+
+/* ---- concentration ---- */
+
+.conc {
+  display: grid;
+  align-content: start;
+  min-height: 0;
+  padding: 0 var(--s-5) var(--s-3);
+  overflow: hidden;
+}
+
+.conc__row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: var(--s-3);
+  padding: clamp(2px, 0.5vh, 16px) 0;
+  border-top: 1px solid var(--border);
+  line-height: 1.15;
+}
+.conc__row:first-child { border-top: 0; }
+.conc__label { font-size: clamp(11px, 1.7vh, 15px); color: var(--text-2); line-height: 1.2; }
+.conc__value {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(14px, 2.15vh, 24px);
+  line-height: 1.15;
+  letter-spacing: var(--tracking-tight);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.conc__value--brand { color: var(--brand-pale); }
+.conc__badge {
+  display: inline-grid; place-items: center;
+  min-width: 26px; height: 22px;
+  padding: 0 6px;
+  margin-right: var(--s-2);
+  border-radius: var(--r-sm);
+  background: rgba(255, 255, 255, 0.07);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The original single-table holdings renderer lived here. It was replaced by
+ * js/holdings.js (the grouped sector browser) and, below the Overview fold,
+ * by the .ovpos table — both of which reuse .prow. The old .table-wrap /
+ * .htable* / .not-live rules had no remaining references in js/ or
+ * index.html and were removed rather than left to be confused with them. */
+
+/* ============ holdings: the sector page ============
+ *
+ * Implements Holdings.dc.html from the Claude Design project. Palette, grid,
+ * row heights and motion come straight from that file; the two deviations are
+ * documented at --text-disabled and --loss-hero below.
+ */
+
+#view-holdings:not([hidden]) { gap: 14px; overflow-y: auto; }
+
+.sectors {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  flex: none;
+  animation: riseIn 420ms var(--ease-spring) both;
+}
+
+.sector-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  height: 32px;
+  padding: 0 11px;
+  border-radius: 8px;
+  background: var(--ink-chip);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  color: var(--text-muted);
+  font: 600 11.5px/1 var(--font-ui);
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--t-ui), color var(--t-ui), border-color var(--t-ui);
+}
+.sector-pill:hover { border-color: var(--hair-3); color: var(--text-primary); }
+.sector-pill[aria-current="page"] {
+  background: var(--violet-500);
+  border-color: rgba(160, 136, 255, 0.5);
+  color: #fff;
+}
+.sector-pill__count {
+  font: 600 10px/1 var(--font-ui);
+  color: var(--text-disabled);
+  font-variant-numeric: tabular-nums;
+}
+.sector-pill[aria-current="page"] .sector-pill__count { color: rgba(255, 255, 255, 0.62); }
+.sector-pill__rule {
+  width: 1px; height: 12px; flex: none;
+  background: rgba(255, 255, 255, 0.07);
+}
+.sector-pill[aria-current="page"] .sector-pill__rule { background: rgba(160, 136, 255, 0.5); }
+.sector-pill__day {
+  font: 700 10.5px/1 var(--font-display);
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.sector-pill__day[data-dir="up"] { color: var(--gain-soft); }
+.sector-pill__day[data-dir="down"] { color: var(--loss-soft); }
+.sector-pill__day[data-dir="flat"] { color: var(--text-muted); }
+/* On the selected pill the whole chip is violet, so the day figure goes white
+ * rather than carrying its own direction hue — as the reference does. */
+.sector-pill[aria-current="page"] .sector-pill__day { color: #fff; }
+
+/* ---- sector hero ---- */
+
+.hero-sector {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  background: var(--ink-raised);
+  border: 1px solid rgba(160, 136, 255, 0.26);
+  border-radius: 12px;
+  /* The violet inset top edge is what makes this plate read as raised rather
+   * than merely lighter — it is the design's signature on this page. */
+  box-shadow: inset 0 2px 0 var(--violet-500),
+              0 0 0 1px rgba(124, 85, 232, 0.10),
+              0 26px 54px -34px rgba(124, 85, 232, 0.42);
+  animation: riseIn 420ms var(--ease-spring) 60ms both;
+}
+
+.hero-sector__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 28px;
+  flex-wrap: wrap;
+  padding: 18px 22px 16px;
+}
+.hero-sector__id { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.hero-sector__eyebrow {
+  font: 600 10px/1.2 var(--font-ui);
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--violet-300);
+}
+.hero-sector__name {
+  margin: 0;
+  font: 800 31px/1.02 var(--font-display);
+  letter-spacing: -0.035em;
+  color: #f5f7fa;
+}
+.hero-sector__meta { font: 500 11.5px/1.3 var(--font-ui); color: var(--text-muted); }
+
+.hero-sector__stats { display: flex; align-items: flex-start; gap: 34px; flex-wrap: wrap; }
+.hstat { display: flex; flex-direction: column; gap: 8px; }
+.hstat__label {
+  font: 600 10px/1.2 var(--font-ui);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+.hstat__value {
+  font: 800 26px/1 var(--font-display);
+  letter-spacing: -0.038em;
+  color: #f5f7fa;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.hstat__row { display: flex; align-items: center; gap: 9px; }
+.hstat__figure {
+  font: 700 21px/1 var(--font-display);
+  letter-spacing: -0.032em;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- breadth strip ---- */
+
+.breadth {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding: 11px 22px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.breadth__bar {
+  display: flex;
+  width: 96px; height: 5px;
+  flex: none;
+  border-radius: 3px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.07);
+}
+.breadth__up { display: block; height: 100%; background: var(--gain-soft); }
+.breadth__down { display: block; height: 100%; background: var(--loss-soft); }
+.breadth__text {
+  font: 600 10.5px/1 var(--font-ui);
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.breadth__rule { width: 1px; height: 13px; flex: none; background: rgba(255, 255, 255, 0.09); }
+.breadth__item { font: 500 10.5px/1 var(--font-ui); color: var(--text-muted); white-space: nowrap; }
+.breadth__figure {
+  font: 700 11px/1 var(--font-display);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.breadth__tk { font: 700 11px/1 var(--font-ui); letter-spacing: 0.03em; color: var(--text-primary); }
+.breadth__note {
+  margin-left: auto;
+  font: 400 10px/1 var(--font-ui);
+  letter-spacing: 0.02em;
+  color: var(--text-disabled);
+  white-space: nowrap;
+}
+
+/* ---- the table ---- */
+
+.positions {
+  display: flex;
+  flex-direction: column;
+  background: var(--ink-panel);
+  border: 1px solid var(--hair-2);
+  border-radius: 12px;
+  animation: riseIn 420ms var(--ease-spring) 120ms both;
+}
+
+.positions__scroll {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(150, 124, 255, 0.28) transparent;
+}
+.positions__scroll::-webkit-scrollbar { height: 8px; }
+.positions__scroll::-webkit-scrollbar-thumb {
+  background: rgba(150, 124, 255, 0.24);
+  border-radius: 4px;
+}
+/* 1020px is what the nine tracks need at their minima plus gaps and padding.
+   Overview's content column is 1146px, so the table still fits there without a
+   horizontal scroll; below that this container scrolls sideways. */
+.positions__inner { min-width: 1020px; display: flex; flex-direction: column; }
+
+/* One grid definition shared by the header and every row, held or watched.
+ * That shared track list is what keeps figures aligned across the boundary
+ * between the two groups — which is the point of merging them into one table. */
+.prow {
+  display: grid;
+  grid-template-columns:
+    minmax(228px, 2fr) minmax(76px, .85fr) minmax(84px, .8fr) minmax(84px, .85fr)
+    minmax(82px, .85fr) minmax(88px, .95fr) minmax(92px, 1fr) minmax(62px, .7fr) 88px;
+  align-items: center;
+  gap: 12px;
+  padding: 0 20px;
+}
+
+/* ---- section header ---- */
+
+.band {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 15px 20px 11px;
+}
+.band__title {
+  font: 700 12.5px/1 var(--font-display);
+  letter-spacing: -0.014em;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+.band__count {
+  font: 600 10.5px/1 var(--font-ui);
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.band__rule { width: 1px; height: 12px; flex: none; background: rgba(255, 255, 255, 0.1); }
+.band__hint { font: 400 10.5px/1 var(--font-ui); color: var(--text-muted); white-space: nowrap; }
+.band__action {
+  margin-left: auto;
+  font: 600 10.5px/1.2 var(--font-ui);
+  color: var(--text-faint);
+  white-space: nowrap;
+  transition: color var(--t-ui);
+}
+.band__action:hover { color: var(--text-primary); }
+
+/* ---- column header ---- */
+
+.phead {
+  align-items: end;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+}
+.phead button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font: 600 9.5px/1.2 var(--font-ui);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--t-ui);
+}
+.phead button:hover { color: var(--text-body); }
+.phead button[data-on="true"] { color: var(--violet-300); }
+.caret {
+  width: 0; height: 0; flex: none;
+  border-left: 3.5px solid transparent;
+  border-right: 3.5px solid transparent;
+  border-top: 4px solid var(--violet-300);
+}
+
+/* ---- rows ---- */
+
+.prow--pos {
+  position: relative;
+  height: 52px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+  transition: background var(--t-ui);
+}
+.prow--pos:hover { background: var(--wash-hover); }
+
+/* The ownership rail: 2px of violet down the left edge of anything you hold. */
+.prow--owned::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 2px;
+  background: var(--violet-500);
+}
+
+/* The last held row carries a stronger hairline — enough to feel the change of
+ * register between held and watched without splitting the table in two. */
+.prow--boundary { border-bottom-color: rgba(150, 124, 255, 0.22); }
+
+.pid { display: flex; align-items: center; gap: 10px; min-width: 0; overflow: hidden; }
+
+/* Light plate: the marks are drawn for light ground, so a dark tile would make
+ * half of them invisible. The monogram sits underneath and shows through if the
+ * mark fails to load. */
+.ptile {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 30px; height: 30px;
+  flex: none;
+  border-radius: 8px;
+  background: #EDF0F3;
+  border: 1px solid rgba(10, 13, 18, 0.16);
+  overflow: hidden;
+}
+.ptile__mono {
+  padding: 0 2px;
+  font: 800 8.5px/1 var(--font-display);
+  letter-spacing: -0.03em;
+  color: inherit;
+}
+.ptile__img {
+  position: absolute;
+  inset: 0;
+  width: 100%; height: 100%;
+  object-fit: contain;
+  padding: 4px;
+}
+
+.pid__text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.pid__line { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.pid__tk {
+  font: 700 12.5px/1 var(--font-ui);
+  letter-spacing: 0.03em;
+  color: var(--text-primary);
+}
+.pid__pill {
+  display: flex;
+  align-items: center;
+  flex: none;
+  height: 15px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--violet-tint-18);
+  border: 1px solid rgba(160, 136, 255, 0.3);
+  font: 700 8px/15px var(--font-ui);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--violet-200);
+}
+.pid__name {
+  font: 400 10.5px/1.3 var(--font-ui);
+  color: var(--text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pstack { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; white-space: nowrap; }
+.pstack--wide { gap: 3px; }
+.pstack__main {
+  font: 700 13px/1 var(--font-display);
+  letter-spacing: -0.025em;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.pstack__main--lg { font-size: 13.5px; letter-spacing: -0.028em; }
+.pstack__main--body { font-size: 12.5px; letter-spacing: -0.022em; color: var(--text-body); }
+.pstack__sub {
+  font: 500 9.5px/1 var(--font-ui);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.pstack__ccy { font: 500 9px/1 var(--font-ui); letter-spacing: 0.07em; color: var(--text-muted); }
+.pstack__ret { font: 600 9.5px/1 var(--font-ui); font-variant-numeric: tabular-nums; }
+
+.pweight {
+  text-align: right;
+  font: 600 12.5px/1 var(--font-display);
+  letter-spacing: -0.022em;
+  color: var(--text-body);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Today's move in pounds, beside the percentage chip. Same weight as the
+   weight column so the two plain figures in the row read as a pair, and the
+   sign carries the direction so it is never colour alone. */
+.pdaypl {
+  text-align: right;
+  font: 600 12.5px/1 var(--font-display);
+  letter-spacing: -0.022em;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: var(--ff-tabular);
+}
+
+.pdelta { display: flex; justify-content: flex-end; min-width: 0; }
+.pspark { display: flex; justify-content: flex-end; }
+.pspark svg { width: 88px; height: 26px; }
+
+/* 30-day range fills the owned-only columns on a watched row: where the last
+ * price sits between the period's low and high. */
+.prange {
+  /* Through the new Today P/L column too: a name you do not hold has no daily
+     P&L any more than it has a quantity or a weight. */
+  grid-column: 4 / 9;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  min-width: 0;
+  white-space: nowrap;
+}
+.prange__label {
+  font: 500 9.5px/1 var(--font-ui);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.prange__edge {
+  font: 500 10px/1 var(--font-ui);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.prange__track {
+  position: relative;
+  flex: 0 0 88px;
+  height: 3px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, .06), rgba(150, 124, 255, .22));
+}
+.prange__dot {
+  position: absolute;
+  top: -3px;
+  width: 9px; height: 9px;
+  margin-left: -4.5px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2.5px var(--ink-panel);
+}
+
+.positions__foot {
+  padding: 10px 20px 12px;
+  font: 400 9.5px/1.4 var(--font-ui);
+  color: var(--text-disabled);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Delta chip, as the design's DeltaValue renders it. */
+.dchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border-radius: 5px;
+  font: 700 10.5px/1 var(--font-display);
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.dchip--up { color: var(--gain-soft); background: rgba(63, 165, 136, 0.13); }
+.dchip--down { color: var(--loss-soft); background: rgba(196, 100, 109, 0.14); }
+.dchip--flat { color: var(--text-muted); background: rgba(255, 255, 255, 0.06); }
+
+.hempty {
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  padding: 28px 20px;
+  text-align: center;
+}
+.hempty__title { font: 700 12px/1 var(--font-display); color: var(--text-body); }
+.hempty__msg { font: 400 10.5px/1.4 var(--font-ui); color: var(--text-muted); }
+
+@keyframes riseIn { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: none; } }
+
+/* ============ states ============ */
+
+/* Slim by design: it is transient, and in the viewport-locked layout every
+ * pixel it takes comes straight out of the cards below it. */
+.stale-banner {
+  display: none;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 5px var(--s-3);
+  border: 1px solid rgba(234, 57, 67, 0.35);
+  border-radius: var(--r-sm);
+  background: var(--neg-bg);
+  font-size: 12px;
+  line-height: 1.35;
+}
+.stale-banner svg { width: 14px; height: 14px; color: var(--neg); flex: none; }
+[data-state="stale"] .stale-banner { display: flex; }
+
+.empty {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--s-4);
+  min-height: 420px;
+  padding: var(--s-7);
+  text-align: center;
+}
+.empty svg { width: 46px; height: 46px; color: var(--text-3); }
+.empty h2 { font-size: 21px; font-weight: 600; letter-spacing: -0.01em; }
+.empty p { max-width: 46ch; color: var(--text-2); }
+
+.btn {
+  padding: 10px var(--s-5);
+  border-radius: var(--r-md);
+  background: linear-gradient(180deg, var(--brand-soft), var(--brand));
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 2px 12px var(--brand-glow);
+  transition: transform var(--dur-fast) var(--ease-spring),
+              box-shadow var(--dur-fast) var(--ease-spring);
+}
+.btn:hover { transform: translateY(-1px); box-shadow: 0 6px 18px var(--brand-glow); }
+.btn:active { transform: translateY(0) scale(0.985); }
+
+/* ============ tooltip ============ */
+
+.tip {
+  position: fixed;
+  z-index: 40;
+  display: none;
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+  box-shadow: var(--shadow-float);
+  font-size: var(--t-sm);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.tip[data-open="true"] { display: block; }
+.tip__date { color: var(--text-2); font-size: 12px; }
+.tip__val { font-family: var(--font-display); font-weight: 700; font-size: 15px; }
+
+/* ============ responsive ============ */
+
+/* ---- the floor ----
+ * Below this the fit would crush the content rather than compress it, so the
+ * lock is released and the page simply scrolls. Better a scrollbar than
+ * unreadable type. */
+@media (max-height: 700px), (max-width: 1280px) {
+  .shell { height: auto; min-height: 100vh; overflow: visible; }
+  .sidebar { overflow-y: visible; }
+  .views { padding-bottom: var(--s-7); }
+  /* :not([hidden]) for the same reason as above — an id selector would
+     otherwise override the hide rule and stack the tabs. */
+  #view-overview:not([hidden]),
+  [data-state="stale"] #view-overview:not([hidden]) {
+    display: block; height: auto; overflow-y: visible;
+  }
+  /* The screenful stops being a screenful once the lock is released: the whole
+     page scrolls instead, so holdings simply follows the bottom row. */
+  .ov-screen,
+  [data-state="stale"] .ov-screen { display: block; height: auto; }
+  .ov-screen > * { margin-bottom: var(--row-gap); }
+  .ov-cue { display: none; }
+  .kpi { min-height: 180px; }
+  .plot { min-height: 220px; }
+  .alloc { display: flex; flex-direction: column; }
+  .alloc__figure svg { height: 240px; }
+  .bottom-row > * { overflow: visible; }
+  #view-holdings:not([hidden]) { height: auto; }
+  .group-grid { overflow-y: visible; }
+}
+
+@media (max-width: 1280px) {
+  .kpi-row { grid-template-columns: 1.71fr 1fr 1fr; }
+  .bottom-row { grid-template-columns: 1fr 1fr; }
+  .bottom-row > :first-child { grid-column: 1 / -1; }
+}
+
+@media (max-width: 1024px) {
+  .shell { grid-template-columns: 1fr; }
+  .sidebar {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--s-4);
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-group { grid-auto-flow: column; gap: var(--s-1); }
+  .nav-group__label, .sidebar__foot { display: none; }
+  .mid-row { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 760px) {
+  :root { --t-hero: 40px; --t-kpi: 27px; --content-pad: 16px; --grid-gap: 14px; }
+  .kpi-row, .bottom-row { grid-template-columns: 1fr; }
+  .bottom-row > :first-child { grid-column: auto; }
+  .kpi { min-height: 0; }
+  .movers__cols { grid-template-columns: 1fr; }
+}
+
+/* ============================================================
+ * Market watch — the world board (MarketWatch.dc.html)
+ *
+ * The page's job is different from Overview and Watchlist, and the layout says
+ * so: markets and time, not holdings. Every value below is measured off the
+ * design file. Three things deliberately differ, each for a reason:
+ *
+ *   1. Six of the eight markets carry a benchmark only, because the free
+ *      provider has no series for KOSDAQ, TOPIX, HSCEI, TPEx, SET50 or FTSE ST
+ *      Mid Cap. `.mcard--solo` is therefore the *primary* card, and it spends
+ *      the freed height on a larger level and a wider sparkline rather than
+ *      leaving a gap where the other-index rows would have been.
+ *   2. The design's card is an <a href="#"> with a hover lift. There is nowhere
+ *      for it to go in this app, so the card is a plain <article> and the lift
+ *      is gone — a hover affordance on something unclickable is a lie. The
+ *      page's real controls are the two switches in the board bar.
+ *   3. The secondary figure (1M / YTD) also appears on the benchmark, not only
+ *      on the other-index rows. Otherwise the bar's "secondary column" note
+ *      would describe nothing at all on six of the eight cards.
+ * ============================================================ */
+
+#view-market:not([hidden]) { gap: 10px; }
+
+@keyframes livePulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+/* The one dot used for every liveness signal on this page: hero, clock strip
+ * and session badge. It is never the only cue — an "Open"/"Closed" word or a
+ * countdown always sits beside it. */
+.livedot {
+  width: 5px; height: 5px;
+  flex: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.24);
+}
+.livedot[data-on="true"] {
+  background: var(--gain-soft);
+  animation: livePulse 2.4s ease-in-out infinite;
+}
+
+/* ---- hero ---- */
+
+.board-hero {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  background: var(--ink-raised);
+  border: 1px solid rgba(160, 136, 255, 0.26);
+  border-radius: 12px;
+  box-shadow:
+    inset 0 2px 0 var(--violet-500),
+    0 0 0 1px rgba(124, 85, 232, 0.10),
+    0 26px 54px -34px rgba(124, 85, 232, 0.42);
+  animation: riseIn 420ms var(--ease-spring) both;
+}
+/* The index feed can be down while IB is perfectly healthy, so the board owns
+ * its own disconnected state — the topbar indicator speaks only for IB. */
+.board-hero[data-stale="true"] {
+  border-color: rgba(234, 57, 67, 0.32);
+  box-shadow: inset 0 2px 0 var(--neg), 0 0 0 1px rgba(234, 57, 67, 0.10);
+}
+
+.board-hero__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 11px 18px 9px;
+}
+.board-hero__id { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.board-hero__eyebrow {
+  font: 600 10px/1.2 var(--font-ui);
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--violet-300);
+}
+.board-hero__date {
+  margin: 0;
+  font: 800 21px/1.02 var(--font-display);
+  letter-spacing: -0.035em;
+  color: #f5f7fa;
+}
+.board-hero__trading {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font: 600 11.5px/1.3 var(--font-ui);
+  color: var(--text-body);
+}
+
+/* ---- world clock strip ---- */
+
+.clockstrip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 0 22px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.clockstrip__item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+  padding: 6px 12px 7px 0;
+  margin-right: 12px;
+  border-right: 1px solid rgba(255, 255, 255, 0.07);
+  white-space: nowrap;
+}
+.clockstrip__code {
+  font: 700 10px/1 var(--font-ui);
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+.clockstrip__item[data-open="true"] .clockstrip__code { color: var(--text-primary); }
+.clockstrip__time {
+  font: 700 11px/1 var(--font-display);
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+.clockstrip__note { font: 400 10px/1 var(--font-ui); color: var(--text-muted); }
+.clockstrip__delay {
+  margin-left: auto;
+  flex: none;
+  padding: 6px 0 7px;
+  font: 400 10px/1 var(--font-ui);
+  letter-spacing: 0.02em;
+  color: var(--text-disabled);
+  white-space: nowrap;
+}
+
+/* ---- board bar ---- */
+
+.board-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  animation: riseIn 420ms var(--ease-spring) 40ms both;
+}
+.board-bar__title {
+  font: 700 12.5px/1 var(--font-display);
+  letter-spacing: -0.014em;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+.board-bar__count {
+  font: 600 10.5px/1 var(--font-ui);
+  color: var(--text-faint);
+}
+.board-bar__rule { width: 1px; height: 12px; flex: none; background: rgba(255, 255, 255, 0.1); }
+.board-bar__note {
+  font: 400 10.5px/1 var(--font-ui);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.board-bar__controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+/* The design carried these as editor props with no on-screen control. They are
+ * real controls here, borrowing Overview's range switch so the two pages agree
+ * rather than introducing a second segmented style. */
+.board-bar .range { padding: 4px 9px; font-size: 11px; }
+
+/* ---- the grid ---- */
+
+.board-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 252px), 1fr));
+  /* Equal rows, but capped: on a tall window an uncapped 1fr stretches two rows
+   * of cards to about 260px each and the board reads as mostly empty. */
+  grid-auto-rows: minmax(150px, 1fr);
+  gap: 10px;
+  align-items: stretch;
+  align-content: start;
+  max-height: 100%;
+  padding-bottom: 2px;
+}
+.board-empty { grid-column: 1 / -1; }
+
+/* ---- market card ---- */
+
+.mcard {
+  display: flex;
+  flex-direction: column;
+  background: var(--ink-panel);
+  border: 1px solid var(--hair-2);
+  border-radius: 12px;
+  overflow: hidden;
+  animation: riseIn 300ms var(--ease-spring) both;
+}
+.mcard[data-open="true"] { border-color: rgba(160, 136, 255, 0.22); }
+
+.mcard__head { display: flex; align-items: center; gap: 7px; padding: 9px 11px 7px; }
+
+.mcode {
+  display: grid;
+  place-items: center;
+  width: 28px; height: 20px;
+  flex: none;
+  border-radius: 5px;
+  background: var(--ink-chip);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  font: 800 9px/1 var(--font-display);
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+}
+.mcard[data-open="true"] .mcode {
+  background: var(--violet-tint-18);
+  border-color: rgba(160, 136, 255, 0.34);
+  color: var(--violet-200);
+}
+.mcard__name {
+  min-width: 0;
+  font: 700 11.5px/1 var(--font-ui);
+  letter-spacing: -0.005em;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.msess {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex: none;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  white-space: nowrap;
+}
+.mcard[data-open="true"] .msess {
+  background: rgba(63, 165, 136, 0.12);
+  border-color: rgba(63, 165, 136, 0.32);
+}
+.msess__state {
+  font: 700 9.5px/1 var(--font-ui);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.mcard[data-open="true"] .msess__state { color: var(--gain-soft); }
+.msess__time {
+  font: 600 10px/1 var(--font-display);
+  letter-spacing: -0.02em;
+  color: var(--text-muted);
+}
+
+/* ---- benchmark block ---- */
+
+/* The design sets the figures and the sparkline side by side, because its card
+ * also had to fit two other-index rows inside ~190px. Ours are wider and taller
+ * — four columns of eight cards rather than three of nine — so the line sits
+ * below the figures at full width and takes whatever height is spare. A 30-day
+ * series is worth reading at 250px across; at 72px it is only a texture. */
+.mbench {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  min-height: 0;
+  padding: 2px 11px 8px;
+}
+/* `flex: none` is load-bearing. On a card that also carries other-index rows the
+ * space runs out, and a shrinkable text block gets squeezed until the parent's
+ * overflow:hidden clips the eyebrow behind the level. The line yields instead —
+ * it has a min-height and degrades gracefully; a clipped figure does not. */
+.mbench__id {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  overflow: hidden;
+}
+.mbench__name {
+  font: 600 9.5px/1 var(--font-ui);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mbench__row { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.mbench__level {
+  font: 800 17px/1 var(--font-display);
+  letter-spacing: -0.038em;
+  color: #f5f7fa;
+  white-space: nowrap;
+}
+.mbench__perf { display: flex; align-items: baseline; gap: 5px; }
+.mbench__perfkey {
+  font: 600 9px/1 var(--font-ui);
+  letter-spacing: 0.08em;
+  color: var(--text-faint);
+}
+
+/* Sparklines take the softer pair here, as the design does locally, so the line
+ * sits with the delta chips instead of shouting over them. */
+/* The svg is taken out of flow on purpose. A percentage-height SVG inside a
+ * flex item with an `auto` basis makes the item's height depend on the svg and
+ * the svg's on the item; the browser resolves that by thrashing layout until
+ * the tab stops responding. Absolute positioning gives the flex item a zero
+ * intrinsic height, so it simply takes its share of the free space. */
+.mspark {
+  position: relative;
+  display: block;
+  flex: 1 1 auto;
+  min-height: 28px;
+  --pos: var(--gain-soft);
+  --neg: var(--loss-soft);
+  --flat: var(--text-faint);
+}
+.mspark svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+/* Six of the eight markets carry a benchmark only, so the extra room goes
+ * straight into the line rather than into a gap. */
+.mcard--solo .mspark { min-height: 48px; }
+
+/* ---- other indices ---- */
+
+.mcard__others {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid rgba(255, 255, 255, 0.055);
+}
+.mcard__others + .mexpo { border-top: 0; }
+.mrow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 46px 42px;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.035);
+}
+/* The last row keeps its rule — as in the design, it is what separates the
+ * others list from the exposure band below it. */
+.mrow__name {
+  font: 500 10px/1 var(--font-ui);
+  color: var(--text-body);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mrow__level {
+  font: 600 10.5px/1 var(--font-display);
+  letter-spacing: -0.022em;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+.mrow__day, .mrow__perf { text-align: right; white-space: nowrap; }
+
+/* Signed always, so direction never rests on hue alone. */
+.mfig {
+  font: 700 10px/1 var(--font-display);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+.mfig--up { color: var(--gain-soft); }
+.mfig--down { color: var(--loss-soft); }
+.mrow__perf .mfig { font-weight: 600; }
+
+/* ---- exposure band ---- */
+
+.mexpo {
+  margin-top: auto;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 11px 7px;
+  /* The others list already ends on a hairline, and its last row drops its own,
+   * so this is exactly one rule in both card shapes — never two. */
+  border-top: 1px solid rgba(255, 255, 255, 0.055);
+  background: rgba(255, 255, 255, 0.018);
+}
+.mexpo__label {
+  font: 600 9.5px/1 var(--font-ui);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.mexpo__track {
+  flex: 1 1 auto;
+  height: 4px;
+  min-width: 40px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+}
+.mexpo__fill {
+  display: block;
+  height: 100%;
+  background: rgba(150, 124, 255, 0.6);
+  transform-origin: left;
+  animation: bar-grow var(--dur-slow) var(--ease-spring) both;
+}
+.mexpo__none {
+  flex: 1 1 auto;
+  font: 400 10.5px/1 var(--font-ui);
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+.mexpo__figures { margin-left: auto; display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
+.mexpo__value {
+  font: 700 11.5px/1 var(--font-display);
+  letter-spacing: -0.024em;
+  color: var(--text-primary);
+}
+.mexpo__value[data-held="false"] { color: var(--text-faint); }
+.mexpo__weight { font: 500 10px/1 var(--font-ui); color: var(--text-muted); }
+
+/* ---- footnote ---- */
+
+.board-foot {
+  flex: none;
+  padding: 0 2px;
+  font: 400 9.5px/1.4 var(--font-ui);
+  color: var(--text-disabled);
+}
+
+/* ---- loading ---- */
+
+.mcard--skeleton { gap: 0; }
+.mcard--skeleton .sk--chip { width: 28px; height: 20px; flex: none; }
+.mcard--skeleton .sk--name { width: 96px; height: 11px; }
+.mcard--skeleton .sk--label { width: 74px; height: 9px; }
+.mcard--skeleton .sk--level { width: 108px; height: 20px; }
+.mcard--skeleton .sk--spark { width: 104px; height: 38px; flex: none; }
+.mcard--skeleton .sk--bar { width: 100%; height: 12px; }
+
+/* ---- responsive ---- */
+
+@media (max-width: 1024px) {
+  .board-bar__controls { margin-left: 0; width: 100%; }
+  .clockstrip { padding: 0 14px; }
+  .board-hero__top { padding: 10px 14px 8px; }
+}
+
+@media (max-width: 760px) {
+  .board-grid { grid-template-columns: 1fr; grid-auto-rows: auto; }
+  .board-hero__date { font-size: 18px; }
+  .board-bar__controls { gap: 6px; }
+  /* 27px is a fine mouse target and a poor thumb one. */
+  .board-bar .range { min-height: 44px; padding: 4px 12px; }
+  /* Below the design's 252px card the clock strip is the first thing to go —
+     each card carries its own local time and session badge anyway. */
+  .clockstrip { display: none; }
+}
+
+/* =========================================================================
+   Stock detail  (#view-stock)
+   =========================================================================
+   Built to Stock.dc.html. That design overrides the design-system tokens
+   inline, so the values below are its values, mapped onto this project's
+   token names. Where it names a colour this project already has a token for
+   (--ink-panel, --violet-500, --gain-soft) the token is used; the handful of
+   one-off rgba() washes it specifies are kept literal, as the holdings and
+   market-watch sections already do.
+
+   Dark-only, like Holdings and Market watch: it draws on the --ink-* /
+   --violet-* / --text-primary family, which tokens.css defines once in the
+   theme-agnostic :root and never restates for light. Giving those light
+   values would change those two pages too, so it is out of scope here. */
+
+#view-stock {
+  gap: 12px;
+  padding-bottom: var(--s-5);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(150, 124, 255, 0.22) transparent;
+}
+#view-stock::-webkit-scrollbar { width: 8px; }
+#view-stock::-webkit-scrollbar-thumb {
+  background: rgba(150, 124, 255, 0.22); border-radius: 4px;
+}
+
+/* ---- breadcrumb ---- */
+.crumb {
+  display: flex; align-items: center; gap: 8px; flex: none;
+  font: 500 10.5px/1 var(--font-ui);
+  color: var(--text-faint);
+}
+.crumb__link { color: var(--text-faint); transition: color var(--t-ui); }
+.crumb__link:hover { color: var(--text-primary); }
+.crumb__sep { color: var(--text-disabled); }
+.crumb__here { color: var(--text-body); }
+
+/* ---- disconnected / stale banner ---- */
+.sbanner {
+  display: flex; align-items: center; gap: 9px; flex: none;
+  padding: 9px 14px; border-radius: var(--r-md);
+  background: rgba(199, 109, 117, 0.10);
+  border: 1px solid rgba(199, 109, 117, 0.28);
+  color: var(--loss-soft);
+  font: 500 11.5px/1.4 var(--font-ui);
+}
+.sbanner svg { width: 15px; height: 15px; flex: 0 0 auto; }
+
+/* ---- hero ---- */
+.shero {
+  display: flex; flex-direction: column; flex: none;
+  background: var(--ink-raised);
+  border: 1px solid rgba(160, 136, 255, 0.26);
+  border-radius: 12px;
+  /* Layered and violet-tinted, per the design: an inset top rule, a hairline
+     ring, and a wide low-opacity drop. Never a flat shadow. */
+  box-shadow: inset 0 2px 0 var(--violet-500),
+              0 0 0 1px rgba(124, 85, 232, 0.10),
+              0 26px 54px -34px rgba(124, 85, 232, 0.42);
+  animation: riseIn 420ms var(--ease-spring) both;
+}
+.shero__top {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 26px; flex-wrap: wrap; padding: 16px 20px 14px;
+}
+.shero__id { display: flex; align-items: flex-start; gap: 14px; min-width: 0; }
+.shero__tile { width: 48px; height: 48px; border-radius: 11px; flex: 0 0 auto; }
+.shero__tile .ptile__mono { font-size: 14px; letter-spacing: -0.03em; }
+.shero__names { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.shero__line { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+
+.shero__name {
+  margin: 0;
+  font: 800 23px/1.04 var(--font-display);
+  letter-spacing: -0.032em;
+  color: #f5f7fa;
+}
+.shero__tk {
+  display: flex; align-items: center; height: 21px; padding: 0 8px;
+  border-radius: 5px;
+  background: var(--violet-tint-18);
+  border: 1px solid rgba(160, 136, 255, 0.34);
+  font: 700 11px/1 var(--font-ui); letter-spacing: 0.05em;
+  color: var(--violet-200);
+}
+.shero__owned {
+  display: flex; align-items: center; height: 21px; padding: 0 8px;
+  border-radius: 5px;
+  background: rgba(124, 85, 232, 0.10);
+  border: 1px solid rgba(160, 136, 255, 0.24);
+  font: 700 9.5px/1 var(--font-ui);
+  letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--violet-300);
+}
+.shero__sub { font: 400 11px/1.3 var(--font-ui); color: var(--text-muted); }
+
+.sbtn {
+  display: flex; align-items: center; gap: 7px;
+  height: 32px; padding: 0 12px;
+  border-radius: var(--r-sm);
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  color: var(--text-body);
+  font: 600 11.5px/1 var(--font-ui);
+  cursor: pointer;
+  transition: background-color var(--t-ui), border-color var(--t-ui), color var(--t-ui);
+}
+.sbtn svg { width: 14px; height: 14px; }
+.sbtn:hover {
+  background: var(--wash-hover); border-color: var(--hair-3); color: var(--text-primary);
+}
+.sbtn:active { transform: scale(0.97); }
+.sbtn[aria-pressed="true"] {
+  background: var(--violet-tint-18); border-color: rgba(160, 136, 255, 0.34);
+  color: var(--violet-200);
+}
+
+.shero__figures {
+  display: flex; align-items: flex-end; gap: 34px; flex-wrap: wrap;
+  padding: 0 20px 15px;
+}
+.sfig { display: flex; flex-direction: column; gap: 8px; }
+.sfig--ah { padding-bottom: 3px; }
+.sfig__row { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.sfig__px {
+  font: 800 40px/1 var(--font-figure);
+  letter-spacing: -0.04em; color: #f5f7fa; white-space: nowrap;
+}
+.sfig__delta { display: flex; align-items: center; gap: 9px; padding-bottom: 4px; }
+.sfig__abs {
+  font: 700 17px/1 var(--font-figure);
+  letter-spacing: -0.03em; white-space: nowrap;
+}
+.sfig__ahpx {
+  font: 700 20px/1 var(--font-figure);
+  letter-spacing: -0.032em; color: var(--text-body); white-space: nowrap;
+}
+.sfig__ahdelta {
+  font: 600 12px/1 var(--font-figure);
+  letter-spacing: -0.024em; white-space: nowrap;
+}
+.sfig__note { font: 400 10.5px/1 var(--font-ui); color: var(--text-muted); white-space: nowrap; }
+.sfig--ah .sfig__note { color: var(--text-faint); }
+
+.shero__stats {
+  margin-left: auto; display: flex; align-items: center; gap: 26px;
+  flex-wrap: wrap; padding-bottom: 3px;
+}
+.sstat { display: flex; flex-direction: column; gap: 7px; }
+.sstat__label { font-size: 9.5px; color: var(--text-faint); white-space: nowrap; }
+.sstat__value {
+  font: 700 16px/1 var(--font-figure);
+  letter-spacing: -0.03em; color: var(--text-primary); white-space: nowrap;
+}
+.sstat__value--sm { font-size: 13px; letter-spacing: -0.026em; color: var(--text-body); }
+
+/* ---- shared card chrome ---- */
+.scard {
+  display: flex; flex-direction: column; flex: none;
+  background: var(--ink-panel);
+  border: 1px solid var(--hair-2);
+  border-radius: 12px;
+  box-shadow: none;
+  animation: riseIn 420ms var(--ease-spring) both;
+}
+.scard__head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 13px 16px 10px;
+}
+.scard__title {
+  font: 700 12.5px/1 var(--font-display);
+  letter-spacing: -0.014em; color: var(--text-primary); white-space: nowrap;
+}
+.scard__rule {
+  width: 1px; height: 12px; flex: 0 0 auto; background: rgba(255, 255, 255, 0.1);
+}
+.scard__note { font: 400 10.5px/1 var(--font-ui); color: var(--text-muted); }
+
+/* ---- chart ---- */
+.schart { animation-delay: 60ms; }
+.schart__bar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 12px 16px 10px;
+}
+.sranges {
+  display: flex; align-items: center; gap: 2px; padding: 2px;
+  border-radius: var(--r-sm);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.055);
+}
+.srange {
+  display: flex; align-items: center; height: 24px; padding: 0 10px;
+  border: none; border-radius: 6px; background: transparent;
+  color: var(--text-muted);
+  font: 700 10.5px/1 var(--font-ui); letter-spacing: 0.03em;
+  cursor: pointer;
+  /* background-color only. The design transitions colour too, but a disabled
+     range then holds its enabled colour instead of settling on the disabled
+     one, and CLAUDE.md rules out animating anything but transform/opacity. */
+  transition: background-color var(--t-ui);
+}
+.srange:hover:not(:disabled) { color: var(--text-primary); }
+.srange:active:not(:disabled) { transform: scale(0.96); }
+.srange[aria-pressed="true"] { background: var(--violet-500); color: #fff; }
+/* A range the provider returned nothing for. Reads as unavailable rather than
+   silently doing nothing when clicked. Scoped through .sranges so it cannot
+   lose to the aria-pressed rule above, which matches at the same specificity
+   and would otherwise win on source order for a disabled active button. */
+.sranges .srange:disabled {
+  color: var(--text-disabled);
+  cursor: not-allowed;
+  opacity: 0.55;
+  /* Also clears the active pill. A disabled button that is still the selected
+     one — which happens the moment you open a fund, whose first statement tab
+     is both current and unavailable — would otherwise keep the violet fill and
+     read as enabled-but-dim. */
+  background: transparent;
+}
+
+.schart__figures { display: flex; align-items: baseline; gap: 9px; white-space: nowrap; }
+.schart__figures .eyebrow { font-size: 10px; }
+.schart__pct { font: 700 14px/1 var(--font-figure); letter-spacing: -0.028em; }
+.schart__abs {
+  font: 600 11px/1 var(--font-figure); letter-spacing: -0.02em; color: var(--text-muted);
+}
+.schart__legend {
+  margin-left: auto; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+}
+.slegend { display: flex; align-items: center; gap: 6px; white-space: nowrap;
+  font: 500 10px/1 var(--font-ui); color: var(--text-muted); }
+.slegend__line {
+  width: 14px; height: 2px; flex: 0 0 auto; border-radius: 1px;
+  background: var(--flat);
+}
+.slegend__line--dash {
+  height: 0; background: none; border-top: 2px dashed rgba(255, 255, 255, 0.34);
+}
+
+.schart__plot { flex: none; height: 292px; padding: 0 6px 8px; }
+/* The design keeps the price line red/green and the benchmark neutral, so the
+   two are told apart by colour AND by dash — never colour alone. */
+.plot__bench { stroke: rgba(255, 255, 255, 0.34); stroke-width: 1.5; stroke-dasharray: 4 4; }
+.plot__dot--bench { fill: rgba(255, 255, 255, 0.7); stroke: var(--ink-panel); stroke-width: 2; }
+.tip__bench {
+  margin-top: 3px; font: 500 10px/1 var(--font-ui); color: var(--text-muted);
+}
+
+/* ---- key statistics ---- */
+.sstats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 0 22px;
+  padding: 0 16px 14px;
+}
+.srow {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 14px; padding: 7px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+}
+.srow__k { font: 400 11.5px/1.2 var(--font-ui); color: var(--text-muted); white-space: nowrap; }
+.srow__v {
+  font: 700 12px/1.2 var(--font-figure); letter-spacing: -0.022em;
+  color: var(--text-primary); white-space: nowrap;
+}
+
+/* ---- profile + news ---- */
+.spair {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 12px; align-items: stretch; flex: none;
+}
+.spair > .scard { animation-delay: 120ms; }
+/* The design's profile paragraph is three sentences. Real provider descriptions
+   run to a dozen, which would push this card to twice the height of the news
+   card beside it and break the row. Clamped to the design's depth; the full
+   text stays in the title attribute. */
+.sprofile {
+  margin: 0; padding: 0 16px 14px; max-width: 60ch;
+  font: 400 12px/1.6 var(--font-ui); color: var(--text-body); text-wrap: pretty;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 6;
+  overflow: hidden;
+}
+.sprofile__grid {
+  margin-top: auto;
+  /* 130px, not the design's 150px: this project's sidebar is 260px against the
+     design's 186px, so at the same viewport the card is ~573px not ~629px and
+     four 150px cells would wrap to 3+1. This keeps the design's single row. */
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 1px;
+  background: rgba(255, 255, 255, 0.055);
+  border-top: 1px solid rgba(255, 255, 255, 0.055);
+  border-radius: 0 0 12px 12px;
+  overflow: hidden;
+}
+.scell {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 11px 16px 13px; background: var(--ink-panel);
+}
+.scell__k {
+  font: 600 9.5px/1 var(--font-ui); letter-spacing: 0.09em;
+  text-transform: uppercase; color: var(--text-faint); white-space: nowrap;
+}
+.scell__v { font: 600 12px/1.2 var(--font-ui); color: var(--text-body); }
+
+.snews { display: flex; flex-direction: column; }
+.snewsitem {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 10px 16px 11px;
+  border-top: 1px solid rgba(255, 255, 255, 0.045);
+  transition: background-color var(--t-ui);
+}
+a.snewsitem:hover { background: var(--wash-hover); }
+.snewsitem__title {
+  font: 600 11.5px/1.4 var(--font-ui); color: var(--text-primary); text-wrap: pretty;
+}
+.snewsitem__meta {
+  display: flex; align-items: center; gap: 7px;
+  font: 400 9.5px/1 var(--font-ui); color: var(--text-faint); white-space: nowrap;
+}
+.snewsitem__meta i { font-style: normal; color: var(--text-disabled); }
+
+/* ---- analyst ---- */
+.sanalyst {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  border-top: 1px solid rgba(255, 255, 255, 0.055);
+}
+.sanalyst__col {
+  display: flex; flex-direction: column; gap: 11px;
+  padding: 14px 18px 16px;
+  border-right: 1px solid rgba(255, 255, 255, 0.055);
+}
+.sanalyst__col:last-child { border-right: none; }
+.sanalyst__col--est { gap: 0; }
+.sanalyst .eyebrow { font-size: 9.5px; color: var(--text-faint); white-space: nowrap; }
+
+.sratings { display: flex; flex-direction: column; gap: 11px; }
+.srating {
+  display: grid; grid-template-columns: 52px minmax(0, 1fr) 30px;
+  align-items: center; gap: 12px;
+}
+.srating__k { font: 600 11px/1 var(--font-ui); color: var(--text-muted); white-space: nowrap; }
+.srating__track {
+  display: block; height: 7px; border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06); overflow: hidden;
+}
+.srating__fill { display: block; height: 100%; }
+.srating__n {
+  text-align: right; font: 700 12px/1 var(--font-figure);
+  letter-spacing: -0.022em; color: var(--text-body);
+}
+
+.starget__head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+}
+.starget__figures { display: flex; align-items: baseline; gap: 9px; }
+.starget__mean {
+  font: 700 17px/1 var(--font-figure); letter-spacing: -0.032em;
+  color: var(--text-primary); white-space: nowrap;
+}
+.starget__upside {
+  font: 600 11.5px/1 var(--font-figure); letter-spacing: -0.02em; white-space: nowrap;
+}
+.starget__track {
+  position: relative; display: block; height: 5px; margin-top: 3px;
+  border-radius: 3px; background: rgba(255, 255, 255, 0.06);
+}
+.starget__band {
+  position: absolute; top: 0; bottom: 0; border-radius: 3px;
+  background: rgba(150, 124, 255, 0.42);
+}
+.starget__mark {
+  position: absolute; top: -3px; width: 2px; height: 11px;
+  border-radius: 1px; background: #f5f7fa;
+}
+.starget__scale {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  font: 500 9.5px/1 var(--font-ui); color: var(--text-faint);
+}
+.starget__last { color: var(--text-muted); }
+
+.sest {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0 20px;
+}
+.sestcell { display: flex; flex-direction: column; gap: 6px; padding: 5px 0; }
+.sestcell__k {
+  font: 600 9.5px/1 var(--font-ui); letter-spacing: 0.09em;
+  text-transform: uppercase; color: var(--text-faint); white-space: nowrap;
+}
+.sestcell__v {
+  font: 700 13px/1 var(--font-figure); letter-spacing: -0.026em;
+  color: var(--text-primary); white-space: nowrap;
+}
+
+/* ---- skeletons ---- */
+/* The .sk--* modifiers in the market-watch block are scoped to
+   .mcard--skeleton, so the stock page needs its own sizes. */
+.sk--spx    { width: 190px; height: 40px; border-radius: var(--r-sm); }
+.sk--sname  { width: 220px; height: 23px; border-radius: var(--r-sm); }
+.sk--ssub   { width: 280px; height: 11px; border-radius: 3px; }
+.sk--srow   { width: 100%;  height: 12px; border-radius: 3px; }
+.sk--splot  { width: 100%;  height: 100%; border-radius: var(--r-md); }
+.sk--stile  { width: 48px;  height: 48px; border-radius: 11px; }
+
+/* ---- responsive ---- */
+@media (max-width: 1024px) {
+  .shero__stats { margin-left: 0; width: 100%; gap: 20px; }
+  .sanalyst__col { border-right: none; border-bottom: 1px solid rgba(255, 255, 255, 0.055); }
+}
+@media (max-width: 760px) {
+  .sfig__px { font-size: 32px; }
+  .shero__name { font-size: 19px; }
+  .schart__plot { height: 220px; }
+  .schart__legend { margin-left: 0; }
+}
+
+/* =========================================================================
+   Topbar instrument search
+   =========================================================================
+   Built to PortfolioDashboard.dc.html. Sits between the tab row and the feed
+   chips, on the same baseline as the tab underline (the topbar is 52px and
+   align-items:flex-end). The tabs hold their width and the meta block gives
+   ground, so the field is the only thing that flexes. */
+
+.tabs { flex: 0 0 auto; }
+.topbar__meta { flex: 0 1 auto; min-width: 0; }
+
+.search {
+  position: relative;
+  flex: 1 1 120px;
+  min-width: 0;
+  max-width: 300px;
+  margin-left: auto;
+  padding-bottom: 8px;
+}
+
+.search__field {
+  display: flex; align-items: center; gap: 8px;
+  height: 30px; padding: 0 10px;
+  border-radius: var(--r-sm);
+  background: var(--ink-chip);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  transition: border-color var(--t-ui);
+}
+.search__field:focus-within,
+.search[data-open="true"] .search__field { border-color: var(--hair-3); }
+
+.search__icon { width: 14px; height: 14px; flex: 0 0 auto; color: var(--text-faint); }
+
+.search__input {
+  flex: 1; min-width: 0;
+  border: none; outline: none; background: transparent;
+  color: var(--text-primary);
+  font: 500 11.5px/1 var(--font-ui);
+}
+.search__input::placeholder { color: var(--text-disabled); }
+
+.search__kbd {
+  display: flex; align-items: center; flex: 0 0 auto;
+  height: 17px; padding: 0 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  font: 600 9.5px/1 var(--font-ui); letter-spacing: 0.04em;
+  color: var(--text-disabled);
+}
+
+.search__panel {
+  position: absolute; top: 38px; left: 0; right: 0; z-index: 40;
+  display: flex; flex-direction: column;
+  max-height: 296px; overflow-y: auto;
+  background: var(--ink-panel);
+  border: 1px solid var(--hair-3);
+  border-radius: var(--r-md);
+  box-shadow: 0 26px 54px -26px rgba(0, 0, 0, 0.85),
+              0 0 0 1px rgba(124, 85, 232, 0.12);
+}
+.search__panel[hidden] { display: none; }
+
+.sresult {
+  display: grid; grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center; gap: 10px;
+  padding: 8px 11px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+  transition: background-color var(--t-ui);
+}
+.sresult:last-child { border-bottom: none; }
+.sresult:hover,
+.sresult[data-active="true"] { background: var(--wash-hover); }
+
+.sresult__kind {
+  display: flex; align-items: center; justify-content: center;
+  height: 19px; border-radius: 4px;
+  font: 700 9px/1 var(--font-ui); letter-spacing: 0.06em;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  color: var(--text-muted);
+}
+.sresult__kind[data-kind="ETF"] {
+  background: var(--violet-tint-18);
+  border-color: rgba(160, 136, 255, 0.32);
+  color: var(--violet-200);
+}
+.sresult__kind[data-kind="GDR"] { color: var(--text-faint); }
+
+.sresult__id { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.sresult__tk {
+  font: 700 11.5px/1 var(--font-ui); letter-spacing: 0.03em;
+  color: var(--text-primary); white-space: nowrap;
+}
+.sresult__name {
+  font: 400 10px/1.2 var(--font-ui); color: var(--text-faint);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sresult__figs {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 3px;
+  white-space: nowrap;
+}
+.sresult__px {
+  font: 700 11.5px/1 var(--font-figure); letter-spacing: -0.024em;
+  color: var(--text-primary);
+}
+.sresult__day { font: 600 10px/1 var(--font-figure); letter-spacing: -0.02em; }
+
+.search__empty {
+  padding: 14px 12px;
+  font: 400 11px/1.4 var(--font-ui); color: var(--text-muted); text-align: center;
+}
+.search__foot {
+  padding: 8px 11px;
+  border-top: 1px solid rgba(255, 255, 255, 0.045);
+  font: 400 9.5px/1 var(--font-ui); color: var(--text-faint); text-align: center;
+}
+
+/* Skeleton rows while the universe is still loading. The .sk--* modifiers in
+   the market-watch block are scoped to .mcard--skeleton, so these are ours. */
+.sk--skind { width: 44px; height: 19px; border-radius: 4px; }
+.sk--stk   { width: 46px; height: 10px; border-radius: 3px; }
+.sk--sco   { width: 92px; height:  9px; border-radius: 3px; }
+.sk--spx2  { width: 52px; height: 10px; border-radius: 3px; }
+
+@media (max-width: 900px) {
+  .search { max-width: 220px; }
+  .search__kbd { display: none; }
+}
+@media (max-width: 620px) {
+  .search { flex-basis: 90px; }
+}
+
+/* Holdings rows became anchors when the stock page landed, so they need the
+   grid restated (an <a> is inline by default), plus the interactive states the
+   hover wash was previously implying without delivering. */
+a.prow--pos {
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+a.prow--pos:focus-visible {
+  outline: 2px solid var(--brand-soft);
+  outline-offset: -2px;
+  background: var(--wash-hover);
+}
+a.prow--pos:active { background: rgba(124, 85, 232, 0.18); }
+
+/* Search states introduced by the wider directory + remote lookup. */
+
+/* A status line inside the results panel. Not an option — it carries no
+   role="option" and never enters the keyboard rows, so arrow navigation stays
+   aligned with the sr-N ids. */
+.sresult--note {
+  grid-template-columns: 1fr;
+  justify-items: center;
+  padding: 10px 11px;
+  font: 400 10.5px/1 var(--font-ui);
+  color: var(--text-faint);
+  cursor: default;
+}
+.sresult--note:hover { background: transparent; }
+
+/* A directory row whose type the provider never gave. Reads as unknown rather
+   than being guessed into STK. */
+.sresult__kind[data-kind=""] {
+  color: var(--text-disabled);
+  letter-spacing: 0;
+}
+
+.search__foot--warn { color: var(--loss-soft); }
+
+/* =========================================================================
+   Company financials  (#view-financials)
+   =========================================================================
+   No reference design exists for this page — the Canvas files in the design
+   project are empty — so it is built from the stock page's vocabulary: same
+   card chrome, same segmented control, same hero. Dark-only, like its sibling. */
+
+#view-financials {
+  gap: 12px;
+  padding-bottom: var(--s-5);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(150, 124, 255, 0.22) transparent;
+}
+#view-financials::-webkit-scrollbar { width: 8px; }
+#view-financials::-webkit-scrollbar-thumb {
+  background: rgba(150, 124, 255, 0.22); border-radius: 4px;
+}
+
+.finhero .shero__top { padding-bottom: 16px; }
+.finhero__basis {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 6px;
+  margin-left: auto;
+}
+.finhero__ccy {
+  font: 700 16px/1 var(--font-figure); letter-spacing: -0.03em;
+  color: var(--text-primary);
+}
+/* The reporting/quote mismatch is a fact about the company, not an error —
+   HSBC reports in USD and quotes in pence. Violet like the ticker chip, never
+   the loss red. */
+.finhero__note {
+  display: flex; align-items: center; height: 19px; padding: 0 8px;
+  border-radius: 5px;
+  background: var(--violet-tint-18);
+  border: 1px solid rgba(160, 136, 255, 0.34);
+  font: 600 9.5px/1 var(--font-ui); letter-spacing: 0.04em;
+  color: var(--violet-200); white-space: nowrap;
+}
+
+.fincontrols {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap; flex: none;
+}
+.fincontrols .sranges:last-child { margin-left: auto; }
+
+.finplot { flex: none; height: 240px; padding: 0 6px 8px; }
+/* The reference every bar is read against, so it is not just another tick. */
+.plot__zero { stroke: var(--border-strong); stroke-width: 1.5; }
+.plot__band { fill: var(--wash-hover); }
+@keyframes barGrow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+
+.slegend__sq {
+  width: 9px; height: 9px; flex: 0 0 auto; border-radius: 2px;
+}
+.tip__series {
+  display: flex; align-items: center; gap: 7px; margin-top: 4px;
+  font: 500 10.5px/1 var(--font-ui); color: var(--text-body); white-space: nowrap;
+}
+.tip__series i { width: 8px; height: 8px; border-radius: 2px; flex: 0 0 auto; }
+.tip__series b {
+  margin-left: auto; font: 700 10.5px/1 var(--font-figure);
+  font-variant-numeric: tabular-nums; color: var(--text-primary);
+}
+
+/* ---- the statement table ---- */
+.fintable__scroll { overflow-x: auto; padding: 0 16px 4px; }
+.fintable {
+  width: 100%; border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: var(--ff-tabular);
+}
+.fintable th, .fintable td { padding: 7px 10px; white-space: nowrap; }
+.fintable thead th {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--ink-panel);
+  border-bottom: 1px solid var(--hair-2);
+  font: 600 10px/1 var(--font-ui); letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--text-faint);
+  text-align: right;
+}
+.fintable thead th:first-child { text-align: left; }
+/* Tables run newest-first, matching filings and the provider; the trend chart
+   above runs oldest-first, because a time axis reads left to right. The latest
+   column is marked so the two directions read as deliberate. */
+.fintable .is-latest { color: var(--violet-200); }
+.fintable td.is-latest { background: rgba(124, 85, 232, 0.06); }
+
+.fintable tbody th {
+  text-align: left;
+  font: 400 11.5px/1.3 var(--font-ui); color: var(--text-muted);
+}
+.fintable tbody th[data-indent="1"] { padding-left: 24px; }
+.fintable td {
+  text-align: right;
+  font: 600 11.5px/1.3 var(--font-figure); letter-spacing: -0.018em;
+  color: var(--text-body);
+}
+.fintable tr[data-emphasis="0"] th { color: var(--text-primary); font-weight: 600; }
+.fintable tr[data-emphasis="0"] td { color: var(--text-primary); font-weight: 700; }
+.fintable tbody tr:hover td,
+.fintable tbody tr:hover th { background: var(--wash-hover); }
+
+.fintable .finsection th {
+  padding-top: 16px;
+  font: 600 9.5px/1 var(--font-ui); letter-spacing: 0.09em;
+  text-transform: uppercase; color: var(--text-faint);
+}
+/* Rows we computed rather than received. Said once per section, not per row. */
+.fintable .finsection--derived th::after {
+  content: " · computed";
+  color: var(--text-disabled); letter-spacing: 0.04em;
+}
+
+.fintable__foot {
+  margin: 0; padding: 10px 16px 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.045);
+  font: 400 10px/1.5 var(--font-ui); color: var(--text-faint);
+}
+
+/* ---- the Financials pill on the stock page ---- */
+.spill {
+  margin-left: auto;
+  display: flex; align-items: center; gap: 7px; flex: 0 0 auto;
+  height: 28px; padding: 0 12px;
+  border-radius: 7px;
+  background: var(--violet-tint-10);
+  border: 1px solid rgba(160, 136, 255, 0.28);
+  color: var(--violet-200);
+  font: 600 11px/1 var(--font-ui); white-space: nowrap;
+  transition: background-color var(--t-ui), border-color var(--t-ui);
+}
+.spill svg { width: 14px; height: 14px; }
+.spill:hover { background: var(--violet-tint-18); border-color: var(--hair-3); }
+.spill:active { transform: scale(0.97); }
+/* A fund files no company statements. Reads as unavailable with a reason,
+   and stays focusable so a screen reader can hear why — the same idiom as a
+   chart range the provider has no data for. */
+.spill[aria-disabled="true"] {
+  color: var(--text-disabled);
+  border-color: rgba(255, 255, 255, 0.07);
+  background: transparent;
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.spill[aria-disabled="true"] svg { pointer-events: none; }
+
+/* ---- skeletons ---- */
+.sk--fplot { width: 100%; height: 100%; border-radius: var(--r-md); }
+.sk--frow  { width: 100%; height: 11px; border-radius: 3px; }
+
+@media (max-width: 900px) {
+  .fincontrols .sranges:last-child { margin-left: 0; }
+  .finhero__basis { align-items: flex-start; margin-left: 0; }
+}
+
+/* =========================================================================
+   Overview: holdings below the fold
+   =========================================================================
+   Reuses the Watchlist tab's positions table verbatim, so a position looks the
+   same wherever you meet it. The only additions are a static (unsortable)
+   header and the scroll cue. Dark-only, like the table it borrows — the app
+   hardcodes data-theme="dark" and has no toggle, so this is theoretical, but
+   it is the same caveat the stock page carries. */
+
+.ovpos {
+  flex: 0 0 auto;
+  /* No riseIn: it would play out before the section is ever scrolled into
+     view, so the animation would be spent on nobody. */
+  animation: none;
+}
+.ovpos .positions__foot { margin: 0; }
+
+/* Static labels where the Watchlist tab has sort buttons. Same grid, same
+   metrics, so the columns line up between the two tables. */
+.ovhead__cell {
+  display: flex;
+  align-items: flex-end;
+  font: 600 10px/1 var(--font-ui);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+/* The cue. Absolutely positioned so it reflows nothing above it — the whole
+   point is that the first screenful is untouched. */
+/* Bottom-right, not bottom-centre. It has to overlay something — there is no
+   gutter big enough below the cards — so it overlays the quietest corner
+   rather than the middle of a figure in the currency card. */
+.ov-cue {
+  position: absolute;
+  right: 10px;
+  bottom: 6px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 11px;
+  border-radius: var(--r-pill);
+  background: var(--ink-raised);
+  border: 1px solid rgba(160, 136, 255, 0.3);
+  box-shadow: 0 10px 24px -12px rgba(124, 85, 232, 0.6);
+  color: var(--violet-200);
+  font: 600 10.5px/1 var(--font-ui);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  /* transform and opacity only */
+  transition: opacity var(--dur-mid) var(--ease-spring),
+              transform var(--dur-mid) var(--ease-spring);
+}
+.ov-cue svg { width: 12px; height: 12px; }
+.ov-cue:hover { transform: translateY(2px); }
+.ov-cue:active { transform: translateY(1px) scale(0.97); }
+/* Gone once you have scrolled — it has done its job and should not sit over
+   the holdings it pointed at. */
+.ov-cue[data-gone="true"] {
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ov-cue { transition: none; }
+}
+
+/* The view is the scroll container, so the cue anchors to it. */
+#view-overview { position: relative; }

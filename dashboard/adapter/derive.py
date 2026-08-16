@@ -1,0 +1,170 @@
+"""Portfolio maths shared by the snapshot builder and the live feed.
+
+Two code paths produce the same payload shape: `build.py` (connect, fetch,
+disconnect, write portfolio.json) and `feed.py` (one connection held open,
+recomposed every few seconds). They must agree exactly — if "invested" or
+"cash weight" were implemented twice, the page would show one number on load
+and a different one three seconds later.
+
+Everything here is pure: give it positions and rates, get a payload back. It
+opens no connections and reads no files, which is also what makes it testable
+without a broker.
+
+Percentage conventions come from the reference design and are not arbitrary;
+each was reverse-engineered from the figures printed on it:
+
+    unrealised %  return on cost      1554 / (45147 - 1554) = 3.57%
+    daily %       against prior NAV   -925 / (50332 + 925)  = -1.80%
+    weights       share of *invested*, not of NAV
+    cash weight   share of NAV
+"""
+from __future__ import annotations
+
+import logging
+
+import regions as regions_mod
+
+log = logging.getLogger(__name__)
+
+
+def pct(numerator: float | None, denominator: float | None) -> float | None:
+    if numerator is None or not denominator:
+        return None
+    return numerator / denominator * 100.0
+
+
+def converter(fx: dict[str, float]):
+    """Build an amount -> GBP converter from a {currency: rate} table."""
+    def to_gbp(amount: float, currency: str) -> float:
+        rate = fx.get(currency)
+        if rate is None:
+            log.warning("no FX rate for %s; treating as base", currency)
+            rate = 1.0
+        return amount * rate
+    return to_gbp
+
+
+def make_position(*, con_id: int, symbol: str, currency: str, exchange: str,
+                  quantity: float, price: float, market_value: float,
+                  average_cost: float, unrealized_pnl: float,
+                  day_change_pct: float | None, day_change_source: str,
+                  spark: list[float], to_gbp) -> dict:
+    """One position row, with everything converted to GBP."""
+    name, region = regions_mod.lookup(con_id, symbol)
+
+    value_gbp = to_gbp(market_value, currency)
+    cost_gbp = to_gbp(average_cost * quantity, currency)
+    unrealised_gbp = to_gbp(unrealized_pnl, currency)
+
+    # Day P&L in GBP is derived from the percentage rather than taken from
+    # IBKR, so the money figure always agrees with the percentage printed
+    # beside it.
+    day_pnl_gbp = None
+    if day_change_pct is not None:
+        opening = value_gbp / (1.0 + day_change_pct / 100.0)
+        day_pnl_gbp = value_gbp - opening
+
+    return {
+        "con_id": con_id,
+        "symbol": symbol,
+        "name": name,
+        "region": region,
+        "currency": currency,
+        "exchange": exchange,
+        "quantity": quantity,
+        "price": price,
+        "value_gbp": value_gbp,
+        "cost_gbp": cost_gbp,
+        "unrealised_gbp": unrealised_gbp,
+        "unrealised_pct": pct(unrealised_gbp, cost_gbp),
+        "day_change_pct": day_change_pct,
+        "day_pnl_gbp": day_pnl_gbp,
+        "day_change_source": day_change_source,
+        "spark": spark,
+    }
+
+
+def daily_pnl(positions: list[dict], account_daily_pnl: float | None) -> tuple[float, str]:
+    """Account day P&L, preferring the sum of positions over IBKR's own figure.
+
+    That looks backwards — the broker's number ought to win — but IBKR's
+    account-level dailyPnL is only the sum of the positions its market-data
+    farms managed to value, and it reports that partial total with no
+    indication that it is partial. Measured 26 Jul 2026: IBKR said -552.47,
+    exactly HSBA + HY9H + IUCS + SMSN + XDJP converted to GBP; the other ten
+    returned warning 2150 or never streamed. Summing all fifteen gives -935.60.
+
+    So: use the complete set when there is one, and fall back to IBKR's partial
+    figure only when we could not price everything ourselves.
+    """
+    summed = sum(p["day_pnl_gbp"] for p in positions if p["day_pnl_gbp"] is not None)
+    priced = [p for p in positions if p["day_pnl_gbp"] is not None]
+
+    if positions and len(priced) == len(positions):
+        return summed, "positions-complete"
+    if account_daily_pnl is not None:
+        return account_daily_pnl, "ibkr-account-partial"
+    return summed, f"positions-partial-{len(priced)}-of-{len(positions)}"
+
+
+def aggregate(positions: list[dict], *, nav: float, cash: float,
+              account_daily_pnl: float | None) -> dict:
+    """KPIs, region and currency splits, concentration and movers."""
+    invested = sum(p["value_gbp"] for p in positions)
+    unrealised = sum(p["unrealised_gbp"] for p in positions)
+    cost_basis = invested - unrealised
+    day_pnl, day_source = daily_pnl(positions, account_daily_pnl)
+
+    by_region: dict[str, float] = {}
+    for p in positions:
+        by_region[p["region"]] = by_region.get(p["region"], 0.0) + p["value_gbp"]
+    region_rows = [
+        {
+            "name": name,
+            "value_gbp": value,
+            "weight_pct": pct(value, invested),
+            "color_index": regions_mod.sort_key(name),
+        }
+        for name, value in sorted(
+            by_region.items(), key=lambda kv: (-kv[1], regions_mod.sort_key(kv[0])))
+    ]
+
+    by_currency: dict[str, float] = {}
+    for p in positions:
+        by_currency[p["currency"]] = by_currency.get(p["currency"], 0.0) + p["value_gbp"]
+    currency_rows = [
+        {"code": code, "value_gbp": value, "weight_pct": pct(value, invested)}
+        for code, value in sorted(by_currency.items(), key=lambda kv: -kv[1])
+    ]
+
+    ranked = sorted(positions, key=lambda p: -p["value_gbp"])
+    largest = ranked[0] if ranked else None
+    movable = [p for p in positions if p["day_change_pct"] is not None]
+    movable.sort(key=lambda p: -p["day_change_pct"])
+
+    return {
+        "daily_pnl_source": day_source,
+        "kpis": {
+            "net_liquidation": nav,
+            "daily_pnl": day_pnl,
+            "daily_pnl_pct": pct(day_pnl, nav - day_pnl),
+            "unrealised_pnl": unrealised,
+            "unrealised_pnl_pct": pct(unrealised, cost_basis),
+            "invested": invested,
+            "cash_available": cash,
+        },
+        "regions": region_rows,
+        "currencies": currency_rows,
+        "concentration": {
+            "largest_symbol": largest["symbol"] if largest else None,
+            "largest_weight_pct": pct(largest["value_gbp"], invested) if largest else None,
+            "top3_weight_pct": pct(sum(p["value_gbp"] for p in ranked[:3]), invested),
+            "positions": len(positions),
+            "markets": len({p["region"] for p in positions}),
+            "cash_weight_pct": pct(cash, nav),
+        },
+        "movers": {
+            "gainers": [p for p in movable if p["day_change_pct"] > 0][:3],
+            "losers": [p for p in reversed(movable) if p["day_change_pct"] < 0][:3],
+        },
+    }

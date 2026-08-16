@@ -1,0 +1,260 @@
+/* Design tokens.
+ *
+ * Colours are sampled from Design.pdf, not invented — the hex values below are
+ * what the reference actually renders. Dark is the shipped theme; every colour
+ * also carries a light value so the system is complete and a toggle is a
+ * one-line change rather than a redesign.
+ *
+ * Spacing is a single scale: 4 8 12 16 24 32 48. No off-scale values.
+ */
+
+:root {
+  /* ---- spacing ---- */
+  --s-1:  4px;
+  --s-2:  8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+  --s-7: 48px;
+
+  /* ---- radius ---- */
+  --r-sm:  6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 18px;
+  --r-pill: 999px;
+
+  /* ---- type ---- */
+  --font-display: "Archivo", "Inter", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, sans-serif;
+
+  /* The figure face. Archivo like --font-display, but a separate token because
+   * it is a separate job: --font-display sets titles and prose headings, this
+   * sets numbers. They coincide today; a future change to heading type must not
+   * silently re-cut every price on the screen. Always pair with --ff-tabular. */
+  --font-figure: "Archivo", "Helvetica Neue", Arial, sans-serif;
+
+  /* Tabular, lining figures. `font-variant-numeric: tabular-nums` alone leaves
+   * old-style figures on faces that default to them, so the raw features are
+   * set too — digits must be equal-width AND sit on the baseline for a column
+   * of prices to line up. Applied via font-feature-settings. */
+  --ff-tabular: "tnum" 1, "lnum" 1;
+
+  /* Display sizes scale with viewport height so the whole Overview fits one
+   * screen without becoming unreadable. The floor is what fits an 801px
+   * browser; the ceiling is the size measured off Design.pdf, reached at
+   * roughly 1230px of viewport height. */
+  --t-hero:   clamp(34px, 5.2vh, 64px);   /* net liquidation */
+  --t-kpi:    clamp(22px, 3.2vh, 36px);   /* remaining KPI values */
+  --t-donut:  clamp(20px, 3.0vh, 36px);   /* donut centre value */
+  --t-title:  clamp(15px, 2.1vh, 20px);   /* card titles */
+  --t-body:   14px;
+  --t-sm:     13px;
+  --t-label:  11px;   /* uppercase letterspaced eyebrows */
+
+  --tracking-tight: -0.03em;
+  --tracking-label:  0.09em;
+  --leading-body: 1.7;
+
+  /* ---- layout ---- */
+  --sidebar-w: 260px;
+  --content-pad: 32px;
+  --grid-gap: 22px;
+  --row-gap: clamp(12px, 2.2vh, 24px);
+
+  /* ---- motion ---- */
+  --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 150ms;
+  --dur-mid:  220ms;
+  --dur-slow: 300ms;
+
+  /* ---- categorical series (donut / regions) ----
+   * Fixed order, assigned by region rank in regions.py, never cycled. A region
+   * keeps its colour when another drops out of the portfolio. */
+  --cat-1: #4c8df6;   /* Hong Kong / China */
+  --cat-2: #e0a33e;   /* United States */
+  --cat-3: #2fb88a;   /* South Korea */
+  --cat-4: #9b72e8;   /* Japan */
+  --cat-5: #3fb6c4;   /* Singapore */
+  --cat-6: #db5f7e;   /* United Kingdom */
+  --cat-7: #6b7280;   /* Unclassified */
+
+  /* ---- Holdings sector page (Holdings.dc.html) ----
+   * Taken from that file's inline overrides. Two values differ, both because
+   * the design fails WCAG AA at the sizes it uses them:
+   *
+   *   --text-disabled  #5B6470 -> #788391   3.13:1 on the panel, 2.96:1 on the
+   *                                         hero. Now 4.88 / 4.60. The design's
+   *                                         latest revision moved the column
+   *                                         headers and row sublabels off this
+   *                                         token to --text-muted on its own,
+   *                                         so it now carries only the footer
+   *                                         legal line and the hero's closing
+   *                                         note — but those still need to be
+   *                                         readable.
+   *   --loss-soft      #C4626B -> #c76d75   4.48:1 on --ink-raised and 4.18:1
+   *                                         inside its own tinted delta chip.
+   *                                         Now 4.96 / 4.56. Lifting the text
+   *                                         rather than washing out the chip
+   *                                         keeps the design's fill weight.
+   *
+   * Same hue in both cases, minimum lift to clear 4.5:1.
+   */
+  --font-display-holdings: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-ui: "Manrope", "Helvetica Neue", Arial, sans-serif;
+
+  --ink-page:   #0A0C0F;
+  --ink-rail:   #0C0F13;
+  --ink-panel:  #0F1216;
+  --ink-raised: #181722;
+  --ink-chip:   #14181D;
+
+  --violet-200: #D5C6FF;
+  --violet-300: #B69CFF;
+  --violet-400: #9A79F2;
+  --violet-500: #7C55E8;
+  --violet-600: #6B45D6;
+  --violet-tint-18: rgba(124, 85, 232, 0.18);
+
+  --hair-1: rgba(150, 124, 255, 0.09);
+  --hair-2: rgba(150, 124, 255, 0.11);
+  --hair-3: rgba(160, 136, 255, 0.20);
+  --wash-hover: rgba(124, 85, 232, 0.12);
+
+  --text-primary:  #EEF1F5;
+  --text-body:     #B9C1CB;
+  --text-muted:    #8B95A2;
+  --text-faint:    #828D9B;
+  --text-disabled: #788391;   /* lifted for AA — see note above */
+
+  --gain-soft: #3FA588;
+  --loss-soft: #c76d75;       /* lifted for AA — see note above */
+  /* The neutral of that pair: the analyst "Hold" bar, and anything else that is
+   * neither a gain nor a loss. A token because it sits beside the two above in
+   * the same chart and has to theme with them. */
+  --hold-soft: #8A7BC8;
+
+  /* Statement trend series. Three hues in one lightness band, so they separate
+   * by hue rather than by lightness alone and survive colourblind viewing.
+   * Validated against --ink-panel #0F1216 with the dataviz palette validator:
+   * lightness band, chroma floor, CVD separation (worst adjacent pair ΔE 12.9
+   * deutan), normal-vision floor and 3:1 contrast all pass.
+   *
+   * Deliberately their own hexes rather than aliases of --cat-*: that ramp is
+   * assigned by region rank (see regions.py) and a financials chart must not be
+   * able to recolour itself because a region left the portfolio. */
+  --fin-1: #8E6BF0;   /* revenue / assets / operating   */
+  --fin-2: #00A2B2;   /* operating income / liabilities / investing */
+  --fin-3: #BE8317;   /* net income / equity / financing */
+
+  --t-ui: 180ms cubic-bezier(.22, 1, .36, 1);
+}
+
+/* ---------- dark (shipped) ---------- */
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg-page:      #0a0c0f;
+  --bg-sidebar:   #0c0f13;
+  --surface:      #0f1215;   /* base card */
+  --surface-2:    #16151f;   /* elevated / hero card */
+  --surface-3:    #1c1b28;   /* floating: menus, tooltips */
+  --track:        #0d1014;   /* progress-bar troughs */
+
+  --border:       rgba(255, 255, 255, 0.07);
+  --border-strong:rgba(255, 255, 255, 0.12);
+
+  --text:         #f5f7fa;
+  --text-2:       #7a8490;
+  --text-3:       #737e8b;   /* AA 4.55:1 — drives chart axis labels */
+
+  --brand:        #7c55e8;
+  --brand-soft:   #9a79f2;
+  --brand-pale:   #c0adf4;
+  --brand-glow:   rgba(124, 85, 232, 0.45);
+
+  --pos:          #16c784;
+  --neg:          #eb4650;   /* reference #ea3943 +3% L: AA on chip too */
+  --flat:         #7a8490;
+  --pos-bg:       rgba(22, 199, 132, 0.13);
+  --neg-bg:       rgba(234, 57, 67, 0.14);
+
+  /* layered, colour-tinted elevation — never a flat drop shadow */
+  --shadow-card:
+     0 1px 1px rgba(0, 0, 0, 0.5),
+     0 4px 12px rgba(0, 0, 0, 0.35);
+  --shadow-hero:
+     0 1px 1px rgba(0, 0, 0, 0.5),
+     0 8px 28px rgba(124, 85, 232, 0.14),
+     0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-float:
+     0 12px 32px rgba(0, 0, 0, 0.55),
+     0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+/* ---------- light ---------- */
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg-page:      #f4f6f9;
+  --bg-sidebar:   #ffffff;
+  --surface:      #ffffff;
+  --surface-2:    #faf9ff;
+  --surface-3:    #ffffff;
+  --track:        #e8ecf1;
+
+  --border:       rgba(12, 15, 19, 0.09);
+  --border-strong:rgba(12, 15, 19, 0.16);
+
+  --text:         #10141a;
+  --text-2:       #5b6673;
+  --text-3:       #6c7785;   /* AA 4.55:1 on white */
+
+  --brand:        #6635e0;
+  --brand-soft:   #7c55e8;
+  --brand-pale:   #5a2fd0;
+  --brand-glow:   rgba(102, 53, 224, 0.28);
+
+  /* darkened so both still clear WCAG AA on a white surface */
+  --pos:          #087c50;   /* AA on white 5.24 and on its chip 4.62 */
+  --neg:          #c8202c;
+  --flat:         #5b6673;
+  --pos-bg:       rgba(8, 124, 80, 0.10);
+  --neg-bg:       rgba(200, 32, 44, 0.10);
+
+  --cat-1: #2f6fd0; --cat-2: #b87816; --cat-3: #12855f;
+  --cat-4: #7343c9; --cat-5: #1c7f8c; --cat-6: #bc3a5c; --cat-7: #566070;
+
+  --shadow-card:
+     0 1px 2px rgba(16, 20, 26, 0.06),
+     0 4px 12px rgba(16, 20, 26, 0.05);
+  --shadow-hero:
+     0 1px 2px rgba(16, 20, 26, 0.06),
+     0 8px 28px rgba(102, 53, 224, 0.10),
+     0 2px 8px rgba(16, 20, 26, 0.05);
+  --shadow-float:
+     0 12px 32px rgba(16, 20, 26, 0.14),
+     0 2px 6px rgba(16, 20, 26, 0.08);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    color-scheme: light;
+    --bg-page: #f4f6f9; --bg-sidebar: #ffffff;
+    --surface: #ffffff; --surface-2: #faf9ff; --surface-3: #ffffff;
+    --track: #e8ecf1;
+    --border: rgba(12,15,19,.09); --border-strong: rgba(12,15,19,.16);
+    --text: #10141a; --text-2: #5b6673; --text-3: #6c7785;
+    --brand: #6635e0; --brand-soft: #7c55e8; --brand-pale: #5a2fd0;
+    --brand-glow: rgba(102,53,224,.28);
+    --pos: #087c50; --neg: #c8202c; --flat: #5b6673;
+    --pos-bg: rgba(8,124,80,.10); --neg-bg: rgba(200,32,44,.10);
+    --cat-1: #2f6fd0; --cat-2: #b87816; --cat-3: #12855f;
+    --cat-4: #7343c9; --cat-5: #1c7f8c; --cat-6: #bc3a5c; --cat-7: #566070;
+    --shadow-card: 0 1px 2px rgba(16,20,26,.06), 0 4px 12px rgba(16,20,26,.05);
+    --shadow-hero: 0 1px 2px rgba(16,20,26,.06), 0 8px 28px rgba(102,53,224,.10), 0 2px 8px rgba(16,20,26,.05);
+    --shadow-float: 0 12px 32px rgba(16,20,26,.14), 0 2px 6px rgba(16,20,26,.08);
+  }
+}

@@ -1,0 +1,662 @@
+<!doctype html>
+<html lang="en-GB" data-theme="dark" data-state="loading">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Portfolio — Overview</title>
+<meta name="description" content="Live GBP investment portfolio dashboard: net liquidation, daily and unrealised P&amp;L, allocation by region, currency exposure and holdings.">
+<meta name="color-scheme" content="dark light">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Inter:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- ================= sidebar ================= -->
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand__mark" aria-hidden="true">P</span>
+      <span class="brand__name">Portfolio</span>
+      <button class="brand__collapse" type="button" aria-label="Collapse sidebar">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" width="17" height="17">
+          <rect x="2.5" y="3.5" width="15" height="13" rx="2.5"/><path d="M8 3.5v13M13.5 8.5 11.5 10l2 1.5"/>
+        </svg>
+      </button>
+    </div>
+
+    <nav class="nav-group" aria-label="Main">
+      <p class="eyebrow nav-group__label">Main</p>
+      <a class="nav-item" href="#overview" data-nav="overview" aria-current="page">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6">
+          <rect x="2.6" y="2.6" width="6" height="6" rx="1.6"/><rect x="11.4" y="2.6" width="6" height="6" rx="1.6"/>
+          <rect x="2.6" y="11.4" width="6" height="6" rx="1.6"/><rect x="11.4" y="11.4" width="6" height="6" rx="1.6"/>
+        </svg>Overview</a>
+      <a class="nav-item" href="#holdings" data-nav="holdings">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6">
+          <rect x="2.4" y="5.6" width="15.2" height="11" rx="2"/><path d="M7 5.6V4.2a1.6 1.6 0 0 1 1.6-1.6h2.8A1.6 1.6 0 0 1 13 4.2v1.4M2.4 10.4h15.2"/>
+        </svg>Watchlist</a>
+      <a class="nav-item" href="#transactions" data-nav="transactions">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6">
+          <path d="M3 7h11l-2.6-2.8M17 13H6l2.6 2.8"/>
+        </svg>Transactions</a>
+      <a class="nav-item" href="#market" data-nav="market">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">
+          <path d="m10 2.9 2.2 4.5 5 .7-3.6 3.5.85 4.95L10 14.2l-4.45 2.35.85-4.95L2.8 8.1l5-.7Z"/>
+        </svg>Market watch</a>
+    </nav>
+
+    <nav class="nav-group" aria-label="Analysis">
+      <p class="eyebrow nav-group__label">Analysis</p>
+      <a class="nav-item" href="#performance" data-nav="performance">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">
+          <path d="M2.6 13.4 7 8.6l3.2 3 4.8-5.4"/><path d="M12.6 6.2h3v3"/>
+        </svg>Performance</a>
+      <a class="nav-item" href="#allocation" data-nav="allocation">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6">
+          <circle cx="10" cy="10" r="7.2"/><path d="M10 2.8V10l5.1 5.1"/>
+        </svg>Allocation</a>
+    </nav>
+
+    <div class="sidebar__foot">
+      <a class="nav-item" href="#settings">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6">
+          <circle cx="10" cy="10" r="2.6"/>
+          <path d="M10 2.4v2M10 15.6v2M2.4 10h2M15.6 10h2M4.6 4.6l1.4 1.4M14 14l1.4 1.4M15.4 4.6 14 6M6 14l-1.4 1.4"/>
+        </svg>Settings</a>
+      <a class="nav-item" href="#logout">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6">
+          <path d="M7.6 2.8H4.4a1.6 1.6 0 0 0-1.6 1.6v11.2a1.6 1.6 0 0 0 1.6 1.6h3.2M12.4 13.6 16 10l-3.6-3.6M16 10H7.2"/>
+        </svg>Log out</a>
+    </div>
+  </aside>
+
+  <!-- ================= main ================= -->
+  <main class="main">
+
+    <header class="topbar">
+      <div class="tabs" role="tablist" aria-label="Sections">
+        <button class="tab" role="tab" data-tab="overview" aria-selected="true">Overview</button>
+        <button class="tab" role="tab" data-tab="holdings" aria-selected="false">Watchlist</button>
+        <button class="tab" role="tab" data-tab="transactions" aria-selected="false">Transactions</button>
+        <button class="tab" role="tab" data-tab="market" aria-selected="false">Market watch</button>
+      </div>
+
+      <!-- Instrument search. Lives in the shared topbar, so it is reachable
+           from every view rather than only Overview. -->
+      <div class="search" id="search">
+        <div class="search__field" id="searchField">
+          <svg class="search__icon" viewBox="0 0 20 20" fill="none" stroke="currentColor"
+               stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
+            <circle cx="9" cy="9" r="5.6"/><path d="m13.2 13.2 3.4 3.4"/>
+          </svg>
+          <input class="search__input" id="searchInput" type="text"
+                 placeholder="Search stocks or ETFs" aria-label="Search stocks or ETFs"
+                 autocomplete="off" spellcheck="false"
+                 role="combobox" aria-expanded="false" aria-controls="searchResults"
+                 aria-autocomplete="list">
+          <span class="search__kbd" id="searchKbd" aria-hidden="true">⌘K</span>
+        </div>
+        <div class="search__panel" id="searchResults" role="listbox"
+             aria-label="Search results" hidden></div>
+        <p class="u-sr" id="searchStatus" role="status" aria-live="polite"></p>
+      </div>
+
+      <div class="topbar__meta">
+        <span class="feed" id="feed" data-state="live">
+          <i class="feed__dot" aria-hidden="true"></i>
+          <span id="feedLabel">Connecting…</span>
+        </span>
+        <span class="venue-chip">IBKR · GBP</span>
+      </div>
+    </header>
+
+    <div class="views">
+
+      <!-- ---------------- Overview ---------------- -->
+      <section class="view" id="view-overview" role="tabpanel" aria-label="Overview">
+
+        <!-- Everything above the fold. This wrapper owns the viewport-locked
+             grid that used to live on #view-overview itself, so the three rows
+             still resolve their fr tracks against exactly one screenful while
+             the view around it is free to scroll. -->
+        <div class="ov-screen">
+
+        <div class="stale-banner" role="status">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="8" cy="8" r="6.4"/><path d="M8 4.6v4M8 11.2v.3"/>
+          </svg>
+          <span>Feed disconnected. These are the last values received at <b id="staleTime">—</b> — don't trade on them.</span>
+        </div>
+
+        <!-- KPI row -->
+        <div class="kpi-row" id="kpiRow">
+          <article class="card kpi kpi--hero reveal" style="animation-delay:0ms">
+            <p class="eyebrow kpi__label">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
+                <rect x="1.8" y="3.6" width="12.4" height="9" rx="2"/><path d="M1.8 6.6h12.4M11 9.6h1.4"/>
+              </svg>Net liquidation
+            </p>
+            <p class="kpi__value num" id="kpiNav">£0</p>
+          </article>
+
+          <article class="card kpi reveal" style="animation-delay:40ms">
+            <p class="eyebrow kpi__label">Daily P/L</p>
+            <p class="kpi__value num" id="kpiDay">£0</p>
+            <span class="chip kpi__chip" id="kpiDayChip"></span>
+          </article>
+
+          <article class="card kpi reveal" style="animation-delay:80ms">
+            <p class="eyebrow kpi__label">Unrealised P/L</p>
+            <p class="kpi__value num" id="kpiUnreal">£0</p>
+            <span class="chip kpi__chip" id="kpiUnrealChip"></span>
+          </article>
+
+          <article class="card kpi reveal" style="animation-delay:120ms">
+            <p class="eyebrow kpi__label">Invested</p>
+            <p class="kpi__value num" id="kpiInvested">£0</p>
+          </article>
+
+          <article class="card kpi reveal" style="animation-delay:160ms">
+            <p class="eyebrow kpi__label">Cash available</p>
+            <p class="kpi__value num" id="kpiCash">£0</p>
+          </article>
+        </div>
+
+        <!-- chart + allocation -->
+        <div class="mid-row">
+          <section class="card chart-card reveal" style="animation-delay:200ms" aria-labelledby="chartTitle">
+            <div class="card__head">
+              <h2 class="eyebrow" id="chartTitle">Portfolio value</h2>
+              <div class="ranges" role="group" aria-label="Time range">
+                <button class="range" type="button" data-range="1D">1D</button>
+                <button class="range" type="button" data-range="7D">7D</button>
+                <button class="range" type="button" data-range="1M" aria-pressed="true">1M</button>
+                <button class="range" type="button" data-range="1Y">1Y</button>
+                <button class="range" type="button" data-range="ALL">All</button>
+              </div>
+            </div>
+
+            <div class="chart-card__sub" id="chartSub">
+              <span class="chip" id="chartChip"></span>
+              <span class="chart-card__note" id="chartNote">past month · daily close</span>
+            </div>
+
+            <div class="plot" id="chartPlot"><svg id="chartSvg" role="img" aria-label="Portfolio value over time"></svg></div>
+
+            <div class="chart-card__foot" id="chartFoot">
+              <div class="chart-card__stat"><span class="eyebrow" id="chartChangeLabel">1M change</span><b class="num" id="chartChange">—</b></div>
+              <div class="chart-card__stat"><span class="eyebrow" id="chartHighLabel">1M high</span><b class="num" id="chartHigh">—</b></div>
+              <div class="chart-card__stat"><span class="eyebrow" id="chartLowLabel">1M low</span><b class="num" id="chartLow">—</b></div>
+            </div>
+          </section>
+
+          <section class="card alloc reveal" style="animation-delay:240ms" aria-labelledby="allocTitle">
+            <div class="card__head">
+              <h2 class="card-title" id="allocTitle">Asset Allocation</h2>
+              <a class="link-all" href="#allocation">View all <span aria-hidden="true">→</span></a>
+            </div>
+            <div class="alloc__figure"><svg id="donutSvg" role="img" aria-label="Allocation by region"></svg></div>
+            <div class="legend" id="allocLegend"></div>
+          </section>
+        </div>
+
+        <!-- movers / currency / concentration -->
+        <div class="bottom-row">
+          <section class="card reveal" style="animation-delay:280ms" aria-labelledby="moversTitle">
+            <div class="card__head">
+              <h2 class="card-title" id="moversTitle">Top movers</h2>
+              <a class="link-all" href="#holdings">View all <span aria-hidden="true">→</span></a>
+            </div>
+            <div class="movers__cols">
+              <div><p class="eyebrow movers__head movers__head--up">Gainers</p><div id="gainers"></div></div>
+              <div><p class="eyebrow movers__head movers__head--down">Losers</p><div id="losers"></div></div>
+            </div>
+          </section>
+
+          <section class="card reveal" style="animation-delay:320ms" aria-labelledby="ccyTitle">
+            <div class="card__head">
+              <h2 class="card-title" id="ccyTitle">Currency exposure</h2>
+              <a class="link-all" href="#allocation">View all <span aria-hidden="true">→</span></a>
+            </div>
+            <div class="ccy" id="ccyList"></div>
+          </section>
+
+          <section class="card reveal" style="animation-delay:360ms" aria-labelledby="concTitle">
+            <div class="card__head">
+              <h2 class="card-title" id="concTitle">Concentration</h2>
+              <a class="link-all" href="#holdings">View all <span aria-hidden="true">→</span></a>
+            </div>
+            <div class="conc" id="concList"></div>
+          </section>
+        </div>
+
+        </div><!-- /.ov-screen -->
+
+        <!-- Below the fold: what you actually hold, largest first. Overlaid so
+             it reflows nothing above it; fades out once you scroll. -->
+        <button class="ov-cue" id="ovCue" type="button">
+          <span>Holdings</span>
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M8 3.5v9M4.5 9l3.5 3.5L11.5 9"/>
+          </svg>
+        </button>
+
+        <section class="positions ovpos" id="ovHoldings" aria-labelledby="ovBandTitle">
+          <div class="band">
+            <h2 class="band__title" id="ovBandTitle">Holdings</h2>
+            <span class="band__count" id="ovCount">—</span>
+            <span class="band__rule" aria-hidden="true"></span>
+            <span class="band__hint" id="ovHint">Largest first</span>
+            <a class="band__action" href="#holdings">Watchlist <span aria-hidden="true">→</span></a>
+          </div>
+          <div class="positions__scroll">
+            <div class="positions__inner">
+              <div class="prow phead" id="ovHead" role="row"></div>
+              <div id="ovRows"></div>
+            </div>
+          </div>
+          <p class="positions__foot" id="ovFoot">—</p>
+        </section>
+      </section>
+
+      <!-- ---------------- Holdings ---------------- -->
+      <section class="view" id="view-holdings" role="tabpanel" aria-label="Watchlist" hidden>
+
+        <nav class="sectors" id="sectorNav" aria-label="Sectors"></nav>
+
+        <section class="hero-sector" aria-labelledby="sectorName">
+          <div class="hero-sector__top">
+            <div class="hero-sector__id">
+              <span class="hero-sector__eyebrow">Watchlist · sector</span>
+              <h1 class="hero-sector__name" id="sectorName">—</h1>
+              <span class="hero-sector__meta" id="sectorMeta"></span>
+            </div>
+            <div class="hero-sector__stats">
+              <div class="hstat">
+                <span class="hstat__label">Position value</span>
+                <span class="hstat__value num" id="sectorValue">—</span>
+              </div>
+              <div class="hstat">
+                <span class="hstat__label">Unrealised P/L</span>
+                <span class="hstat__row">
+                  <span class="hstat__figure num" id="sectorUnrl">—</span>
+                  <span class="dchip" id="sectorUnrlChip"></span>
+                </span>
+              </div>
+              <div class="hstat">
+                <span class="hstat__label">Today</span>
+                <span class="hstat__row">
+                  <span class="hstat__figure num" id="sectorDay">—</span>
+                  <span class="dchip" id="sectorDayChip"></span>
+                </span>
+              </div>
+              <div class="hstat">
+                <span class="hstat__label">Portfolio weight</span>
+                <span class="hstat__figure num" id="sectorWeight" style="color:var(--text-primary)">—</span>
+              </div>
+            </div>
+          </div>
+          <div class="breadth">
+            <span style="display:flex;align-items:center;gap:8px;flex:none">
+              <span class="breadth__bar" role="img" aria-label="Advancing versus declining">
+                <span class="breadth__up" id="breadthUp"></span>
+                <span class="breadth__down" id="breadthDown"></span>
+              </span>
+              <span class="breadth__text" id="breadthText"></span>
+            </span>
+            <span class="breadth__rule"></span>
+            <span class="breadth__item">Average move
+              <span class="breadth__figure" id="avgMove"></span></span>
+            <span class="breadth__rule"></span>
+            <span class="breadth__item">Best <span class="breadth__tk" id="bestTk"></span>
+              <span class="breadth__figure" id="bestPct" style="color:var(--gain-soft)"></span></span>
+            <span class="breadth__item">Worst <span class="breadth__tk" id="worstTk"></span>
+              <span class="breadth__figure" id="worstPct" style="color:var(--loss-soft)"></span></span>
+            <span class="breadth__note">Quotes are delayed 15 minutes.</span>
+          </div>
+        </section>
+
+        <section class="positions" aria-label="Positions">
+          <div class="positions__scroll">
+            <div class="positions__inner">
+
+              <div class="band">
+                <span class="band__title">Positions</span>
+                <span class="band__count" id="rowsCount"></span>
+                <span class="band__rule" aria-hidden="true"></span>
+                <span class="band__hint" id="listNote"></span>
+                <a class="band__action" href="#overview">Manage portfolio →</a>
+              </div>
+
+              <div class="prow phead" id="tableHead"></div>
+              <div id="tableRows"></div>
+
+            </div>
+          </div>
+          <span class="positions__foot">Each mark is the trademark of its issuer, served as SVG from a public symbol-logo service and shown for identification only; a ticker monogram stands in where no mark is published. Range shows the 30-day low and high in the instrument's own currency.</span>
+        </section>
+      </section>
+
+      <!-- ---------------- placeholder tabs ---------------- -->
+      <section class="view" id="view-transactions" role="tabpanel" aria-label="Transactions" hidden>
+        <div class="card empty">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.4">
+            <rect x="6" y="9" width="36" height="30" rx="4"/><path d="M6 18h36M14 26h12M14 32h8"/>
+          </svg>
+          <h2>No transactions yet</h2>
+          <p id="txCopy">Trade history is collected from the daily job and, once configured, backfilled from your IBKR Flex statement.</p>
+        </div>
+      </section>
+
+      <!-- ---------------- Market watch ---------------- -->
+      <section class="view" id="view-market" role="tabpanel" aria-label="Market watch" hidden>
+
+        <section class="board-hero" aria-labelledby="boardDate">
+          <div class="board-hero__top">
+            <div class="board-hero__id">
+              <span class="board-hero__eyebrow">Market watch · world board</span>
+              <h1 class="board-hero__date" id="boardDate">—</h1>
+            </div>
+            <span class="board-hero__trading">
+              <i class="livedot" id="tradingDot" data-on="false" aria-hidden="true"></i>
+              <span id="tradingNow">Loading markets…</span>
+            </span>
+          </div>
+          <div class="clockstrip" id="clockStrip" aria-label="Local time by market"></div>
+        </section>
+
+        <div class="board-bar">
+          <span class="board-bar__title">All markets</span>
+          <span class="board-bar__count num" id="mktCount">—</span>
+          <span class="board-bar__rule" aria-hidden="true"></span>
+          <span class="board-bar__note" id="orderNote">grouped by region</span>
+
+          <div class="board-bar__controls">
+            <div class="ranges" role="group" aria-label="Order markets by">
+              <button class="range" type="button" data-sort="region" aria-pressed="true">Region</button>
+              <button class="range" type="button" data-sort="day" aria-pressed="false">Day move</button>
+              <button class="range" type="button" data-sort="expo" aria-pressed="false">Exposure</button>
+            </div>
+            <span class="board-bar__rule" aria-hidden="true"></span>
+            <div class="ranges" role="group" aria-label="Secondary figure">
+              <button class="range" type="button" data-perf="month" aria-pressed="true">1M</button>
+              <button class="range" type="button" data-perf="year" aria-pressed="false">YTD</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="board-grid" id="boardGrid"></div>
+
+        <p class="board-foot">Index levels quote in each market's own currency and are price return,
+          excluding dividends. Exposure converts your positions to GBP at the mid-market rate.</p>
+      </section>
+
+      <!-- ---------------- Stock detail ---------------- -->
+      <!-- Reached by drilling in (#stock/<KEY>), so it has no tab and no nav
+           item. tabFromHash() resolves the tab from the hash's first segment,
+           which makes the deep link work without one. -->
+      <section class="view" id="view-stock" role="tabpanel" aria-label="Stock detail">
+
+        <nav class="crumb" id="stockCrumb" aria-label="Breadcrumb">
+          <a class="crumb__link" href="#holdings" id="stockCrumbRoot">Watchlist</a>
+          <span class="crumb__sep" aria-hidden="true">/</span>
+          <a class="crumb__link" href="#holdings" id="stockCrumbSector">—</a>
+          <span class="crumb__sep" aria-hidden="true">/</span>
+          <span class="crumb__here" id="stockCrumbKey" aria-current="page">—</span>
+        </nav>
+
+        <div class="sbanner" id="stockBanner" role="status" hidden>
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <circle cx="8" cy="8" r="6.4"/><path d="M8 4.6v4M8 11.2v.3"/>
+          </svg>
+          <span id="stockBannerText">—</span>
+        </div>
+
+        <!-- quote hero -->
+        <section class="shero" id="stockHero">
+          <div class="shero__top">
+            <div class="shero__id">
+              <span class="ptile shero__tile" id="stockTile">
+                <span class="ptile__mono" id="stockMono">—</span>
+              </span>
+              <div class="shero__names">
+                <div class="shero__line">
+                  <h1 class="shero__name" id="stockName">—</h1>
+                  <span class="shero__tk" id="stockTicker">—</span>
+                  <span class="shero__owned" id="stockOwned" hidden>Owned</span>
+                </div>
+                <span class="shero__sub" id="stockSub">—</span>
+              </div>
+            </div>
+            <div class="shero__actions">
+              <button class="sbtn" type="button" id="stockWatch" aria-pressed="false">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"
+                     stroke-linejoin="round" aria-hidden="true">
+                  <path d="m10 2.9 2.2 4.5 5 .7-3.6 3.5.85 4.95L10 14.2l-4.45 2.35.85-4.95L2.8 8.1l5-.7Z"/>
+                </svg><span>Watch</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="shero__figures">
+            <div class="sfig">
+              <span class="sfig__row">
+                <span class="sfig__px num" id="stockPrice">—</span>
+                <span class="sfig__delta">
+                  <span class="sfig__abs num" id="stockDayAbs">—</span>
+                  <span class="dchip" id="stockDayChip">—</span>
+                </span>
+              </span>
+              <span class="sfig__note" id="stockAsOf">—</span>
+            </div>
+
+            <div class="sfig sfig--ah" id="stockAh" hidden>
+              <span class="sfig__row">
+                <span class="sfig__ahpx num" id="stockAhPx">—</span>
+                <span class="sfig__ahdelta num" id="stockAhDelta">—</span>
+              </span>
+              <span class="sfig__note" id="stockAhNote">—</span>
+            </div>
+
+            <div class="shero__stats">
+              <div class="sstat">
+                <span class="eyebrow sstat__label">In GBP</span>
+                <span class="sstat__value num" id="stockGbp">—</span>
+              </div>
+              <div class="sstat">
+                <span class="eyebrow sstat__label">Day range</span>
+                <span class="sstat__value sstat__value--sm num" id="stockDayRange">—</span>
+              </div>
+              <div class="sstat">
+                <span class="eyebrow sstat__label">52-week range</span>
+                <span class="sstat__value sstat__value--sm num" id="stockYearRange">—</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- price chart -->
+        <section class="card scard schart">
+          <div class="schart__bar">
+            <div class="sranges" id="stockRanges" role="group" aria-label="Chart range"></div>
+            <span class="schart__figures">
+              <span class="eyebrow" id="stockRangeLabel">—</span>
+              <span class="schart__pct num" id="stockRangePct">—</span>
+              <span class="schart__abs num" id="stockRangeAbs">—</span>
+            </span>
+            <span class="schart__legend">
+              <span class="slegend"><i class="slegend__line" id="stockLegendSwatch"></i><span id="stockLegendName">—</span></span>
+              <span class="slegend" id="stockBenchLegend" hidden>
+                <i class="slegend__line slegend__line--dash"></i><span id="stockBenchName">—</span>
+              </span>
+            </span>
+          </div>
+          <div class="plot schart__plot" id="stockPlot"><svg id="stockSvg" role="img"></svg></div>
+        </section>
+
+        <!-- key statistics -->
+        <section class="card scard">
+          <div class="scard__head">
+            <span class="scard__title">Key statistics</span>
+            <span class="scard__rule" aria-hidden="true"></span>
+            <span class="scard__note">Trailing twelve months unless noted</span>
+            <a class="spill" id="stockFinancials" href="#financials/INTC">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"
+                   stroke-linecap="round" aria-hidden="true">
+                <path d="M2.5 13.5V9M6.5 13.5V5M10.5 13.5V7M14.5 13.5V2.5"/>
+              </svg><span>Financials</span>
+            </a>
+            <span class="u-sr" id="stockFinancialsWhy"></span>
+          </div>
+          <div class="sstats" id="stockStats"></div>
+        </section>
+
+        <!-- profile + news -->
+        <div class="spair">
+          <section class="card scard">
+            <div class="scard__head">
+              <span class="scard__title">Company profile</span>
+            </div>
+            <p class="sprofile" id="stockProfileText">—</p>
+            <div class="sprofile__grid" id="stockProfileGrid"></div>
+          </section>
+
+          <section class="card scard">
+            <div class="scard__head">
+              <span class="scard__title">News</span>
+            </div>
+            <div class="snews" id="stockNews"></div>
+          </section>
+        </div>
+
+        <!-- analyst view -->
+        <section class="card scard">
+          <div class="scard__head">
+            <span class="scard__title">Analyst view</span>
+            <span class="scard__rule" aria-hidden="true"></span>
+            <span class="scard__note" id="stockAnalystMeta">—</span>
+          </div>
+          <div class="sanalyst">
+            <div class="sanalyst__col">
+              <span class="eyebrow">Recommendations</span>
+              <div class="sratings" id="stockRatings"></div>
+            </div>
+            <div class="sanalyst__col">
+              <span class="starget__head">
+                <span class="eyebrow">12-month target</span>
+                <span class="starget__figures">
+                  <span class="starget__mean num" id="stockTargetMean">—</span>
+                  <span class="starget__upside num" id="stockTargetUpside">—</span>
+                </span>
+              </span>
+              <span class="starget__track" id="stockTargetTrack">
+                <span class="starget__band" id="stockTargetBand"></span>
+                <span class="starget__mark" id="stockTargetMark"></span>
+              </span>
+              <span class="starget__scale num">
+                <span id="stockTargetLow">—</span>
+                <span class="starget__last" id="stockTargetLast">—</span>
+                <span id="stockTargetHigh">—</span>
+              </span>
+            </div>
+            <div class="sanalyst__col sanalyst__col--est">
+              <div class="sest" id="stockEstimates"></div>
+            </div>
+          </div>
+        </section>
+
+      </section>
+
+      <!-- ---------------- Company financials ---------------- -->
+      <section class="view" id="view-financials" role="tabpanel" aria-label="Company financials">
+
+        <nav class="crumb" id="finCrumb" aria-label="Breadcrumb">
+          <a class="crumb__link" href="#holdings">Watchlist</a>
+          <span class="crumb__sep" aria-hidden="true">/</span>
+          <a class="crumb__link" id="finCrumbStock" href="#stock/INTC">—</a>
+          <span class="crumb__sep" aria-hidden="true">/</span>
+          <span class="crumb__here" aria-current="page">Financials</span>
+        </nav>
+
+        <div class="sbanner" id="finBanner" role="status" hidden>
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <circle cx="8" cy="8" r="6.4"/><path d="M8 4.6v4M8 11.2v.3"/>
+          </svg>
+          <span id="finBannerText">—</span>
+        </div>
+
+        <!-- identity + reporting basis -->
+        <section class="shero finhero">
+          <div class="shero__top">
+            <div class="shero__id">
+              <span class="ptile shero__tile" id="finTile">
+                <span class="ptile__mono" id="finMono">—</span>
+              </span>
+              <div class="shero__names">
+                <div class="shero__line">
+                  <h1 class="shero__name" id="finName">—</h1>
+                  <span class="shero__tk" id="finTicker">—</span>
+                </div>
+                <span class="shero__sub" id="finSub">—</span>
+              </div>
+            </div>
+            <div class="finhero__basis">
+              <span class="eyebrow sstat__label">Reported in</span>
+              <span class="finhero__ccy num" id="finCurrency">—</span>
+              <span class="finhero__note" id="finMismatch" hidden>—</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- controls -->
+        <div class="fincontrols">
+          <div class="sranges" id="finTabs" role="group" aria-label="Statement"></div>
+          <div class="sranges" id="finPeriods" role="group" aria-label="Reporting basis">
+            <button class="srange" type="button" data-period="annual" aria-pressed="true">Annual</button>
+            <button class="srange" type="button" data-period="quarter" aria-pressed="false">Quarterly</button>
+          </div>
+        </div>
+
+        <!-- trend -->
+        <section class="card scard" id="finChartCard">
+          <div class="scard__head">
+            <span class="scard__title" id="finChartTitle">Trend</span>
+            <span class="scard__rule" aria-hidden="true"></span>
+            <span class="scard__note" id="finChartNote">—</span>
+            <span class="schart__legend" id="finLegend"></span>
+          </div>
+          <div class="plot finplot" id="finPlot"><svg id="finSvg" role="img"></svg></div>
+        </section>
+
+        <!-- statement -->
+        <section class="card scard" id="finTableCard">
+          <div class="scard__head">
+            <span class="scard__title" id="finTableTitle">—</span>
+            <span class="scard__rule" aria-hidden="true"></span>
+            <span class="scard__note" id="finUnits">—</span>
+          </div>
+          <div class="fintable__scroll">
+            <table class="fintable" id="finTable"><tbody></tbody></table>
+          </div>
+          <p class="fintable__foot" id="finNote">—</p>
+        </section>
+
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<div class="tip" id="tip" role="tooltip" aria-hidden="true"></div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

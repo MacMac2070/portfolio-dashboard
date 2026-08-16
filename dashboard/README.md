@@ -1,0 +1,442 @@
+# Portfolio Dashboard
+
+Live GBP investment dashboard reading your real IBKR account. Implements
+`Design.pdf`. Nothing in the refresh path involves Claude.
+
+## Running it
+
+```bash
+/opt/anaconda3/bin/python3 serve.py 5174         # serves + holds the live feed
+open http://localhost:5174
+```
+
+That one command is enough. `serve.py` starts a background thread that opens a
+single `ib_async` connection to IB Gateway and keeps it open, so Overview and
+Holdings update on their own — no page reload, no `refresh.py` run.
+
+`serve.py --no-live` skips the feed and serves static files only, for when
+Gateway is down and you just want to look at the page.
+
+**Use `/opt/anaconda3/bin/python3`.** That is the only interpreter on this
+machine with `ib_async` (2.1.0) and `openbb` (4.7.2); the default `python3`
+(3.14.2) has neither. Every script hardcodes it.
+
+IB Gateway must be running and logged in, with API clients enabled, on
+`127.0.0.1:4001`.
+
+## How data gets in
+
+Three independent paths, on three different clocks:
+
+```
+LIVE          IB Gateway :4001 ═══ held open ═══ adapter/feed.py
+(seconds)       clientId 11                        │  in serve.py's thread
+                                                   ▼
+                                          GET /api/snapshot ──► page polls 3s
+
+SNAPSHOT      IB Gateway :4001 ──┐
+(on demand)     clientId 7       ├── adapter/build.py ── data/portfolio.json
+              openbb ────────────┘                       (sparklines live here)
+
+HISTORY       IBKR Flex Web Service ── adapter/backfill.py ── nav_history.jsonl
+(daily)       IB Gateway clientId 7 ── adapter/refresh.py     transactions.jsonl
+
+WORLD BOARD   openbb ─── adapter/markets.py ─── GET /api/markets ──► page polls 30s
+(60s)         11 index series; exposure folded in from the live feed above
+```
+
+The three never block each other: the feed holds **clientId 11**, `build.py`
+and `refresh.py` use **7**, `test_ibkr_connection.py` uses **1**. The daily job
+runs happily while the feed is connected.
+
+| File | Role |
+|---|---|
+| `adapter/feed.py` | **the live connection** — held open, recomposed every 3s |
+| `adapter/derive.py` | **shared maths** — used by both the feed and the builder |
+| `adapter/ibkr.py` | one-shot account, positions, executions |
+| `adapter/marketdata.py` | FX, prior closes, sparkline series via openbb |
+| `adapter/regions.py` | conId → region (hand-maintained; see below) |
+| `adapter/build.py` | derivations → `data/portfolio.json` |
+| `adapter/flex.py` | Flex Web Service client (historical NAV + trades) |
+| `adapter/store.py` | append-only JSONL, merge-by-key so re-runs never duplicate |
+| `adapter/refresh.py` | the scheduled job: build + record the day |
+| `adapter/backfill.py` | one-time Flex history import |
+| `adapter/watchlist.py` | openbb quotes for tickers you don't own (Watchlist) |
+| `adapter/markets.py` | world board: market registry, sessions, index poller |
+
+## What is live, and what isn't
+
+`GET /api/snapshot` returns the newest values plus `meta.connected` and
+`meta.last_refresh`. The page polls it every 3s and drives the live/stale
+indicator off those two fields — **live** means connected *and* refreshed within
+15s; anything else shows the red disconnected banner and keeps the last values
+on screen rather than blanking them.
+
+| | Source | Live? |
+|---|---|---|
+| NAV, cash, invested, unrealised P&L | IB account values | yes |
+| Positions, price, market value | IB `portfolio()` + delayed tickers | yes |
+| Day change %, daily P/L, Top movers | `marketPrice` vs `ticker.close` | yes |
+| Region / currency / concentration | derived locally, IBKR FX rates | yes |
+| **30d sparklines** | last `build.py` run | **no** — labelled "as of HH:MM" |
+
+Prices come from `reqMarketDataType(3)` — delayed by 15 minutes, needing no paid
+subscription, which is what the header chip has always said. Account values
+themselves arrive on IBKR's own push cadence (~3 min, plus immediately on a
+trade); ticker prices move continuously between those pushes, and position
+market values are repriced off the tick so the two never disagree on screen.
+
+Day change comes from the ticker's previous close, **not** from IBKR's
+per-position `dailyPnL` — see the note below on why that figure is unusable.
+
+Sparklines need a historical series, which IB market data does not carry, so
+they keep their last values and say so. Nothing else on Overview or Holdings
+depends on OpenBB while the feed is running.
+
+### Keeping it running
+
+Optional, and separate from the daily job:
+
+```bash
+./install-live-feed.sh          # launchd keeps serve.py alive
+./install-live-feed.sh --remove
+```
+
+| File | Role |
+|---|---|
+| `adapter/ibkr.py` | account, positions, executions over `ib_async` |
+| `adapter/marketdata.py` | FX rates, prior closes, sparkline series via openbb |
+| `adapter/regions.py` | conId → region (hand-maintained; see below) |
+| `adapter/build.py` | derivations → `data/portfolio.json` |
+| `adapter/flex.py` | Flex Web Service client (historical NAV + trades) |
+| `adapter/store.py` | append-only JSONL, merge-by-key so re-runs never duplicate |
+| `adapter/refresh.py` | the scheduled job: build + record the day |
+| `adapter/backfill.py` | one-time Flex history import |
+
+## The symbol directory
+
+The search bar reaches past the 35 curated names in `universe.py` through a
+cached local directory, `data/directory.sqlite3` (~15.8k symbols, WAL).
+
+```bash
+/opt/anaconda3/bin/python3 adapter/directory.py            # rebuild
+/opt/anaconda3/bin/python3 adapter/directory.py --search tenc
+```
+
+Built from the only providers that can *enumerate*: `equity.search` via nasdaq
+(twice — `is_etf` splits into two disjoint sets) and sec. All of them are US
+only. openbb has no yfinance fetcher for `equity.search` or `etf.search`, and
+FMP's ETF search needs a paid tier, so **there is no enumerable source for HKEX,
+SGX, LSE or Frankfurt** — international names arrive one at a time via
+`/api/lookup`, which asks `yfinance.Lookup` after the typing pauses and writes
+what it learns back into the table. A rebuild deletes only rows it built, so
+those survive.
+
+The browser downloads the table once (190 KB gzipped) and keeps it in
+IndexedDB, re-checking with `?have=<version>` — a match costs 78 bytes. All
+filtering is local; there is no request per keystroke.
+
+Prices in search come only from the live feed. A remote result's price stays
+hidden until its currency is known, because Yahoo's search returns a bare number
+and a London name's is in pence — `directory.learn_currency` records the real
+one the first time the stock page opens that instrument.
+
+"Watch" on an untracked name appends it to `data/watchlist_extra.json`, which
+`universe.py` merges at import; it lands in the **Other** sector and is quoted
+from the next watchlist poll. The server never rewrites `universe.py`.
+
+## The daily job
+
+```bash
+./install-daily-job.sh          # LaunchAgent, fires 23:30 local
+./install-daily-job.sh --remove
+launchctl kickstart -p gui/$UID/com.portfolio-dashboard.refresh   # run now
+```
+
+launchd rather than cron — it survives reboot and logout and needs no terminal
+open. Logs to `logs/refresh.log`. If the Gateway is down when it fires, the job
+marks the snapshot stale and exits; re-run `backfill.py` to recover the day.
+
+## Filling in the chart
+
+The equity curve needs history that the TWS API cannot supply — it has no
+NAV-history request at all. Until there are 5 points the chart shows its
+"collecting history" state honestly.
+
+To fill it immediately, configure Flex (a one-time job in IBKR Account
+Management, no Claude involved):
+
+1. Settings → Account Reporting → **Flex Web Service** → generate a token
+2. Create two Flex queries and note each Query ID:
+   - **Activity Statement** including the *Net Asset Value (NAV) in Base*
+     section → daily NAV back to inception (13 Oct 2025)
+   - **Trade Confirmation** → execution history
+3. `cp config.local.json.example config.local.json`, fill in the three values
+4. `/opt/anaconda3/bin/python3 adapter/backfill.py`
+
+`config.local.json` holds a live credential — keep it out of version control.
+
+## Holdings: the sector page
+
+Implements `Holdings.dc.html` from the Claude Design project *Portfolio overview
+July 2026*. Five sector pills, a sector hero with a breadth strip, and one
+aligned table with owned rows banded above watchlist rows. 35 tickers across
+Semiconductors, Big tech, ETFs, Airlines and Financials, defined in
+`adapter/universe.py`.
+
+**Sector is a separate axis from region.** `regions.py` drives Overview's
+allocation donut and answers "where is this exposure"; sector answers "what kind
+of business is this". XDJP is Japan by region and an ETF by sector, and both are
+correct — which is why adding sectors left Overview untouched.
+
+**Ownership is a property of the ticker, not of the sector.** A ticker carries a
+`con_id`; having one *is* ownership. Sectors hold nothing but references, so a
+name reads identically wherever it appears and nothing re-decides ownership per
+sector. Store it per sector and the first divergence shows a position you hold
+as a watchlist row.
+
+**One table, not two bands.** Held rows sort above watched under a single
+8-column header, so every figure lines up across the boundary between the two
+groups — which is the whole point of merging them. Each group sorts
+*independently*, so the held block stays on top whichever column is clicked; a
+column a watched row has no value for falls back to its day move, keeping that
+group's order stable rather than arbitrary. The boundary is a slightly stronger
+violet hairline on the last held row.
+
+Held rows carry both the 2px violet rail and an **"Owned" pill** beside the
+ticker, so ownership never rests on colour alone.
+
+**Logos.** Each row shows the issuer's own mark from a public symbol-logo
+service, on a light plate because marks are drawn for light ground, with the
+brand-coloured monogram underneath showing if a mark fails. 33 of 35 symbols
+resolve directly; `3115` and `ES3` carry explicit overrides, and `HY9H`'s mark
+is filed under its Korean primary listing `000660.KS`. The footer carries the
+identification-only attribution.
+
+Do **not** add `loading="lazy"` to those images. They sit inside a
+horizontally-scrollable container, where Chrome defers them indefinitely and
+they never begin loading — the tiles silently stay monograms. A sector shows
+about a dozen rows, so there is nothing to defer.
+
+**Deviations for WCAG AA.** The design's monogram ink, `mix(brand, #0A0D12,
+0.18)`, fails on the light plate for 8 of 35 issuers — C6L's amber at 2.52:1,
+Apple's grey at 2.91:1. Darkened to **0.45**, where the lowest is 4.77:1 and all
+35 pass with the hue still plainly the issuer's. `--loss-soft` keeps its lift to
+`#c76d75` (4.18:1 inside its own chip otherwise), and `--text-disabled` its lift
+to `#788391` — though the design's latest revision moved the column headers and
+row sublabels off that token to `--text-muted` on its own, so it now carries
+only the footer note.
+
+The design ships hardcoded July prices and a fixed `NAV = 50331.8759`. None of
+it is used — owned rows come from the live IB feed, watchlist rows from openbb,
+and portfolio weight from live NAV. Sector values reconcile: the five totals sum
+to `invested` to the pound.
+
+| | owned rows | watchlist rows |
+|---|---|---|
+| source | IB Gateway live feed | openbb / yfinance |
+| shows | qty, cost, P&L, return, weight | price, day change, 30d only |
+| marked by | purple rail + `Owned` pill | hollow-ring `Watching` pill |
+
+Watchlist rows never get a zeroed quantity or a £0 P&L — the columns show an
+em-dash, and the ragged column *is* the signal, reinforced by rail and pill so
+it never rests on colour alone.
+
+`adapter/watchlist.py` polls openbb every 60s for the 15 symbols IB does not
+cover, plus a daily batched 30d history for sparklines. It is a separate thread
+on a separate endpoint (`/api/watchlist`) and imports nothing from `feed.py`.
+
+**A swallowed NameError cost hours.** Extracting `_resolve_contracts` out of
+`_session` left `from ib_async import Contract` behind in `_session`, so the new
+method raised `NameError` on every call. `details_for`'s broad
+`except Exception` caught it and `log.debug` hid it, so the symptom was
+`resolved 0/15 contracts` logged in the same millisecond as connect — which is
+indistinguishable from IB Gateway being unreachable, and sent the diagnosis
+down the wrong path repeatedly. A total failure now logs `ERROR` with the first
+real exception, and the import lives in the method that uses it.
+
+Two things learned building it:
+
+- **openbb's import is CPU-heavy enough to starve the IB feed.** `from openbb
+  import obb` spends several seconds building its extension registry, and the
+  GIL blocks the feed's asyncio loop meanwhile. `WatchlistFeed` therefore waits
+  for the live feed's first successful refresh before its first call.
+- **`:not([hidden])` on every `#view-*` and `.hview` rule is load-bearing.** An
+  id selector outranks `.view[hidden] { display: none }`, so a bare
+  `#view-overview { display: grid }` wins over the hide rule and the tabs render
+  stacked on top of each other.
+
+## Market watch: the world board
+
+`MarketWatch.dc.html`, wired to `adapter/markets.py` + `js/marketwatch.js`. It
+answers a different question from the other two pages — not *what do I own* but
+*what is trading right now, and how is it moving* — so exposure is the last line
+on a card rather than the first.
+
+**Sessions are real.** Each market carries an IANA zone and its local open/close
+minutes; `zoneinfo` does the rest. The design hardcodes `tz: -5` for New York,
+which is wrong for eight months of the year. Weekends count as closed and the
+countdown runs to Monday, not to a session that will not happen.
+
+The browser re-derives the same session state every second from the same two
+integers, shipped on each card, so the clocks tick between 30s polls. `session_of`
+in `markets.py` and `sessionOf` in `marketwatch.js` are deliberate mirrors — if
+you change one, change the other.
+
+**Coverage is thinner than the design assumes.** Probed 1 Aug 2026:
+
+| Wanted | Reality |
+|---|---|
+| 19 indices | **11**. KOSDAQ, TOPIX, HSCEI, TPEx, SET50 and FTSE ST Mid Cap return nothing from yfinance under any ticker variant |
+| 9 markets | **8**. CSI 300 and SET were both 15 days stale and dropped; SET was Thailand's only index, so Thailand went with it |
+
+So **6 of the 8 cards carry a benchmark only** — that is the primary card, not an
+exception, and it spends the freed height on a full-width sparkline instead of
+leaving a gap. Anything whose last bar is older than 3 days prints its date and
+no day-change rather than passing a stale close off as today's.
+
+**Exposure comes from the live IB feed**, folded in by `serve.py` through
+`REGION_TO_MARKET` — `regions.py` already resolves by underlying exposure, which
+is why XDJP counts as Japan and HY9H as Korea. It reconciles to `invested` to the
+pound. Three states, not two: a market you hold, `Tracked only · nothing held`
+(CN and TW), and `Waiting for the live feed` before the feed has composed —
+because £0 and *not yet known* must not look alike.
+
+**The sparkline is coloured by its own 30-day series**, never by the selected
+1M/YTD figure. Colouring a visibly falling line green because the year was up is
+the one thing a trend line must not do.
+
+## Maintaining the region table
+
+`adapter/regions.py` is hand-maintained because IBKR does not tag positions
+with an investment region, and neither the listing venue nor the trading
+currency implies one:
+
+| Holding | Lists on | Trades in | Actually |
+|---|---|---|---|
+| `XDJP` | LSE | GBP | Japan (Nikkei 225) |
+| `IUCS` | LSE | USD | United States (S&P 500) |
+| `HY9H` | Frankfurt | EUR | South Korea (SK hynix) |
+| `SMSN` | LSE IOB | USD | South Korea (Samsung) |
+
+A position not in the table falls through to **Unclassified** and stays visible
+in the UI rather than vanishing from the totals — that is the signal to add it.
+
+## Things worth knowing
+
+**Daily P/L is summed from positions, not taken from IBKR.** IBKR's
+account-level `dailyPnL` silently reports a *partial* total — only the
+positions its market-data farms managed to value. Measured 26 Jul 2026: IBKR
+said −£552.47, which is exactly HSBA + HY9H + IUCS + SMSN + XDJP; the other ten
+returned warning 2150 or never streamed. Summing all fifteen gives −£935.60.
+`build.py` prefers the complete set and records which source it used in
+`meta.daily_pnl_source`.
+
+**Ticker gotchas.** `SMSN.IL` not `SMSN.L` (the latter is stale and prints
+0.00%). `HY9H.F` not `HY9H.DE` (the latter returns nothing). LSE quotes come
+back in pence — `marketdata.py` divides `GBp` by 100, without which every LSE
+day-change is 100× wrong.
+
+**The LSE quotes in pence, and IBKR will tell you so.** The same trap exists on
+the live path, and it is worse there because the tick is multiplied by quantity:
+an unscaled pence tick once put XDJP at £565,250 and invested at £759k against a
+£50k NAV. Do not infer the unit — `reqContractDetails` returns
+**`priceMagnifier`** for exactly this (100 for HSBA and XDJP, 1 for the other
+thirteen). `feed.py` divides market-data prices by it. Account values
+(`item.marketPrice`, `item.marketValue`) are already in major units and must
+**not** be scaled.
+
+It hid for a whole session because the LSE was shut during every test: the tick
+was IBKR's −1 sentinel, so the code fell back to the account price, which is in
+pounds. It surfaced the moment London opened. Anything that depends on a market
+being open is worth testing while one is.
+
+**The invested cross-check.** `_compose` compares its total against IBKR's own
+`GrossPositionValue` every cycle and, if they diverge by more than 2%, drops the
+tick repricing and rebuilds from account values, logging loudly and setting
+`meta.invested_check = "fallback"`. Verified by reintroducing the bug: the guard
+fires at 9900% and still returns the correct figure. Repricing from ticks is
+what makes the page move between IBKR's ~3-minute pushes, so it is worth
+keeping — but only behind that check.
+
+**Everything degrades.** openbb FX falls back to IBKR's own `ExchangeRate`
+rows; day-change falls back from openbb → IBKR price + openbb prior close →
+IBKR `dailyPnL`; a missing Flex config skips the backfill with an explanation.
+The snapshot completes even when the network does not.
+
+## Two deliberate departures from `Design.pdf`
+
+1. **The equity curve is real, so it looks different.** The reference chart is
+   illustrative — it shows −0.16% in a tight £50.0k–£51.5k band. The actual 1M
+   TWR is −6.29% (£53,709 → £50,332). Note a ~£10.7k deposit on 25 Jun makes
+   the raw NAV delta misleading; TWR is the honest figure.
+
+2. **Top movers rows do not overlap.** In the PDF the avatar chips sit on top
+   of the ticker text, the `+3`/`+1` badges are half-covered, and INTC's chip
+   runs off the card edge. Four elements were being squeezed into a ~200px
+   column. Every part now has a hard minimum and only the sparkline flexes;
+   spacing, colour and type are otherwise unchanged.
+
+## The Overview is viewport-locked
+
+The whole dashboard reads on one screen, as it does on the reference sheet. That
+needed more than tidying: `Design.pdf` reproduced at its natural proportions
+wants **1349 px** of height at a 1470 px width, against a real browser viewport
+of **801 px**. A PDF page has no viewport, which is why everything appears to
+fit there.
+
+So `#view-overview` is a grid whose rows carry the reference's measured
+proportions — **19.6 / 46.9 / 33.5** — inside `100vh`, and the display type
+scales with `vh` (`--t-hero` is `clamp(34px, 5.2vh, 64px)`, reaching its 64 px
+reference size at ~1230 px of viewport height). Below `700px` tall, or under the
+existing width breakpoints, the lock releases and the page scrolls rather than
+crushing the content.
+
+Two things that are easy to get wrong here:
+
+- **`min-height: 0` is load-bearing.** Grid and flex children default to
+  `min-height: auto` and refuse to shrink below their content, which makes the
+  whole fit silently fail. It appears at every level of the chain.
+- **`--leading-body: 1.7` is for prose, not data rows.** Left on the currency
+  and concentration rows it added ~14 px each and pushed the last two entries off
+  their cards. Those rows are explicitly `line-height: 1.2`.
+
+The allocation donut's grid row has a hard `minmax(104px, 1fr)` floor — with
+`minmax(0, 1fr)` the legend's natural height claims the whole card and the ring
+disappears entirely.
+
+`equityCurve()` sizes its `viewBox` from the element's real pixel box rather
+than a fixed `780×260`. With a fixed box the SVG is stretched to fit, and a
+non-uniform stretch squashes the axis **text** — `vector-effect` protects stroke
+width, not glyphs. At the reduced plot height (~133 px) that distortion would be
+obvious.
+
+## Accessibility
+
+- Gain/loss never relies on hue: every value carries a sign, every chip an arrow.
+- WCAG AA verified in **both** themes, including P&L colours against their own
+  tinted chip backgrounds. Three tokens were adjusted to reach it: dark loss
+  `#ea3943 → #eb4650` (+3% lightness, same hue — the reference red clears AA on
+  the card at 4.62:1 but only 4.31:1 inside its chip), light gain
+  `#0a8f5c → #087c50`, and `--text-3` in both themes (`#59616b → #737e8b`,
+  `#8b95a1 → #6c7785`) — it was failing at 2.99:1 and drives the chart's axis
+  labels. Everything now clears the 4.5:1 normal-text bar; the compressed layout
+  shrinks several values below the 18.66px "large text" exemption, so that is the
+  bar that applies.
+- `prefers-reduced-motion` disables count-up, draw-on and entrance animations.
+- `prefers-color-scheme` honoured; every token has a light and a dark value.
+
+### Known: the reference donut palette is hard to read for some viewers
+
+Validated with the dataviz palette checker under all-pairs comparison, which is
+the right test for a donut since any segment may be compared to any other:
+
+- Japan `#9b72e8` vs Hong Kong/China `#4c8df6` — ΔE **2.7** for deuteranopes
+- Singapore `#3fb6c4` vs South Korea `#2fb88a` — ΔE **8.9** with *full* colour
+  vision (below the 15 floor)
+
+The labelled legend means identity is never carried by colour alone, so the
+chart stays usable — but those pairs are genuinely hard to tell apart in the
+ring. Kept as-is because the reference pins the palette. Re-stepping Japan and
+Singapore a few steps apart would fix it without changing the design's
+character; say the word.

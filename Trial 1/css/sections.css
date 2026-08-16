@@ -1,0 +1,576 @@
+/* ==========================================================================
+   sections.css — layout for each row. Row heights are aspect-ratios taken
+   from the reference so the composition holds at any viewport width.
+   ========================================================================== */
+
+.row--split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: calc(25 * var(--u));
+  aspect-ratio: 1755 / 861;
+}
+.row--matrix { aspect-ratio: 1755 / 801; }
+.row--tunnel { aspect-ratio: 1755 / 1023; }
+.row--map    { aspect-ratio: 1755 / 1221; }
+
+/* ==========================================================================
+   HERO — total value over an ASCII rendering of the equity curve
+   ========================================================================== */
+.hero { position: relative; }
+
+.hero__ascii {
+  position: absolute;
+  inset: 0;
+  font-family: var(--ff-mono);
+  font-size: calc(9 * var(--u));
+  line-height: calc(9 * var(--u));
+  letter-spacing: 0;
+  white-space: pre;
+  color: var(--text-primary);
+  user-select: none;
+  overflow: clip;
+  z-index: 1;
+  /* Fade the field out behind the headline and toward the card edges. */
+  mask-image: linear-gradient(180deg, transparent 2%, #000 26%, #000 74%, transparent 92%);
+}
+.hero__ascii b {
+  font-weight: 400;
+  color: var(--accent-mint);
+}
+
+.hero__body {
+  position: absolute;
+  top: calc(74 * var(--u));
+  left: calc(46 * var(--u));
+  z-index: 2;
+  pointer-events: none;
+}
+
+.hero__value,
+.hero__delta {
+  display: block;
+  font-size: calc(var(--fs-display-hero) * var(--u));
+}
+.hero__value { color: var(--text-primary); }
+.hero__delta { color: var(--pnl-pos); }
+.hero__delta[data-dir="down"] { color: var(--pnl-neg); }
+.hero__arrow { font-size: 0.72em; }
+
+.hero__foot {
+  position: absolute;
+  left: calc(52 * var(--u));
+  right: calc(52 * var(--u));
+  bottom: calc(30 * var(--u));
+  z-index: 2;
+}
+
+/* ==========================================================================
+   GAUGE — total return, drawn as a clipped semicircle
+   ========================================================================== */
+.gauge { position: relative; }
+
+.gauge__figure {
+  position: absolute;
+  top: calc(288 * var(--u));
+  left: 0;
+  right: 0;
+  text-align: center;
+  z-index: 2;
+}
+.gauge__num {
+  display: block;
+  font-size: calc(var(--fs-display-gauge) * var(--u));
+  color: var(--text-primary);
+}
+.gauge__unit {
+  display: block;
+  margin-top: calc(10 * var(--u));
+  font-family: var(--ff-body);
+  font-size: max(11px, calc(var(--fs-unit) * var(--u)));
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--text-muted);
+}
+
+/* The arc's circle is centred far below the card and clipped by the card's
+   own bottom edge, which is what produces the wide, shallow sweep. The SVG
+   covers the whole card so its user units are card units — no letterboxing. */
+.gauge__arc {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+.gauge__track { stroke: var(--surface-track); }
+.gauge__fill {
+  stroke: url(#gaugeGrad);
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 calc(10 * var(--u)) var(--gauge-glow));
+}
+.gauge__tick { fill: var(--text-ghost); }
+.gauge__marker {
+  fill: var(--marker-fill);
+  filter: drop-shadow(0 0 calc(7 * var(--u)) var(--marker-glow));
+}
+
+.gauge__ends {
+  position: absolute;
+  left: calc(20 * var(--u));
+  right: calc(20 * var(--u));
+  bottom: calc(22 * var(--u));
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  z-index: 2;
+}
+.gauge__end {
+  display: flex;
+  align-items: flex-end;
+  gap: calc(12 * var(--u));
+}
+.gauge__end--r { flex-direction: row-reverse; }
+.gauge__year {
+  font-family: var(--ff-display);
+  font-weight: 300;
+  font-size: max(12px, calc(var(--fs-endpoint) * var(--u)));
+  letter-spacing: var(--tracking-display);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  line-height: 1;
+}
+.gauge__meta {
+  font-family: var(--ff-mono);
+  font-size: max(8px, calc(var(--fs-mono-sm) * var(--u)));
+  line-height: 1.45;
+  color: var(--text-faint);
+}
+.gauge__end--r .gauge__meta { text-align: right; }
+.gauge__meta b {
+  display: block;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+/* ==========================================================================
+   HOLDINGS MATRIX
+   ========================================================================== */
+.matrix {
+  display: flex;
+  flex-direction: column;
+  padding: calc(56 * var(--u)) calc(19 * var(--u)) calc(19 * var(--u));
+}
+
+.matrix__grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0 var(--sp-6);
+  align-content: start;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.matrix__colhead {
+  font-family: var(--ff-mono);
+  font-size: max(9px, calc(var(--fs-eyebrow) * var(--u)));
+  font-weight: 600;
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+  color: var(--text-primary);
+  padding-bottom: calc(6 * var(--u));
+  line-height: 1;
+}
+.matrix__colhead--r { text-align: right; }
+
+.matrix__list { display: block; }
+
+.matrix__row {
+  display: flex;
+  align-items: center;
+  gap: calc(9 * var(--u));
+  height: calc(36 * var(--u));
+  font-size: max(11px, calc(var(--fs-row) * var(--u)));
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+.matrix__ticker {
+  font-family: var(--ff-mono);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+.matrix__name {
+  color: var(--text-faint);
+  font-size: 0.86em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.matrix__spark { flex: none; margin-left: auto; }
+.matrix__spark svg { overflow: visible; }
+.matrix__delta {
+  font-family: var(--ff-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8em;
+  min-width: calc(96 * var(--u));
+  text-align: right;
+  color: var(--pnl-pos);
+}
+.matrix__delta[data-dir="down"] { color: var(--pnl-neg); }
+.matrix__delta[data-dir="flat"] { color: var(--pnl-flat); }
+
+.matrix__venue {
+  height: calc(36 * var(--u));
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  font-size: max(11px, calc(var(--fs-row) * var(--u)));
+  color: var(--text-faint);
+  line-height: 1.2;
+}
+
+.matrix__foot {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--sp-6);
+  margin-bottom: calc(11 * var(--u));
+}
+
+.matrix__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(7 * var(--u));
+  font-family: var(--ff-mono);
+  font-size: max(9px, calc(var(--fs-mono-sm) * var(--u)));
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  transition:
+    opacity var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-spring);
+}
+.matrix__toggle:hover { color: var(--text-primary); }
+.matrix__toggle:active { transform: translateY(1px); }
+.matrix__toggle svg {
+  width: max(11px, calc(16 * var(--u)));
+  height: max(11px, calc(16 * var(--u)));
+  transition: transform var(--dur-mid) var(--ease-spring);
+}
+.matrix__toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+
+.matrix__notes {
+  text-align: right;
+  font-family: var(--ff-mono);
+  font-size: max(9px, calc(var(--fs-comment) * var(--u)));
+  line-height: 1.5;
+  /* These are read, so they take an AA step rather than the ghost token. */
+  color: var(--text-faint);
+}
+.matrix__notes em {
+  font-style: normal;
+  color: var(--accent-mint);
+}
+
+/* Expanded full table. Height changes on a discrete step and only transform
+   and opacity are animated, so the reveal stays on the compositor. */
+.matrix__expand {
+  display: grid;
+  grid-template-rows: 0fr;
+  overflow: clip;
+}
+.matrix__expand[data-open="true"] { grid-template-rows: 1fr; }
+.matrix__expand > div {
+  min-height: 0;
+  overflow: clip;
+  opacity: 0;
+  transform: translateY(calc(-8 * var(--u)));
+  transition:
+    opacity var(--dur-mid) var(--ease-out),
+    transform var(--dur-slow) var(--ease-spring);
+}
+.matrix__expand[data-open="true"] > div {
+  opacity: 1;
+  transform: none;
+}
+
+.htable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: max(10px, calc(19 * var(--u)));
+}
+.htable th,
+.htable td {
+  padding: calc(7 * var(--u)) calc(10 * var(--u));
+  border-bottom: 1px solid var(--hairline-subtle);
+  white-space: nowrap;
+}
+.htable th {
+  font-family: var(--ff-mono);
+  font-size: max(9px, calc(var(--fs-mono-sm) * var(--u)));
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  text-align: left;
+}
+.htable th.t-num,
+.htable td.t-num { text-align: right; }
+.htable td { color: var(--text-secondary); }
+.htable td.htable__tk {
+  font-family: var(--ff-mono);
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.htable tbody tr {
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+.htable tbody tr:hover { background: var(--hairline-subtle); }
+.htable .pos { color: var(--pnl-pos); }
+.htable .neg { color: var(--pnl-neg); }
+.htable .flat { color: var(--pnl-flat); }
+
+/* ==========================================================================
+   TUNNEL — real CSS 3D. Receding frames toward a vanishing point, with
+   holding tiles pinned to the four walls at varying depths.
+   ========================================================================== */
+.tunnel {
+  background: var(--surface-inset);
+  perspective: calc(1180 * var(--u));
+  perspective-origin: 50% 47%;
+}
+
+.tunnel__space {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  transform: translate3d(var(--px, 0px), var(--py, 0px), 0);
+  transition: transform var(--dur-slow) var(--ease-out);
+}
+
+/* Frames fill the card so the tunnel mouth is the card itself, rather than a
+   smaller box floating inside it. */
+.tunnel__frame {
+  position: absolute;
+  inset: calc(22 * var(--u));
+  border: 1px solid var(--hairline);
+  border-radius: calc(4 * var(--u));
+  transform: translateZ(var(--z));
+  opacity: var(--frame-op, 0.5);
+}
+
+/* The four vanishing-point rails */
+.tunnel__rail {
+  position: absolute;
+  inset: calc(22 * var(--u));
+  pointer-events: none;
+}
+.tunnel__rail line { stroke: var(--hairline); }
+
+.tunnel__tile {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(190 * var(--u));
+  margin: calc(-52 * var(--u)) 0 0 calc(-95 * var(--u));
+  padding: calc(11 * var(--u)) calc(13 * var(--u));
+  border-radius: calc(9 * var(--u));
+  background: var(--surface-card);
+  box-shadow: var(--elev-float);
+  transform: translate3d(var(--tx), var(--ty), var(--tz)) rotateY(var(--ry, 0deg)) rotateX(var(--rx, 0deg));
+  transition:
+    transform var(--dur-slow) var(--ease-spring),
+    opacity var(--dur-mid) var(--ease-out);
+  text-align: left;
+  cursor: pointer;
+}
+.tunnel__tile:hover,
+.tunnel__tile:focus-visible {
+  transform: translate3d(var(--tx), var(--ty), calc(var(--tz) + 60 * var(--u))) rotateY(var(--ry, 0deg)) rotateX(var(--rx, 0deg));
+}
+.tunnel__tile-tk {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: calc(8 * var(--u));
+  font-family: var(--ff-mono);
+  font-size: calc(17 * var(--u));
+  font-weight: 500;
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+.tunnel__tile-ch {
+  font-family: var(--ff-mono);
+  font-size: calc(14 * var(--u));
+  font-variant-numeric: tabular-nums;
+  color: var(--pnl-pos);
+}
+.tunnel__tile-ch[data-dir="down"] { color: var(--pnl-neg); }
+.tunnel__tile-ch[data-dir="flat"] { color: var(--pnl-flat); }
+.tunnel__tile svg { margin-top: calc(6 * var(--u)); overflow: visible; }
+
+/* Centre search — the floating plane */
+.tunnel__center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  justify-items: center;
+  gap: calc(14 * var(--u));
+  z-index: 5;
+}
+.tunnel__pill {
+  padding: calc(9 * var(--u)) calc(22 * var(--u));
+  border-radius: var(--r-chip);
+  background: var(--tunnel-pill-bg);
+  color: var(--tunnel-pill-fg);
+  font-size: calc(19 * var(--u));
+  font-weight: 450;
+  line-height: 1.3;
+  box-shadow: 0 calc(6 * var(--u)) calc(24 * var(--u)) calc(-6 * var(--u)) var(--tunnel-pill-shadow);
+  white-space: nowrap;
+}
+.tunnel__search {
+  width: calc(210 * var(--u));
+  padding: calc(11 * var(--u)) calc(18 * var(--u));
+  border: 0;
+  border-radius: var(--r-chip);
+  background: var(--tunnel-void);
+  box-shadow: 0 0 0 1px var(--tunnel-hairline), 0 calc(8 * var(--u)) calc(26 * var(--u)) calc(-8 * var(--u)) var(--tunnel-search-shadow);
+  color: var(--tunnel-ink);
+  font-family: var(--ff-mono);
+  font-size: calc(15 * var(--u));
+  text-align: center;
+  /* Focus ring lands instantly — box-shadow is off the animatable list here,
+     and an instant ring is better for keyboard users anyway. */
+}
+.tunnel__search::placeholder { color: var(--tunnel-ink-dim); }
+.tunnel__search:focus {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--accent-mint), var(--glow-mint);
+}
+.tunnel__count {
+  font-family: var(--ff-mono);
+  font-size: calc(13 * var(--u));
+  color: var(--tunnel-ink-faint);
+  min-height: 1.4em;
+}
+.tunnel__tile[hidden] { display: none; }
+
+/* ==========================================================================
+   GEOGRAPHIC EXPOSURE MAP
+   ========================================================================== */
+.geo { padding: calc(56 * var(--u)) 0 0; }
+.geo__plot {
+  position: absolute;
+  inset: calc(56 * var(--u)) 0 0;
+}
+.geo__plot svg { width: 100%; height: 100%; overflow: visible; }
+
+.geo__dot { fill: var(--map-dot); }
+.geo__arc {
+  fill: none;
+  stroke-linecap: round;
+  stroke-dasharray: var(--len);
+  stroke-dashoffset: var(--len);
+  transition: stroke-dashoffset 1.1s var(--ease-out);
+}
+.geo__arc.is-drawn { stroke-dashoffset: 0; }
+.geo__arc--primary { stroke: var(--accent-mint); stroke-width: 2; opacity: 0.85; }
+.geo__arc--muted { stroke: var(--text-ghost); stroke-width: 1.5; }
+
+.geo__pin { cursor: pointer; }
+.geo__pin-halo { opacity: 0.22; }
+.geo__pin-core { stroke: var(--surface-card); stroke-width: 2; }
+
+.geo__chips { position: absolute; inset: calc(56 * var(--u)) 0 0; pointer-events: none; }
+.geo__chip {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+}
+
+.geo__legend {
+  position: absolute;
+  right: calc(19 * var(--u));
+  top: calc(15 * var(--u));
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: calc(6 * var(--u)) calc(14 * var(--u));
+  max-width: 55%;
+  z-index: 3;
+}
+.geo__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(6 * var(--u));
+  font-family: var(--ff-mono);
+  font-size: max(9px, calc(var(--fs-mono-sm) * var(--u)));
+  color: var(--text-faint);
+}
+.geo__legend-swatch {
+  width: calc(8 * var(--u));
+  height: calc(8 * var(--u));
+  min-width: 6px;
+  min-height: 6px;
+  border-radius: 50%;
+  flex: none;
+}
+.geo__legend-item b {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+/* ==========================================================================
+   RESPONSIVE — below 1100px the proportional clone stops being readable, so
+   the deck switches to a stacked layout with real px type.
+   ========================================================================== */
+@media (max-width: 1100px) {
+  .shell { margin: 10px; padding: 12px; border-radius: 22px; }
+  .deck { gap: var(--sp-4); }
+
+  .row--split { grid-template-columns: 1fr; aspect-ratio: auto; }
+  .hero { min-height: 340px; }
+  .gauge { min-height: 400px; }
+  .row--matrix { aspect-ratio: auto; }
+  .row--tunnel { aspect-ratio: 4 / 3; }
+  .row--map { aspect-ratio: 4 / 3; }
+
+  .topbar {
+    grid-template-columns: 1fr auto;
+    height: auto;
+    row-gap: var(--sp-3);
+    padding: var(--sp-3) var(--sp-2);
+  }
+  .nav { grid-column: 1 / -1; order: 3; overflow-x: auto; }
+  .topbar__right { gap: var(--sp-3); }
+  .feed { display: none; }
+
+  .hero__value, .hero__delta { font-size: clamp(38px, 9vw, 64px); }
+  .hero__body { top: 26px; left: 20px; }
+  .hero__foot { left: 20px; right: 20px; bottom: 16px; }
+  .gauge__num { font-size: clamp(40px, 10vw, 72px); }
+  .gauge__figure { top: 92px; }
+
+  .matrix { padding: 44px 14px 14px; }
+  .matrix__grid { grid-template-columns: 1fr; }
+  .matrix__colhead--r, .matrix__venue { display: none; }
+  .matrix__row { height: 34px; }
+  .matrix__foot { flex-direction: column; align-items: flex-start; gap: var(--sp-3); }
+  .matrix__notes { text-align: left; }
+  .barcode { grid-template-columns: repeat(5, 1fr); gap: 4px; }
+  .barcode__label span { display: none; }
+
+  .geo__legend { position: static; max-width: none; justify-content: flex-start; padding: 0 14px 8px; }
+  .geo, .geo__plot, .geo__chips { padding-top: 0; }
+  .geo__plot, .geo__chips { inset: 76px 0 0; }
+}
+
+@media (max-width: 640px) {
+  .htable__hide-sm { display: none; }
+  .empty h2 { font-size: 24px; }
+  .row--tunnel { aspect-ratio: 1 / 1; }
+}

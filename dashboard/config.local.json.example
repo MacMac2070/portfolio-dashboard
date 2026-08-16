@@ -1,0 +1,18 @@
+{
+  "_comment": "Copy to config.local.json and fill in. That file holds a live credential — keep it out of version control.",
+
+  "flex_token": "PASTE_YOUR_FLEX_WEB_SERVICE_TOKEN",
+  "nav_query_id": "PASTE_ACTIVITY_STATEMENT_QUERY_ID",
+  "trades_query_id": "PASTE_TRADE_CONFIRMATION_QUERY_ID",
+
+  "_how_to_get_these": [
+    "IBKR Account Management -> Settings -> Account Reporting -> Flex Web Service",
+    "Generate a token (this is flex_token).",
+    "Then Settings -> Account Reporting -> Flex Queries:",
+    "  - Activity Statement query including the 'Net Asset Value (NAV) in Base'",
+    "    section, period 'Last 365 Days' -> its Query ID is nav_query_id",
+    "  - Trade Confirmation query (or Activity Statement with Trades)",
+    "    -> its Query ID is trades_query_id",
+    "Then: /opt/anaconda3/bin/python3 adapter/backfill.py"
+  ]
+}

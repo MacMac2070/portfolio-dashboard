@@ -1,0 +1,343 @@
+/* ==========================================================================
+   tokens.css — the single source of truth for every design value.
+   Colour values are taken verbatim from the reference site's own CSS variable
+   dump where one exists; anything marked DERIVED was stepped by us and then
+   run through the dataviz palette validator (six checks) before being used.
+   Nothing in this project hardcodes a colour, size, radius or duration.
+   ========================================================================== */
+
+:root {
+  /* ---- Spacing: one scale, no off-scale values -------------------------- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-12: 48px;
+
+  /* ---- Radius ---------------------------------------------------------- */
+  --r-chip: 999px;
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-card: 21px;
+  --r-shell: 30px;
+
+  /* ---- Proportional unit ----------------------------------------------
+     The reference capture is 1830px wide with a 1755px content column.
+     `--u` resolves to exactly 1px at that width and scales linearly either
+     side of it, so every measurement below can be written as the literal
+     pixel value read off the reference and still hold at any viewport.   */
+  --content-cols: 17.55;
+
+  /* ---- Type scale (values are reference pixels at 1755px content) ------ */
+  --fs-display-hero: 91;
+  --fs-display-gauge: 99;
+  --fs-wordmark: 29;
+  --fs-nav: 20;
+  --fs-row: 23;
+  --fs-unit: 23;
+  --fs-endpoint: 23;
+  --fs-eyebrow: 14.5;
+  --fs-comment: 13.5;
+  --fs-mono-sm: 12.4;
+  --fs-chip: 12.5;
+  --fs-terminal: 14.5;
+
+  --tracking-display: -0.03em;
+  --tracking-eyebrow: 0.14em;
+  --tracking-wordmark: 0.08em;
+  --leading-display: 1.05;
+  --leading-body: 1.7;
+
+  --ff-display: "Archivo", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --ff-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --ff-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* ---- Motion ---------------------------------------------------------- */
+  --dur-fast: 150ms;
+  --dur-mid: 220ms;
+  --dur-slow: 300ms;
+  --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out: cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+/* ==========================================================================
+   DARK THEME — the default. Traders open this at 7am with the lights off.
+   Surface, hairline, text and accent values are verbatim from the reference.
+   ========================================================================== */
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg-page: #000;
+  --surface-base: #0a0a0a;
+  --surface-card: #0f0f0f;
+  --surface-elevated: #171717;
+  --surface-floating: #191919;
+  --surface-track: #272b2d;
+  --surface-inset: #030303;
+
+  --hairline-subtle: #ffffff0d;
+  --hairline: #ffffff1a;
+  --hairline-strong: #ffffff26;
+  --hairline-tint: #abe0ff0d;
+
+  /* Text ladder. Every step used for *text* clears WCAG AA (4.5:1) on
+     --surface-card once its alpha is composited — the reference's 40%/20%
+     whites measure 3.81:1 and 1.82:1, which is why these are stepped up.
+     --text-ghost is deliberately below AA and is reserved for non-text
+     decoration only (tick dots, decorative icons, hairline strokes). */
+  --text-primary: #f5f5f5;   /* 17.6:1 */
+  --text-secondary: #ffffffb3; /* 10.4:1 */
+  --text-muted: #fff9;       /*  8.0:1 */
+  --text-faint: #ffffff8c;   /*  6.3:1 */
+  --text-dim: #858585;       /*  5.2:1 */
+  --text-invert: #08070e;
+  --text-ghost: #fff3;       /* decoration only — not for text */
+
+  --accent-mint: #00ffb2;
+  --accent-sky: #2eb9ff;
+  --accent-magenta: #e879c7; /* DERIVED — gauge gradient origin */
+
+  /* P&L. Verbatim from the reference dump; all clear AA on --surface-card
+     (positive 8.9:1, negative 6.4:1, warning 11.5:1, flat 5.2:1).
+     Hue is never the only channel — every value also carries a sign+arrow. */
+  --pnl-pos: #22cb58;
+  --pnl-neg: #ff5e5d;
+  --pnl-flat: #858585;
+  --pnl-warn: #ffbc4f;
+  --pnl-pos-wash: #22cb5814;
+  --pnl-neg-wash: #ff5e5d14;
+
+  /* Sector categorical palette. DERIVED, then validated for the dark
+     surface: lightness band PASS, chroma floor PASS, worst adjacent CVD
+     ΔE 9.1 (deutan) PASS, normal-vision ΔE 18.4 PASS, contrast PASS.
+     Order is deliberate — it keeps the two warm hues non-adjacent, which
+     is what lets the pair clear the normal-vision floor. */
+  --sector-1: #8c9b30;
+  --sector-2: #bf4fc4;
+  --sector-3: #d65a28;
+  --sector-4: #17a877;
+  --sector-5: #c2891a;
+
+  --map-dot: #ffffff21;
+  --map-dot-lit: #ffffff3d;
+
+  /* Warning washes, derived from --pnl-warn */
+  --warn-halo: #ffbc4f1f;
+  --warn-wash: #ffbc4f0f;
+  --warn-ring: #ffbc4f2e;
+
+  /* The tunnel is a lit interior: it stays dark in both themes, because a
+     white void reads as a blank card rather than as depth. */
+  --tunnel-void: #0d0d0d;
+  --tunnel-ink: #f5f5f5;
+  --tunnel-ink-dim: #ffffff8c;
+  --tunnel-ink-faint: #ffffff99;
+  --tunnel-pill-bg: #fff;
+  --tunnel-pill-fg: #08070e;
+  --tunnel-pill-shadow: #000000cc;
+  --tunnel-search-shadow: #000;
+  --tunnel-hairline: #ffffff1a;
+
+  --marker-fill: #fff;
+  --marker-glow: #ffffff80;
+  --gauge-glow: #00ffb229;
+
+  /* Ambient wash behind the shell */
+  --atmo-1: #00ffb20a;
+  --atmo-2: #e879c70a;
+  --atmo-3: #2eb9ff08;
+  --grain-opacity: 0.035;
+  --grain-blend: overlay;
+
+  /* Layered, colour-tinted elevation — never a flat neutral drop shadow. */
+  --elev-card:
+    0 1px 0 0 var(--hairline-subtle) inset,
+    0 2px 8px -2px #00000099,
+    0 16px 40px -12px #000000cc;
+  --elev-float:
+    0 0 0 1px var(--hairline) ,
+    0 2px 6px -1px #000000b3,
+    0 12px 32px -8px #00000099,
+    0 0 24px -6px #00ffb214;
+  --glow-mint: 0 0 12px -2px #00ffb266;
+}
+
+/* ==========================================================================
+   LIGHT THEME — first-class, not an inversion. Steps are chosen for a light
+   surface and re-validated, because a flipped dark palette fails contrast.
+   ========================================================================== */
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg-page: #ededed;
+  --surface-base: #fafafa;
+  --surface-card: #fff;
+  --surface-elevated: #fafafa;
+  --surface-floating: #fff;
+  --surface-track: #e2e2e4;
+  --surface-inset: #f2f2f2;
+
+  --hairline-subtle: #18181a0d;
+  --hairline: #18181a1a;
+  --hairline-strong: #18181a33;
+  --hairline-tint: #18181a0d;
+
+  /* Same rule as dark: the reference's 40%/20% inks measure 2.53:1 and
+     1.53:1 on white, so the text steps are darkened to clear AA. */
+  --text-primary: #18181a;   /* 17.7:1 */
+  --text-secondary: #18181acc; /* 12.0:1 */
+  --text-muted: #18181a99;   /*  7.7:1 */
+  --text-faint: #18181ab3;   /*  6.5:1 */
+  --text-dim: #5c5c5c;       /*  6.7:1 */
+  --text-invert: #fafafa;
+  --text-ghost: #18181a33;   /* decoration only — not for text */
+
+  --accent-mint: #0a7d59;
+  --accent-sky: #0a72b8;
+  --accent-magenta: #b4479a;
+
+  /* Re-stepped for a white surface. The dark values measure 2.15:1
+     (positive) and 3.00:1 (negative) here and would fail AA outright;
+     these measure 4.85:1, 5.46:1, 5.93:1 and 6.69:1. */
+  --pnl-pos: #12833a;
+  --pnl-neg: #c62f2e;
+  --pnl-flat: #5c5c5c;
+  --pnl-warn: #8a5a00;
+  --pnl-pos-wash: #12833a14;
+  --pnl-neg-wash: #c62f2e14;
+
+  /* Light steps of the same five hue families. Validated against #fafafa:
+     all six checks PASS, worst adjacent CVD ΔE 8.3, normal-vision ΔE 17.0. */
+  --sector-1: #7d8b22;
+  --sector-2: #b03fb5;
+  --sector-3: #c94d1c;
+  --sector-4: #0f9468;
+  --sector-5: #ad7a0c;
+
+  --map-dot: #18181a1f;
+  --map-dot-lit: #18181a3d;
+
+  --warn-halo: #8a5a001f;
+  --warn-wash: #8a5a000f;
+  --warn-ring: #8a5a002e;
+
+  /* Unchanged from dark on purpose — see the note on --tunnel-void above. */
+  --tunnel-void: #0d0d0d;
+  --tunnel-ink: #f5f5f5;
+  --tunnel-ink-dim: #ffffff8c;
+  --tunnel-ink-faint: #ffffff99;
+  --tunnel-pill-bg: #fff;
+  --tunnel-pill-fg: #08070e;
+  --tunnel-pill-shadow: #000000cc;
+  --tunnel-search-shadow: #000;
+  --tunnel-hairline: #ffffff1a;
+
+  --marker-fill: #18181a;
+  --marker-glow: #18181a4d;
+  --gauge-glow: #0a7d5929;
+
+  --atmo-1: #0a7d5910;
+  --atmo-2: #b4479a0d;
+  --atmo-3: #0a72b80d;
+  --grain-opacity: 0.022;
+  --grain-blend: multiply;
+
+  --elev-card:
+    0 1px 0 0 #ffffff inset,
+    0 1px 3px -1px #18181a1a,
+    0 12px 32px -14px #18181a26;
+  --elev-float:
+    0 0 0 1px var(--hairline),
+    0 2px 6px -1px #18181a14,
+    0 12px 28px -10px #18181a1f,
+    0 0 20px -8px #0b8f6614;
+  --glow-mint: 0 0 10px -3px #0b8f6640;
+}
+
+/* Follow the OS when the viewer has not chosen explicitly. The toggle stamps
+   data-theme on :root and must win in both directions, so the media block is
+   scoped with :where() to keep its specificity at zero. */
+@media (prefers-color-scheme: light) {
+  :root:where(:not([data-theme])) {
+    color-scheme: light;
+
+    --bg-page: #ededed;
+    --surface-base: #fafafa;
+    --surface-card: #fff;
+    --surface-elevated: #fafafa;
+    --surface-floating: #fff;
+    --surface-track: #e2e2e4;
+    --surface-inset: #f2f2f2;
+
+    --hairline-subtle: #18181a0d;
+    --hairline: #18181a1a;
+    --hairline-strong: #18181a33;
+    --hairline-tint: #18181a0d;
+
+    --text-primary: #18181a;
+    --text-secondary: #18181acc;
+    --text-muted: #18181a99;
+    --text-faint: #18181ab3;
+    --text-dim: #5c5c5c;
+    --text-invert: #fafafa;
+    --text-ghost: #18181a33;
+
+    --accent-mint: #0a7d59;
+    --accent-sky: #0a72b8;
+    --accent-magenta: #b4479a;
+
+    --pnl-pos: #12833a;
+    --pnl-neg: #c62f2e;
+    --pnl-flat: #5c5c5c;
+    --pnl-warn: #8a5a00;
+    --pnl-pos-wash: #12833a14;
+    --pnl-neg-wash: #c62f2e14;
+
+    --sector-1: #7d8b22;
+    --sector-2: #b03fb5;
+    --sector-3: #c94d1c;
+    --sector-4: #0f9468;
+    --sector-5: #ad7a0c;
+
+    --map-dot: #18181a1f;
+    --map-dot-lit: #18181a3d;
+
+    --warn-halo: #8a5a001f;
+    --warn-wash: #8a5a000f;
+    --warn-ring: #8a5a002e;
+
+    --tunnel-void: #0d0d0d;
+    --tunnel-ink: #f5f5f5;
+    --tunnel-ink-dim: #ffffff8c;
+    --tunnel-ink-faint: #ffffff99;
+    --tunnel-pill-bg: #fff;
+    --tunnel-pill-fg: #08070e;
+    --tunnel-pill-shadow: #000000cc;
+    --tunnel-search-shadow: #000;
+    --tunnel-hairline: #ffffff1a;
+
+    --marker-fill: #18181a;
+    --marker-glow: #18181a4d;
+    --gauge-glow: #0a7d5929;
+
+    --atmo-1: #0a7d5910;
+    --atmo-2: #b4479a0d;
+    --atmo-3: #0a72b80d;
+    --grain-opacity: 0.022;
+    --grain-blend: multiply;
+
+    --elev-card:
+      0 1px 0 0 #ffffff inset,
+      0 1px 3px -1px #18181a1a,
+      0 12px 32px -14px #18181a26;
+    --elev-float:
+      0 0 0 1px var(--hairline),
+      0 2px 6px -1px #18181a14,
+      0 12px 28px -10px #18181a1f,
+      0 0 20px -8px #0b8f6614;
+    --glow-mint: 0 0 10px -3px #0b8f6640;
+  }
+}

@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en-GB" data-state="loading">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Portfolio — Dashboard</title>
+<meta name="description" content="Live GBP investment portfolio dashboard: total value, return, holdings, sector allocation and geographic exposure.">
+<meta name="color-scheme" content="dark light">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@200;300;400;500&family=Inter:wght@400;450;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/components.css">
+<link rel="stylesheet" href="css/sections.css">
+</head>
+<body>
+
+<div class="shell">
+<div class="deck">
+
+  <!-- ===================== TOPBAR ===================== -->
+  <header class="topbar">
+    <span class="wordmark">Ledger&nbsp;&amp;&nbsp;Co</span>
+
+    <nav class="nav" aria-label="Sections">
+      <a class="nav__item" href="#" aria-current="page">Dashboard</a>
+      <a class="nav__item" href="#holdings">Holdings</a>
+      <a class="nav__item" href="#research">Research</a>
+    </nav>
+
+    <div class="topbar__right">
+      <span class="feed" id="feed" data-feed="live">
+        <i class="feed__dot feed__pulse" aria-hidden="true"></i>
+        <span id="feedLabel">Connecting…</span>
+      </span>
+
+      <button class="toggle" id="themeToggle" type="button" aria-label="Switch colour theme">
+        <svg class="toggle__moon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <path d="M16.5 12.4A7 7 0 0 1 7.6 3.5a7 7 0 1 0 8.9 8.9Z"/>
+        </svg>
+        <svg class="toggle__sun" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <circle cx="10" cy="10" r="3.6"/>
+          <path d="M10 1.6v2M10 16.4v2M1.6 10h2M16.4 10h2M4.1 4.1l1.4 1.4M14.5 14.5l1.4 1.4M15.9 4.1l-1.4 1.4M5.5 14.5l-1.4 1.4"/>
+        </svg>
+      </button>
+
+      <span class="cube" aria-hidden="true">
+        <span class="cube__inner">
+          <i class="cube__face"></i><i class="cube__face"></i><i class="cube__face"></i>
+        </span>
+      </span>
+    </div>
+  </header>
+
+  <!-- ===================== LOADING ===================== -->
+  <div data-view="loading">
+    <div class="row--split" style="margin-bottom:calc(25 * var(--u))">
+      <div class="card" style="padding:calc(46 * var(--u))">
+        <div class="sk" style="width:58%;height:calc(96 * var(--u));margin-bottom:calc(14 * var(--u))"></div>
+        <div class="sk" style="width:42%;height:calc(96 * var(--u))"></div>
+        <div class="sk" style="position:absolute;left:calc(52 * var(--u));right:calc(52 * var(--u));bottom:calc(34 * var(--u));height:calc(38 * var(--u))"></div>
+      </div>
+      <div class="card" style="padding:calc(46 * var(--u));display:grid;justify-items:center;align-content:start">
+        <div class="sk" style="width:44%;height:calc(100 * var(--u));margin-top:calc(104 * var(--u))"></div>
+        <div class="sk" style="width:18%;height:calc(24 * var(--u));margin-top:calc(18 * var(--u))"></div>
+        <div class="sk" style="width:86%;height:calc(220 * var(--u));margin-top:calc(70 * var(--u));border-radius:calc(220 * var(--u)) calc(220 * var(--u)) 0 0"></div>
+      </div>
+    </div>
+
+    <div class="card row--matrix" style="padding:calc(56 * var(--u)) calc(19 * var(--u)) calc(19 * var(--u));margin-bottom:calc(25 * var(--u))">
+      <div style="display:grid;gap:calc(13 * var(--u))">
+        <div class="sk" style="width:96%;height:calc(23 * var(--u))"></div>
+        <div class="sk" style="width:88%;height:calc(23 * var(--u))"></div>
+        <div class="sk" style="width:92%;height:calc(23 * var(--u))"></div>
+        <div class="sk" style="width:84%;height:calc(23 * var(--u))"></div>
+        <div class="sk" style="width:90%;height:calc(23 * var(--u))"></div>
+        <div class="sk" style="width:80%;height:calc(23 * var(--u))"></div>
+      </div>
+      <div class="barcode" style="margin-top:calc(40 * var(--u))">
+        <div class="sk" style="height:calc(68 * var(--u))"></div>
+        <div class="sk" style="height:calc(68 * var(--u))"></div>
+        <div class="sk" style="height:calc(68 * var(--u))"></div>
+        <div class="sk" style="height:calc(68 * var(--u))"></div>
+        <div class="sk" style="height:calc(68 * var(--u))"></div>
+      </div>
+    </div>
+
+    <div class="card row--map"><div class="sk" style="position:absolute;inset:calc(56 * var(--u)) calc(30 * var(--u)) calc(30 * var(--u))"></div></div>
+    <p class="u-sr" role="status">Loading your portfolio.</p>
+  </div>
+
+  <!-- ===================== EMPTY ===================== -->
+  <div data-view="empty">
+    <div class="card empty">
+      <div class="empty__inner">
+        <svg class="empty__mark" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <rect x="5" y="12" width="38" height="26" rx="4"/>
+          <path d="M5 20h38M13 29h8"/>
+        </svg>
+        <h2>No positions yet</h2>
+        <p>Once you connect a brokerage account or add a holding by hand, your value, return and allocation appear here.</p>
+        <a class="btn" href="#add">Add your first holding</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== READY ===================== -->
+  <div data-view="ready">
+
+    <!-- ---------- Row: hero + gauge ---------- -->
+    <div class="row--split reveal" style="margin-bottom:calc(25 * var(--u))">
+
+      <section class="card hero" aria-labelledby="heroValue">
+        <div class="hero__ascii" id="heroAscii" aria-hidden="true"></div>
+
+        <div class="hero__body">
+          <span class="t-display hero__value is-live" id="heroValue">£0</span>
+          <span class="t-display hero__delta is-live" id="heroDelta" data-dir="up">£0</span>
+        </div>
+
+        <div class="hero__foot">
+          <p class="terminal">
+            <span class="tok-kw">const</span> <span class="tok-fn">portfolio</span> = ledger.open(<span class="tok-ok">'GBP'</span>);
+            <br>&gt; 15 positions across 5 exchanges. Last tick <span class="tok-ok" id="heroTick">--:--:--</span><span class="caret"></span>
+          </p>
+          <div class="stale-banner">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+              <path d="M8 4.5v4M8 11.2v.3"/><circle cx="8" cy="8" r="6.4"/>
+            </svg>
+            <span>Feed disconnected. Showing the last values received at <b id="staleTime">--:--</b> — don't trade on these.</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="card gauge" aria-labelledby="gaugeEyebrow">
+        <div class="card__head">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+            <circle cx="8" cy="8" r="6.4"/><path d="M8 4.4V8l2.6 1.6"/>
+          </svg>
+          <span class="t-eyebrow" id="gaugeEyebrow">Total return</span>
+        </div>
+
+        <div class="gauge__figure">
+          <span class="t-display gauge__num is-live" id="gaugeNum">0.00%</span>
+          <span class="gauge__unit">total return on cost</span>
+        </div>
+
+        <svg class="gauge__arc" id="gaugeArc"></svg>
+
+        <div class="gauge__ends">
+          <span class="gauge__end">
+            <span class="gauge__year" id="gaugeStart">2020</span>
+            <span class="gauge__meta">Invested<b id="gaugeCost">£0</b></span>
+          </span>
+          <span class="gauge__end gauge__end--r">
+            <span class="gauge__year" id="gaugeEnd">2025</span>
+            <span class="gauge__meta">Value today<b id="gaugeValue">£0</b></span>
+          </span>
+        </div>
+      </section>
+    </div>
+
+    <!-- ---------- Row: holdings matrix ---------- -->
+    <section class="card matrix row--matrix reveal" id="holdings" aria-labelledby="matrixEyebrow" style="margin-bottom:calc(25 * var(--u))">
+      <div class="card__head">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+          <path d="M2.6 13.4V9.2M6.4 13.4V3.2M10.2 13.4V6.6M14 13.4v-2.8"/>
+        </svg>
+        <span class="t-eyebrow" id="matrixEyebrow">Holdings matrix</span>
+      </div>
+
+      <div class="matrix__grid">
+        <div class="matrix__colhead">Position</div>
+        <div class="matrix__colhead matrix__colhead--r">Venue</div>
+        <div class="matrix__list is-live" id="matrixList"></div>
+        <div id="matrixVenues"></div>
+      </div>
+
+      <div class="matrix__expand" id="matrixExpand" data-open="false">
+        <div>
+          <table class="htable">
+            <caption class="u-sr">All holdings with value, book cost, profit and loss, and weight</caption>
+            <thead>
+              <tr>
+                <th scope="col">Ticker</th>
+                <th scope="col" class="htable__hide-sm">Name</th>
+                <th scope="col" class="t-num">Value</th>
+                <th scope="col" class="t-num htable__hide-sm">Cost</th>
+                <th scope="col" class="t-num">P&amp;L</th>
+                <th scope="col" class="t-num">Return</th>
+                <th scope="col" class="t-num">Today</th>
+                <th scope="col" class="t-num">Weight</th>
+              </tr>
+            </thead>
+            <tbody id="htableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="matrix__foot">
+        <button class="matrix__toggle" id="matrixToggle" type="button" aria-expanded="false" aria-controls="matrixExpand">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <path d="M4 6.2 8 10l4-3.8"/>
+          </svg>
+          <span id="matrixToggleLabel">All 15 positions</span>
+        </button>
+        <p class="matrix__notes">
+          // weights are computed from live value <em>(total = 100%)</em><br>
+          // rebalanced quarterly, <em>next review 30 Sep</em>
+        </p>
+      </div>
+
+      <div class="barcode is-live" id="barcode"></div>
+    </section>
+
+    <!-- ---------- Row: tunnel ---------- -->
+    <section class="card tunnel row--tunnel reveal" id="tunnelCard" aria-labelledby="tunnelEyebrow" style="margin-bottom:calc(25 * var(--u))">
+      <h2 class="u-sr" id="tunnelEyebrow">Browse holdings</h2>
+      <div class="tunnel__space" id="tunnelSpace"></div>
+      <div class="tunnel__center">
+        <span class="tunnel__pill">What are you holding?</span>
+        <input class="tunnel__search" id="tunnelSearch" type="search" placeholder="Find a holding" aria-label="Find a holding by ticker or name" autocomplete="off">
+        <span class="tunnel__count" id="tunnelCount" role="status"></span>
+      </div>
+    </section>
+
+    <!-- ---------- Row: geographic exposure ---------- -->
+    <section class="card geo row--map reveal" id="research" aria-labelledby="geoEyebrow">
+      <div class="card__head">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+          <circle cx="8" cy="8" r="6.4"/><path d="M1.8 8h12.4M8 1.6a11 11 0 0 1 0 12.8A11 11 0 0 1 8 1.6Z"/>
+        </svg>
+        <span class="t-eyebrow" id="geoEyebrow">Geographic exposure</span>
+      </div>
+      <div class="geo__legend" id="geoLegend"></div>
+      <div class="geo__plot"><svg id="geoSvg"></svg></div>
+      <div class="geo__chips" id="geoChips"></div>
+    </section>
+
+  </div><!-- /ready -->
+
+</div><!-- /deck -->
+</div><!-- /shell -->
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
