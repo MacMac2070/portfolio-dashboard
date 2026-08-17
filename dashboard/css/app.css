@@ -216,16 +216,22 @@
   white-space: nowrap;
   border-right: 1px solid var(--border);
 }
+/* Theme-aware text tokens, not the Holdings ink scale. --text-body and
+   --text-muted are pale greys with no light-mode value, which measured
+   1.82:1 and 3.04:1 on a white strip. These two carry both themes:
+   5.06 / 5.84 and 4.65 / 4.55. The hierarchy between symbol and price is
+   carried by family and weight rather than by brightness, which keeps the
+   strip recessive — it is a glance, not the subject of the page. */
 .tape__sym {
   font: 600 10.5px/1 var(--font-ui);
   letter-spacing: 0.05em;
-  color: var(--text-body);
+  color: var(--text-2);
 }
 .tape__px {
   font-family: var(--font-figure);
   font-size: 10.5px;
   font-weight: 500;
-  color: var(--text-muted);
+  color: var(--text-3);
   font-variant-numeric: tabular-nums;
   font-feature-settings: var(--ff-tabular);
 }
@@ -465,7 +471,7 @@
 .benchbar__key { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .benchbar__swatch { width: 14px; height: 0; flex: none; }
 .benchbar__swatch--port { border-top: 2px solid var(--pos); border-radius: 2px; }
-.benchbar__swatch--bench { border-top: 1.5px dashed rgba(255, 255, 255, 0.34); }
+.benchbar__swatch--bench { border-top: 1.5px dashed var(--bench-line); }
 
 /* The picker and its swatch read as one legend entry. */
 .benchbar__pick { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; flex: none; }
@@ -2170,8 +2176,11 @@
 .schart__plot { flex: none; height: 292px; padding: 0 6px 8px; }
 /* The design keeps the price line red/green and the benchmark neutral, so the
    two are told apart by colour AND by dash — never colour alone. */
-.plot__bench { stroke: rgba(255, 255, 255, 0.34); stroke-width: 1.5; stroke-dasharray: 4 4; }
-.plot__dot--bench { fill: rgba(255, 255, 255, 0.7); stroke: var(--ink-panel); stroke-width: 2; }
+/* Themed rather than hardcoded white: the equity curve now draws a benchmark
+   too, and on a white card a white line measures 1.00:1 — it is not faint,
+   it is absent. --bench-line carries a value for each theme. */
+.plot__bench { stroke: var(--bench-line); stroke-width: 1.5; stroke-dasharray: 4 4; }
+.plot__dot--bench { fill: var(--text-2); stroke: var(--surface); stroke-width: 2; }
 .tip__bench {
   margin-top: 3px; font: 500 10px/1 var(--font-ui); color: var(--text-muted);
 }

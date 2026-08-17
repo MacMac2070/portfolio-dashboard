@@ -228,6 +228,10 @@
   --pos:          #34d399;   /* emerald-400 */
   --neg:          #fb7185;   /* rose-400    */
   --flat:         #7a8490;
+  /* The benchmark line and its swatch. Deliberately neutral — it is context,
+   * not a P&L figure, and must never be mistaken for one. Measures 3.56:1 on
+   * the card, past the 3:1 that WCAG asks of a non-text graphic. */
+  --bench-line:   rgba(255, 255, 255, 0.38);
   /* Chip tints, composited over the card beneath. Text-on-own-chip measures
    * 7.40-7.78:1 (gain) and 5.48-5.79:1 (loss). */
   --pos-bg:       rgba(52, 211, 153, 0.13);
@@ -285,6 +289,10 @@
   --pos:          #047857;   /* emerald-700 */
   --neg:          #be123c;   /* rose-700    */
   --flat:         #5b6673;
+  /* Ink rather than white, or the line would be invisible on a white card —
+   * the dark value measures 1.00:1 here. 0.50 clears 3:1 on both --surface
+   * (3.46) and --bg-page (3.42); 0.45 does not (2.96 on the latter). */
+  --bench-line:   rgba(16, 20, 26, 0.50);
   --pos-bg:       rgba(4, 120, 87, 0.10);
   --neg-bg:       rgba(190, 18, 60, 0.10);
 
@@ -315,6 +323,7 @@
     --brand-glow: rgba(102,53,224,.28);
     --pos: #047857; --neg: #be123c; --flat: #5b6673;
     --pos-bg: rgba(4,120,87,.10); --neg-bg: rgba(190,18,60,.10);
+    --bench-line: rgba(16,20,26,.50);
     --cat-1: #2f6fd0; --cat-2: #b87816; --cat-3: #12855f;
     --cat-4: #7343c9; --cat-5: #1c7f8c; --cat-6: #bc3a5c; --cat-7: #566070;
     --shadow-card: 0 1px 2px rgba(16,20,26,.06), 0 4px 12px rgba(16,20,26,.05);
