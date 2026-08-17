@@ -7,7 +7,7 @@
 
 import {
   money, moneyCompact, moneySigned, pctSigned, pct, qty,
-  direction, stamp, clock, initials,
+  direction, stamp, clock, initials, esc,
 } from "./format.js";
 import { sparkline, donut, equityCurve, countUp } from "./charts.js";
 import * as holdings from "./holdings.js";
@@ -22,6 +22,12 @@ const NAV_URL = "data/nav_history.jsonl";
 const LIVE_URL = "api/snapshot";
 const WATCH_URL = "api/watchlist";
 const MARKETS_URL = "api/markets";
+const BENCH_URL = "api/benchmark";
+/* Which index the equity curve is compared against. Remembered because it is a
+ * reading preference, not state: coming back to the dashboard and finding the
+ * comparison reset to the default every time would be a small, repeated
+ * annoyance. Same localStorage habit stock.js uses for its watch list. */
+const BENCH_KEY = "portfolio-dashboard:benchmark";
 /* Watchlist quotes come from openbb on a 60s server-side cycle, so polling it
  * at the IB feed's 3s would just re-fetch the same numbers. */
 const WATCH_POLL_MS = 20000;
@@ -43,6 +49,12 @@ const $ = (id) => document.getElementById(id);
 const root = document.documentElement;
 
 let livePolling = false;   // set once /api/snapshot answers
+
+/* The comparison series for the equity curve, as the server composed it:
+ * { symbol, name, currency, ranges: { '1M': { points, count, withheld }, … } }.
+ * Null until /api/benchmark answers, and null again if it fails — in both cases
+ * the curve simply draws without a second line. */
+let benchmark = null;
 
 /* Write only when the value actually changed. Every one of these runs up to
  * 20 times a second across the page; blind writes cause layout thrash and drop
@@ -145,6 +157,104 @@ function sliceRange(points, range) {
   return points.slice(-Math.max(2, days));
 }
 
+/* ---------------- benchmark ---------------- */
+
+/**
+ * The comparison series for one range, plus why it is absent when it is.
+ *
+ * Everything numeric here was computed by adapter/benchmark.py — slicing,
+ * forward-filling and rebasing all happen server-side. This only decides
+ * whether the array is safe to hand to the chart.
+ *
+ * Returns { points, reason }: `points` is the array or null; `reason` is a
+ * short phrase for the strip under the chart when there is nothing to draw.
+ */
+function benchmarkFor(range, expected) {
+  if (!benchmark) return { points: null, reason: "" };
+  if (benchmark.available === false) {
+    return { points: null, reason: "index data unavailable" };
+  }
+  const slot = benchmark.ranges?.[range];
+  if (!slot) return { points: null, reason: "" };
+
+  if (slot.withheld === "funding") {
+    // The server judged this window to be dominated by deposits rather than
+    // performance. Say so — an absent line with no explanation reads as a bug.
+    return { points: null, reason: "not shown over this range · deposits dominate the change" };
+  }
+  // Length parity is the server's contract, but assert it rather than trust it:
+  // a mismatch would plot every point against the wrong date, and a silently
+  // wrong chart is worse than no chart.
+  if (slot.count !== expected) {
+    return { points: null, reason: "" };
+  }
+  if (!slot.covered) return { points: null, reason: "no index history for this range" };
+  return { points: slot.points, reason: "" };
+}
+
+/**
+ * The legend and note under the chart.
+ *
+ * The dashed swatch is shown only while a line is actually drawn, so the key
+ * never advertises a series that is not on the chart. The note carries either
+ * the reason a line is missing or, for a non-GBP index, the currency caveat —
+ * the comparison is of growth, so an index in its own currency shows the return
+ * a local investor earned rather than a sterling one.
+ */
+function renderBenchBar(bench) {
+  const key = $("benchKey");
+  const note = $("benchNote");
+  if (!key || !note) return;
+
+  const drawing = Boolean(bench.points);
+  key.hidden = !drawing;
+
+  setText(note, bench.reason || (drawing && benchmark?.currency && benchmark.currency !== "GBP"
+    ? `${benchmark.currency} · unhedged`
+    : ""));
+}
+
+/** Fill the picker once, then keep it in step with the stored choice. */
+function renderBenchOptions(available, selected) {
+  const sel = $("benchSelect");
+  if (!sel || !available?.length) return;
+  const key = available.map((c) => c.symbol).join(",");
+  if (sel.dataset.key !== key) {
+    sel.dataset.key = key;
+    sel.innerHTML = available
+      .map((c) => `<option value="${esc(c.symbol)}">${esc(c.name)}</option>`)
+      .join("");
+  }
+  if (selected) sel.value = selected;
+}
+
+async function loadBenchmark(symbol) {
+  try {
+    const url = symbol ? `${BENCH_URL}?symbol=${encodeURIComponent(symbol)}` : BENCH_URL;
+    const res = await fetch(`${url}${symbol ? "&" : "?"}t=${Date.now()}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    benchmark = data.benchmark || null;
+    renderBenchOptions(data.available, benchmark?.symbol);
+    if (benchmark?.symbol) {
+      try { localStorage.setItem(BENCH_KEY, benchmark.symbol); } catch { /* private mode */ }
+    }
+    renderChart();
+  } catch {
+    // A missing comparison line is not worth breaking the page over.
+    benchmark = null;
+  }
+}
+
+function initBenchmark() {
+  const sel = $("benchSelect");
+  if (!sel) return;
+  sel.addEventListener("change", () => loadBenchmark(sel.value));
+  let stored = null;
+  try { stored = localStorage.getItem(BENCH_KEY); } catch { /* private mode */ }
+  loadBenchmark(stored || "");
+}
+
 function renderChart() {
   const plot = $("chartPlot");
   const points = sliceRange(navHistory, activeRange);
@@ -156,6 +266,9 @@ function renderChart() {
   }
 
   if (points.length < MIN_CURVE_POINTS) {
+    // No chart at all here, so the key must not keep advertising a benchmark
+    // from whichever range was shown before this one.
+    renderBenchBar({ points: null, reason: "" });
     $("chartChip").className = "chip chip--flat";
     $("chartChip").textContent = navHistory.length ? `${navHistory.length} of ${MIN_CURVE_POINTS}` : "no history";
     plot.innerHTML = `
@@ -173,11 +286,16 @@ function renderChart() {
     return;
   }
 
+  const bench = benchmarkFor(activeRange, points.length);
+  renderBenchBar(bench);
+
   plot.innerHTML = '<svg id="chartSvg" role="img" aria-label="Portfolio value over time"></svg>';
   equityCurve($("chartSvg"), points, {
     tooltip: $("tip"),
     formatValue: (v, full) => (full ? money(v) : moneyCompact(v)),
     formatDate: (d) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
+    benchmark: bench.points,
+    benchmarkName: benchmark?.name ?? "Benchmark",
   });
 
   const first = points[0].value;
@@ -561,6 +679,10 @@ async function boot() {
   search.init();
   financials.init();
   ovholdings.init();
+  // Fires its own fetch and re-renders the curve when it lands, so the chart
+  // paints immediately from nav_history and gains its comparison line a moment
+  // later rather than waiting on a second request before showing anything.
+  initBenchmark();
   // A name added from the stock page appears without waiting out the 20s poll.
   stock.onWatchAdded(() => pollWatchlist());
   const initial = tabFromHash();

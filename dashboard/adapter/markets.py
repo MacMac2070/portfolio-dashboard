@@ -173,6 +173,11 @@ class MarketFeed:
 
         self._lock = threading.Lock()
         self._series: dict[str, dict] = {}   # symbol -> derived figures
+        # symbol -> [(YYYY-MM-DD, close), ...] oldest first, the full 420-day
+        # window this feed already pulls. The board itself only needs the last
+        # 30 closes, but the Overview benchmark line needs the whole series and
+        # there is no reason to fetch it twice — see adapter/benchmark.py.
+        self._history: dict[str, list[tuple[str, float]]] = {}
         self._series_day: str | None = None
         self._last_refresh: str | None = None
         self._error: str | None = None
@@ -193,6 +198,30 @@ class MarketFeed:
         self._stop.set()
         if self._thread:
             self._thread.join(timeout=8)
+
+    def history(self, symbol: str) -> list[tuple[str, float]]:
+        """The full daily close series for one index, oldest first.
+
+        Empty until the first successful refresh. Copied under the lock because
+        the worker thread replaces the dict wholesale on every poll.
+        """
+        with self._lock:
+            return list(self._history.get(symbol, ()))
+
+    @staticmethod
+    def catalogue() -> list[dict]:
+        """Every index on the board, flattened, for a benchmark picker.
+
+        Ordered market by market as MARKETS declares them, benchmark first
+        within each — the same order the board itself renders, so a person
+        meets the indices in one consistent sequence.
+        """
+        return [
+            {"symbol": index.symbol, "name": index.name,
+             "market": market.code, "market_name": market.name,
+             "currency": market.currency}
+            for market in MARKETS for index in market.indices
+        ]
 
     def snapshot(self, exposure: dict[str, float] | None = None,
                  nav: float = 0.0) -> dict:
@@ -323,6 +352,7 @@ class MarketFeed:
         today = date.today()
         year_start = f"{today.year}-01-01"
         derived: dict[str, dict] = {}
+        history: dict[str, list[tuple[str, float]]] = {}
 
         for symbol, sub in frame.groupby("symbol"):
             sub = sub.sort_values("date")
@@ -351,10 +381,12 @@ class MarketFeed:
                 "as_of": as_of,
                 "stale": stale,
             }
+            history[str(symbol)] = rows
 
         with self._lock:
             if derived:
                 self._series = derived
+                self._history = history
                 self._last_refresh = datetime.now(timezone.utc).isoformat(timespec="seconds")
                 self._error = None
 

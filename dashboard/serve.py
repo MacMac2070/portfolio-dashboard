@@ -45,6 +45,31 @@ sys.path.insert(0, str(ROOT / "adapter"))
 from markets import REGION_TO_MARKET  # noqa: E402  (needs the path above)
 
 
+def markets_catalogue():
+    """Every index the board tracks, for the benchmark picker.
+
+    Imported lazily and defensively: the picker is a convenience, and a broken
+    markets module should cost the benchmark line, not the whole server.
+    """
+    try:
+        from markets import MarketFeed
+        return MarketFeed.catalogue()
+    except Exception:
+        log.exception("could not build the index catalogue")
+        return []
+
+
+def store_read_nav():
+    """The NAV history the equity curve is drawn from, parsed once here.
+
+    The page fetches data/nav_history.jsonl directly; this reads the same file
+    through the same store helper, so the benchmark is aligned against exactly
+    the dates the portfolio line uses.
+    """
+    from store import NAV_PATH, _read
+    return _read(NAV_PATH)
+
+
 def _no_financials(key, error):
     """The financials page's offline shape. Built here, like _no_instrument, so
     it still answers when adapter.financials is the thing that failed to load."""
@@ -105,6 +130,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             return self._watchlist()
         if route == "/api/markets":
             return self._markets()
+        if route == "/api/benchmark":
+            return self._benchmark()
         # Prefix rather than equality — this is the one endpoint with the
         # instrument key in the path.
         if route.startswith("/api/instrument/"):
@@ -282,6 +309,60 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                                         "error": str(exc)},
                                "markets": [], "open_now": [],
                                "trading_text": "Market data unavailable"})
+
+    def _benchmark(self):
+        """The comparison line for Overview's equity curve.
+
+        Reads the same nav_history the page draws its own line from, so both
+        series come off one source and cannot disagree about which days exist.
+        The index history is whatever Market watch last pulled — that feed
+        already fetches 420 daily closes for all eleven indices on a 60s poll,
+        so this endpoint adds no network traffic of its own.
+
+        Always 200 with the catalogue attached, so an unwarmed feed still lets
+        the page build its picker and simply draws no line.
+        """
+        import benchmark as bench  # noqa: PLC0415 — adapter/ is on sys.path
+
+        catalogue = markets_catalogue()
+        wanted = self._query("symbol") or bench.DEFAULT_SYMBOL
+        entry = next((c for c in catalogue if c["symbol"] == wanted), None)
+        if entry is None:
+            entry = next((c for c in catalogue if c["symbol"] == bench.DEFAULT_SYMBOL),
+                         catalogue[0] if catalogue else None)
+        if entry is None:
+            return self._json({"meta": {"source": "none", "error": "no indices configured"},
+                               "available": [], "benchmark": None})
+
+        meta = {"source": "openbb-yfinance", "error": None}
+        try:
+            nav_rows = [r for r in store_read_nav()
+                        if r.get("date") and isinstance(r.get("nav_gbp"), (int, float))]
+            nav_rows.sort(key=lambda r: r["date"])
+        except Exception as exc:
+            log.exception("could not read nav history for the benchmark")
+            return self._json({"meta": {"source": "none", "error": str(exc)},
+                               "available": catalogue, "benchmark": None})
+
+        rows = []
+        if DashboardHandler.markets is not None:
+            try:
+                rows = DashboardHandler.markets.history(entry["symbol"])
+            except Exception as exc:
+                log.exception("index history unavailable")
+                meta["error"] = str(exc)
+        else:
+            meta["error"] = "market feed not running"
+
+        try:
+            payload = bench.build(nav_rows, rows, entry["symbol"],
+                                  entry["name"], entry["currency"])
+        except Exception as exc:
+            log.exception("benchmark build failed")
+            return self._json({"meta": {"source": "openbb-yfinance", "error": str(exc)},
+                               "available": catalogue, "benchmark": None})
+
+        return self._json({"meta": meta, "available": catalogue, "benchmark": payload})
 
     def _snapshot(self):
         # Always 200, even when the feed is down or absent. The page needs the

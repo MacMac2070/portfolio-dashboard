@@ -163,10 +163,24 @@ export function donut(svg, rows, { centreValue, centreCaption } = {}) {
  * a crosshair that snaps to the nearest point.
  *
  * `points` is [{ date: 'YYYY-MM-DD', value: Number }, ...] oldest first.
+ *
+ * `benchmark` is an optional array the SAME LENGTH as `points`, holding an
+ * index already rebased onto this series' starting value by the server (see
+ * adapter/benchmark.py — the page does no financial arithmetic of its own).
+ * A null means the index had no close on that date and the line breaks there
+ * rather than bridging a gap it has no data for. Both series share the one
+ * axis; there is never a second scale.
  */
-export function equityCurve(svg, points, { tooltip, formatValue, formatDate } = {}) {
+export function equityCurve(svg, points, {
+  tooltip, formatValue, formatDate, benchmark = null, benchmarkName = "Benchmark",
+} = {}) {
   svg.replaceChildren();
   if (!points || points.length < 2) return;
+
+  // A benchmark of the wrong length would shear the two series apart — every
+  // point would be plotted against the wrong date. Drop it rather than draw a
+  // chart that is subtly and invisibly wrong.
+  if (benchmark && benchmark.length !== points.length) benchmark = null;
 
   // The viewBox tracks the element's real pixel box rather than a fixed
   // 780x260. With a fixed box the SVG has to be stretched to fit, and a
@@ -193,7 +207,10 @@ export function equityCurve(svg, points, { tooltip, formatValue, formatDate } = 
   svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
 
   const values = points.map((p) => p.value);
-  let [lo, hi] = extent(values);
+  // The benchmark shares the axis, so it has to be inside the domain or it
+  // would be clipped at the plot edge and read as flat.
+  const benchValues = (benchmark || []).filter(Number.isFinite);
+  let [lo, hi] = extent(benchValues.length ? values.concat(benchValues) : values);
   const headroom = (hi - lo) * 0.12;
   lo -= headroom; hi += headroom;
 
@@ -253,6 +270,24 @@ export function equityCurve(svg, points, { tooltip, formatValue, formatDate } = 
     fill: `url(#${id})`, stroke: "none",
   }));
 
+  // Benchmark under the portfolio line: it is context, not the subject, so it
+  // is dashed, unfilled and recessive. Drawn in segments so a null breaks the
+  // line rather than bridging a session the index did not trade. Same
+  // treatment priceChart gives the stock page's benchmark.
+  if (benchmark && benchValues.length > 1) {
+    let d = "";
+    let open = false;
+    benchmark.forEach((v, i) => {
+      if (!Number.isFinite(v)) { open = false; return; }
+      d += `${open ? "L" : "M"}${x(i).toFixed(2)},${y(v).toFixed(2)} `;
+      open = true;
+    });
+    svg.append(el("path", {
+      class: "plot__bench", d: d.trim(), fill: "none",
+      "vector-effect": "non-scaling-stroke",
+    }));
+  }
+
   const line = el("path", {
     class: "plot__line plot__line--draw", d: path, stroke,
     "vector-effect": "non-scaling-stroke",
@@ -262,11 +297,25 @@ export function equityCurve(svg, points, { tooltip, formatValue, formatDate } = 
     try { line.style.setProperty("--len", line.getTotalLength()); } catch { /* no layout yet */ }
   });
 
+  // The shape as a sentence, so the chart is not silent to a screen reader.
+  const firstV = values[0], lastV = values[values.length - 1];
+  const fmtPlain = (v) => (formatValue ? formatValue(v, true) : String(v));
+  const summary = el("title");
+  summary.textContent =
+    `Portfolio value over ${points.length} days, ${lastV >= firstV ? "up" : "down"} from `
+    + `${fmtPlain(firstV)} to ${fmtPlain(lastV)}.`
+    + (benchValues.length > 1
+        ? ` ${benchmarkName}, rebased to the same start, ends at `
+          + `${fmtPlain(benchValues[benchValues.length - 1])}.`
+        : "");
+  svg.append(summary);
+
   if (!tooltip) return;
 
   const crosshair = el("line", { class: "plot__crosshair", y1: padT, y2: h - padB, opacity: 0 });
   const dot = el("circle", { class: "plot__dot", r: 4.5, fill: stroke, opacity: 0 });
-  svg.append(crosshair, dot);
+  const benchDot = el("circle", { class: "plot__dot plot__dot--bench", r: 3.5, opacity: 0 });
+  svg.append(crosshair, dot, benchDot);
 
   const hit = el("rect", {
     x: padL, y: 0, width: w - padL - padR, height: h,
@@ -288,10 +337,22 @@ export function equityCurve(svg, points, { tooltip, formatValue, formatDate } = 
     dot.setAttribute("cy", y(point.value));
     dot.setAttribute("opacity", 1);
 
+    const bv = benchmark?.[i];
+    if (Number.isFinite(bv)) {
+      benchDot.setAttribute("cx", x(i));
+      benchDot.setAttribute("cy", y(bv));
+      benchDot.setAttribute("opacity", 1);
+    } else {
+      benchDot.setAttribute("opacity", 0);
+    }
+
+    const fmt = (v) => (formatValue ? formatValue(v, true) : String(v));
     tooltip.dataset.open = "true";
     tooltip.innerHTML =
       `<div class="tip__date">${formatDate ? formatDate(point.date) : point.date}</div>` +
-      `<div class="tip__val">${formatValue ? formatValue(point.value, true) : point.value}</div>`;
+      `<div class="tip__val">${fmt(point.value)}</div>` +
+      (Number.isFinite(bv)
+        ? `<div class="tip__bench">${benchmarkName} ${fmt(bv)}</div>` : "");
     tooltip.style.left = `${Math.min(event.clientX + 14, window.innerWidth - tooltip.offsetWidth - 8)}px`;
     tooltip.style.top = `${event.clientY - 8}px`;
   };
@@ -299,6 +360,7 @@ export function equityCurve(svg, points, { tooltip, formatValue, formatDate } = 
   const leave = () => {
     crosshair.setAttribute("opacity", 0);
     dot.setAttribute("opacity", 0);
+    benchDot.setAttribute("opacity", 0);
     tooltip.dataset.open = "false";
   };
 

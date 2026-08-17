@@ -377,6 +377,64 @@
 .plot__crosshair { stroke: var(--border-strong); stroke-width: 1; stroke-dasharray: 3 3; }
 .plot__dot { stroke: var(--surface); stroke-width: 2; }
 
+/* ---- benchmark strip ----
+ * Sits between the plot and the stat row: legend on the left, the compare-
+ * against picker on the right. The two series are told apart by dash as well
+ * as by colour, so the swatches mirror the strokes rather than being dots. */
+.benchbar {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: 0 var(--s-5) var(--s-2);
+  flex: none;
+  font: 500 10.5px/1 var(--font-ui);
+  color: var(--text-2);
+  min-width: 0;
+}
+.benchbar__key { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.benchbar__swatch { width: 14px; height: 0; flex: none; }
+.benchbar__swatch--port { border-top: 2px solid var(--pos); border-radius: 2px; }
+.benchbar__swatch--bench { border-top: 1.5px dashed rgba(255, 255, 255, 0.34); }
+
+/* The picker and its swatch read as one legend entry. */
+.benchbar__pick { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; flex: none; }
+.benchbar__select {
+  appearance: none;
+  padding: 3px 22px 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface-2) var(--icon-caret) no-repeat right 6px center;
+  background-size: 10px;
+  color: var(--text);
+  font: 500 10.5px/1.4 var(--font-ui);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-spring),
+              background-color var(--dur-fast) var(--ease-spring);
+}
+.benchbar__select:hover { border-color: var(--border-strong); background-color: var(--surface-3); }
+.benchbar__select:focus-visible {
+  outline: 2px solid var(--brand-soft);
+  outline-offset: 2px;
+  border-color: var(--brand-soft);
+}
+/* Sits between the two legend entries, right-aligned against the picker. It is
+   an aside about the line, so it stays quieter than either. */
+.benchbar__note {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: right;
+  color: var(--text-3);
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.benchbar__note:not(:empty) + .benchbar__pick { margin-left: var(--s-2); }
+
+@media (max-width: 1280px) {
+  .benchbar { flex-wrap: wrap; row-gap: var(--s-1); }
+}
+
 .chart-card__foot {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

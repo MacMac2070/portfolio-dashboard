@@ -190,6 +190,27 @@
 
             <div class="plot" id="chartPlot"><svg id="chartSvg" role="img" aria-label="Portfolio value over time"></svg></div>
 
+            <!-- Compare-against strip.
+                 The picker doubles as the benchmark's legend entry — the dashed
+                 swatch sits against the control naming that series, so the name
+                 is printed once rather than beside the chart and again inside
+                 the select. A real <select> because eleven indices is too many
+                 for a pill row, and the native control brings its own keyboard
+                 handling and mobile picker for free. -->
+            <div class="benchbar" id="benchBar">
+              <span class="benchbar__key">
+                <span class="benchbar__swatch benchbar__swatch--port" aria-hidden="true"></span>
+                <span>Portfolio</span>
+              </span>
+              <span class="benchbar__note" id="benchNote"></span>
+              <label class="benchbar__pick">
+                <span class="benchbar__swatch benchbar__swatch--bench" id="benchKey"
+                      aria-hidden="true" hidden></span>
+                <span class="u-sr">Compare against</span>
+                <select class="benchbar__select" id="benchSelect"></select>
+              </label>
+            </div>
+
             <div class="chart-card__foot" id="chartFoot">
               <div class="chart-card__stat"><span class="eyebrow" id="chartChangeLabel">1M change</span><b class="num" id="chartChange">—</b></div>
               <div class="chart-card__stat"><span class="eyebrow" id="chartHighLabel">1M high</span><b class="num" id="chartHigh">—</b></div>
