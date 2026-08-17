@@ -203,9 +203,10 @@ function benchmarkFor(range, expected) {
  * a local investor earned rather than a sterling one.
  */
 function renderBenchBar(bench) {
+  const bar = $("benchBar");
   const key = $("benchKey");
   const note = $("benchNote");
-  if (!key || !note) return;
+  if (!bar || !key || !note) return;
 
   const drawing = Boolean(bench.points);
   key.hidden = !drawing;
@@ -213,12 +214,31 @@ function renderBenchBar(bench) {
   setText(note, bench.reason || (drawing && benchmark?.currency && benchmark.currency !== "GBP"
     ? `${benchmark.currency} · unhedged`
     : ""));
+
+  // With no picker, no line and nothing to explain, the strip would be a
+  // legend describing a single series — which the card title already names.
+  const pick = bar.querySelector(".benchbar__pick");
+  const useful = drawing || Boolean(note.textContent) || !(pick?.hidden ?? true);
+  bar.hidden = !useful;
 }
 
-/** Fill the picker once, then keep it in step with the stored choice. */
+/**
+ * Fill the picker, and hide it entirely when there is nothing to pick.
+ *
+ * An empty <select> still renders — a 32px box with a caret and no options —
+ * which is a control that looks operable and is not. If the index catalogue
+ * never arrived there is no benchmark to choose, so the whole legend entry
+ * goes with it.
+ */
 function renderBenchOptions(available, selected) {
   const sel = $("benchSelect");
-  if (!sel || !available?.length) return;
+  const pick = sel?.closest(".benchbar__pick");
+  if (!sel) return;
+
+  const has = Boolean(available?.length);
+  if (pick) pick.hidden = !has;
+  if (!has) return;
+
   const key = available.map((c) => c.symbol).join(",");
   if (sel.dataset.key !== key) {
     sel.dataset.key = key;
@@ -233,18 +253,20 @@ async function loadBenchmark(symbol) {
   try {
     const url = symbol ? `${BENCH_URL}?symbol=${encodeURIComponent(symbol)}` : BENCH_URL;
     const res = await fetch(`${url}${symbol ? "&" : "?"}t=${Date.now()}`);
-    if (!res.ok) return;
+    if (!res.ok) throw new Error(`benchmark: ${res.status}`);
     const data = await res.json();
     benchmark = data.benchmark || null;
     renderBenchOptions(data.available, benchmark?.symbol);
     if (benchmark?.symbol) {
       try { localStorage.setItem(BENCH_KEY, benchmark.symbol); } catch { /* private mode */ }
     }
-    renderChart();
   } catch {
-    // A missing comparison line is not worth breaking the page over.
+    // A missing comparison line is not worth breaking the page over. Clearing
+    // it matters though: a failed switch must not leave the previous index's
+    // line on the chart under the newly chosen name.
     benchmark = null;
   }
+  renderChart();
 }
 
 function initBenchmark() {

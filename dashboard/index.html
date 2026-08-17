@@ -207,13 +207,17 @@
                  the select. A real <select> because eleven indices is too many
                  for a pill row, and the native control brings its own keyboard
                  handling and mobile picker for free. -->
-            <div class="benchbar" id="benchBar">
+            <!-- Both the strip and the picker start hidden and are revealed
+                 once /api/benchmark answers. An empty <select> renders as a
+                 small caret box that looks operable and is not, and it would
+                 otherwise be on screen for the length of that round trip. -->
+            <div class="benchbar" id="benchBar" hidden>
               <span class="benchbar__key">
                 <span class="benchbar__swatch benchbar__swatch--port" aria-hidden="true"></span>
                 <span>Portfolio</span>
               </span>
               <span class="benchbar__note" id="benchNote"></span>
-              <label class="benchbar__pick">
+              <label class="benchbar__pick" hidden>
                 <span class="benchbar__swatch benchbar__swatch--bench" id="benchKey"
                       aria-hidden="true" hidden></span>
                 <span class="u-sr">Compare against</span>
