@@ -9,7 +9,7 @@ import {
   money, moneyCompact, moneySigned, pctSigned, pct, qty,
   direction, stamp, clock, initials, esc,
 } from "./format.js";
-import { sparkline, donut, equityCurve, countUp } from "./charts.js";
+import { sparkline, donut, donutActive, equityCurve, countUp } from "./charts.js";
 import * as holdings from "./holdings.js";
 import * as marketwatch from "./marketwatch.js";
 import * as stock from "./stock.js";
@@ -315,10 +315,71 @@ function renderChart() {
 
 /* ---------------- allocation ---------------- */
 
+/* Which allocation segment the pointer or keyboard focus is on, or null for
+ * none. Held here rather than inside donut() because the ring is redrawn on
+ * every live tick and state living inside it would be lost each time. */
+let allocActive = null;
+/* The rows currently drawn, so the centre label can be recomputed on hover
+ * without a re-render or a second pass over the payload. */
+let allocRows = [];
+
+/** What the middle of the ring should read, given what is hovered. */
+function allocCentre(invested) {
+  const row = allocActive == null ? null : allocRows[allocActive];
+  if (!row) return { value: money(invested), caption: "Invested", pct: "" };
+  return {
+    value: money(row.value_gbp),
+    caption: row.name,
+    // Same precision as the legend row directly beneath it. A centre reading
+    // 31.3% above a row reading 31% looks like two different numbers rather
+    // than one number twice.
+    pct: pct(row.weight_pct, 0),
+  };
+}
+
+/** Paint the ring's active state and centre. Cheap; safe to call on any tick. */
+function paintAlloc(invested) {
+  donutActive($("donutSvg"), allocActive, allocCentre(invested));
+  for (const row of document.querySelectorAll(".legend__row")) {
+    const on = allocActive != null && Number(row.dataset.index) === allocActive;
+    if (row.classList.contains("is-active") !== on) row.classList.toggle("is-active", on);
+  }
+}
+
+function setAllocActive(index, invested) {
+  if (allocActive === index) return;
+  allocActive = index;
+  paintAlloc(invested);
+}
+
 function renderAllocation(data) {
   const rows = data.regions || [];
   const invested = data.kpis?.invested ?? 0;
 
+  allocRows = rows;
+  // A region that has left the portfolio must not leave a stale index pointing
+  // at a row that no longer exists.
+  if (allocActive != null && allocActive >= rows.length) allocActive = null;
+
+  drawAlloc(rows, invested);
+
+  // Rows are focusable so the breakdown is reachable without a pointer: the
+  // hover swap is the only route to a region's own value, and a keyboard user
+  // should not be shut out of it.
+  $("allocLegend").innerHTML = rows.map((r, i) => `
+    <div class="legend__row" data-region="${esc(r.name)}" data-index="${i}" tabindex="0">
+      <span class="legend__dot" style="background:${catColor(r.color_index)}"></span>
+      <span class="legend__name">${esc(r.name)}</span>
+      <span class="legend__pct num" data-f="pct">${pct(r.weight_pct, 0)}</span>
+      <span class="legend__val num" data-f="val">${money(r.value_gbp)}</span>
+    </div>`).join("");
+
+  paintAlloc(invested);
+}
+
+/** The ring itself. Separated so the live tick can redraw without rebuilding
+ *  the legend, and so both paths pass the same hover handler. */
+function drawAlloc(rows, invested) {
   donut($("donutSvg"), rows.map((r) => ({
     label: r.name,
     value: r.value_gbp,
@@ -327,15 +388,42 @@ function renderAllocation(data) {
   })), {
     centreValue: money(invested),
     centreCaption: "Invested",
+    onHover: (i) => setAllocActive(i, invested),
   });
+}
 
-  $("allocLegend").innerHTML = rows.map((r) => `
-    <div class="legend__row" data-region="${r.name}">
-      <span class="legend__dot" style="background:${catColor(r.color_index)}"></span>
-      <span class="legend__name">${r.name}</span>
-      <span class="legend__pct num" data-f="pct">${pct(r.weight_pct, 0)}</span>
-      <span class="legend__val num" data-f="val">${money(r.value_gbp)}</span>
-    </div>`).join("");
+/**
+ * Hover and focus on the legend, delegated.
+ *
+ * Delegation rather than per-row listeners because renderAllocation replaces
+ * the legend's innerHTML whenever the set of regions changes, which would
+ * discard bound handlers. pointerover/pointerout and focusin/focusout all
+ * bubble; mouseenter/mouseleave do not, which is why they are not used here.
+ */
+function initAllocation() {
+  const legend = $("allocLegend");
+  if (!legend) return;
+
+  const invested = () => portfolio?.kpis?.invested ?? 0;
+  const indexFrom = (event) => {
+    const row = event.target.closest?.(".legend__row");
+    return row ? Number(row.dataset.index) : null;
+  };
+
+  legend.addEventListener("pointerover", (e) => {
+    const i = indexFrom(e);
+    if (i != null) setAllocActive(i, invested());
+  });
+  legend.addEventListener("pointerout", (e) => {
+    // Ignore moves between a row's own children.
+    if (e.relatedTarget?.closest?.(".legend__row") === e.target.closest?.(".legend__row")) return;
+    setAllocActive(null, invested());
+  });
+  legend.addEventListener("focusin", (e) => {
+    const i = indexFrom(e);
+    if (i != null) setAllocActive(i, invested());
+  });
+  legend.addEventListener("focusout", () => setAllocActive(null, invested()));
 }
 
 /* ---------------- movers ---------------- */
@@ -452,16 +540,18 @@ function applyLive(data) {
   if (legendKeys !== regions.map((r) => r.name).join(",")) {
     renderAllocation(data);                       // composition changed
   } else {
-    donut($("donutSvg"), regions.map((r) => ({
-      label: r.name, value: r.value_gbp, color: catColor(r.color_index),
-      display: `${pct(r.weight_pct, 0)} · ${money(r.value_gbp)}`,
-    })), { centreValue: money(invested), centreCaption: "Invested" });
+    allocRows = regions;
+    drawAlloc(regions, invested);
     for (const r of regions) {
       const row = document.querySelector(`.legend__row[data-region="${CSS.escape(r.name)}"]`);
       if (!row) continue;
       setText(row.querySelector('[data-f="pct"]'), pct(r.weight_pct, 0));
       setText(row.querySelector('[data-f="val"]'), money(r.value_gbp));
     }
+    // The ring was just rebuilt from scratch, so re-apply whatever the pointer
+    // or keyboard was on. Without this the centre label would snap back to the
+    // portfolio total every three seconds while someone is reading a region.
+    paintAlloc(invested);
   }
 
   // --- movers: rebuild only if the tickers changed, else retint the chips ---
@@ -683,6 +773,7 @@ async function boot() {
   // paints immediately from nav_history and gains its comparison line a moment
   // later rather than waiting on a second request before showing anything.
   initBenchmark();
+  initAllocation();
   // A name added from the stock page appears without waiting out the 20s poll.
   stock.onWatchAdded(() => pollWatchlist());
   const initial = tabFromHash();

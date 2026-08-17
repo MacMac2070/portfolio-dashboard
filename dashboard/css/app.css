@@ -505,7 +505,19 @@
   transition: opacity var(--dur-fast) var(--ease-spring);
   transform-origin: center;
 }
-.alloc:has(.donut__seg:hover) .donut__seg:not(:hover) { opacity: 0.45; }
+/* Dimming is driven from JS (donutActive) rather than by a :has() hover rule.
+ * The rule that used to live here only fired when the pointer was on an arc,
+ * which left the legend and keyboard focus unable to highlight anything — and
+ * a CSS `opacity` property silently outranks the `opacity` attribute the JS
+ * writes, so the two would have fought. One owner. */
+
+.donut__pct {
+  fill: var(--text-3);
+  font-family: var(--font-figure);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: var(--ff-tabular);
+}
 
 .donut__value {
   font-family: var(--font-figure);
@@ -529,7 +541,16 @@
   border-radius: var(--r-sm);
   transition: background-color var(--dur-fast) var(--ease-spring);
 }
-.legend__row:hover { background: rgba(255, 255, 255, 0.04); }
+/* Hovering a row and hovering its arc are the same state, so they look the
+   same. .is-active is set from JS and therefore also covers the arc-hover and
+   keyboard-focus routes into it. */
+.legend__row:hover,
+.legend__row.is-active { background: rgba(255, 255, 255, 0.04); }
+.legend__row:focus-visible {
+  outline: 2px solid var(--brand-soft);
+  outline-offset: -2px;
+  background: rgba(255, 255, 255, 0.04);
+}
 
 .legend__dot { width: 10px; height: 10px; border-radius: 3px; }
 .legend__name { font-size: clamp(12px, 1.85vh, 16px); color: var(--text); line-height: 1.3; }

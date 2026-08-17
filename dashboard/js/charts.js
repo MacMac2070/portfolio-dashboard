@@ -100,8 +100,15 @@ export function sparkline(svg, series, { direction = "flat" } = {}) {
  * Allocation ring. Segments are separated by a real gap in the surface colour
  * rather than a stroke, so adjacent slices stay distinguishable even when two
  * hues are close.
+ *
+ * `onHover(index | null)` fires as the pointer crosses segments. The caller
+ * owns the resulting state and calls `donutActive` below to reflect it —
+ * this function does not repaint itself, because it is redrawn wholesale on
+ * the 3s live tick and a hover that lived inside it would not survive that.
+ *
+ * Each arc carries data-seg so the caller can address it afterwards.
  */
-export function donut(svg, rows, { centreValue, centreCaption } = {}) {
+export function donut(svg, rows, { centreValue, centreCaption, centrePct, onHover } = {}) {
   svg.replaceChildren();
   const size = 240, r = 92, thickness = 26;
   const cx = size / 2, cy = size / 2;
@@ -116,12 +123,13 @@ export function donut(svg, rows, { centreValue, centreCaption } = {}) {
 
   const group = el("g", { transform: `rotate(-90 ${cx} ${cy})` });
 
-  for (const row of rows) {
+  rows.forEach((row, i) => {
     const share = Math.max(0, row.value) / total;
     const length = Math.max(share * circumference - gap, 1);
 
     const arc = el("circle", {
       class: "donut__seg",
+      "data-seg": i,
       cx, cy, r,
       fill: "none",
       stroke: row.color,
@@ -132,28 +140,60 @@ export function donut(svg, rows, { centreValue, centreCaption } = {}) {
     const title = el("title");
     title.textContent = `${row.label} — ${row.display}`;
     arc.append(title);
+    if (onHover) {
+      arc.addEventListener("pointerenter", () => onHover(i));
+      arc.addEventListener("pointerleave", () => onHover(null));
+    }
     group.append(arc);
 
     offset += share * circumference;
-  }
+  });
 
   svg.append(group);
 
-  if (centreValue) {
-    const value = el("text", {
-      class: "donut__value", x: cx, y: cy - 2,
-      "text-anchor": "middle", "dominant-baseline": "middle",
-    });
-    value.textContent = centreValue;
-    svg.append(value);
+  // The centre is three stacked lines rather than two when a segment is
+  // active. They are always created, empty when unused, so donutActive can
+  // fill them without the caller having to redraw the ring to make room.
+  const value = el("text", {
+    class: "donut__value", x: cx, y: cy - 2,
+    "text-anchor": "middle", "dominant-baseline": "middle",
+  });
+  value.textContent = centreValue || "";
+  const caption = el("text", {
+    class: "donut__caption", x: cx, y: cy + 26, "text-anchor": "middle",
+  });
+  caption.textContent = centreCaption || "";
+  const share = el("text", {
+    class: "donut__pct", x: cx, y: cy + 44, "text-anchor": "middle",
+  });
+  share.textContent = centrePct || "";
+  svg.append(value, caption, share);
+}
+
+/**
+ * Reflect a hovered segment without redrawing the ring.
+ *
+ * Non-active segments drop to 40% so the hovered one reads as highlighted
+ * rather than merely labelled — the mechanism shadcn-fintech's allocation
+ * donut uses. Attribute writes only: no node is replaced, so a pointer sitting
+ * on an arc keeps its hover through the 3s live tick.
+ *
+ * `centre` is { value, caption, pct } — whatever the middle should now read.
+ */
+export function donutActive(svg, activeIndex, centre = {}) {
+  if (!svg) return;
+  for (const seg of svg.querySelectorAll(".donut__seg")) {
+    const dim = activeIndex != null && Number(seg.dataset.seg) !== activeIndex;
+    const want = dim ? "0.4" : "1";
+    if (seg.getAttribute("opacity") !== want) seg.setAttribute("opacity", want);
   }
-  if (centreCaption) {
-    const caption = el("text", {
-      class: "donut__caption", x: cx, y: cy + 26, "text-anchor": "middle",
-    });
-    caption.textContent = centreCaption;
-    svg.append(caption);
-  }
+  const write = (sel, text) => {
+    const node = svg.querySelector(sel);
+    if (node && node.textContent !== (text || "")) node.textContent = text || "";
+  };
+  write(".donut__value", centre.value);
+  write(".donut__caption", centre.caption);
+  write(".donut__pct", centre.pct);
 }
 
 /* ---------------- equity curve ---------------- */
