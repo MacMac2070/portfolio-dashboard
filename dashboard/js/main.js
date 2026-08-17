@@ -16,6 +16,7 @@ import * as stock from "./stock.js";
 import * as search from "./search.js";
 import * as financials from "./financials.js";
 import * as ovholdings from "./ovholdings.js";
+import * as tape from "./tape.js";
 
 const DATA_URL = "data/portfolio.json";
 const NAV_URL = "data/nav_history.jsonl";
@@ -533,6 +534,10 @@ function applyLive(data) {
 
   renderKpis(data);
 
+  // Patches its figures in place unless the set of holdings changed; a rebuild
+  // here would restart the scroll animation on every poll.
+  tape.update(data);
+
   // --- allocation: donut arcs + legend figures ---
   const regions = data.regions || [];
   const legendKeys = [...document.querySelectorAll(".legend__row")]
@@ -759,6 +764,7 @@ async function boot() {
   renderCurrencies(portfolio);
   renderConcentration(portfolio);
   renderHoldings(portfolio);
+  tape.update(portfolio);
   renderFreshness(portfolio);
 
   applyLive._moversKey = moversKey(portfolio);

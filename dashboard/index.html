@@ -117,6 +117,16 @@
       </div>
     </header>
 
+    <!-- Scrolling ticker.
+         aria-hidden because the strip renders every holding twice by
+         construction (that duplication is what makes the scroll seamless) and
+         the same figures are already in the holdings table, properly labelled
+         and in a real reading order. A screen reader announcing each position
+         twice, mid-scroll, would be worse than not announcing it at all. -->
+    <div class="tape" id="tape" aria-hidden="true" hidden>
+      <div class="tape__track" id="tapeTrack"></div>
+    </div>
+
     <div class="views">
 
       <!-- ---------------- Overview ---------------- -->
