@@ -28,6 +28,7 @@ import time
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
+from datetime import date
 from pathlib import Path
 
 BASE = "https://ndcdyn.interactivebrokers.com/AccountManagement/FlexWebService"
@@ -175,6 +176,16 @@ def _iso(value: str) -> str:
     return value
 
 
+def _span_days(node) -> int:
+    """How many days a period element covers, for picking the widest of several."""
+    try:
+        start = date.fromisoformat(_iso(node.get("fromDate") or ""))
+        end = date.fromisoformat(_iso(node.get("toDate") or ""))
+        return (end - start).days
+    except (ValueError, TypeError):
+        return 0
+
+
 def _num(node, name: str) -> float:
     """An attribute as a float, or 0.0. Flex writes "" for a field that had no
     activity, which float() will not take."""
@@ -218,9 +229,13 @@ def parse_change_in_nav(root: ET.Element) -> dict | None:
     does not name. It exists so a schema difference surfaces as data rather
     than as a flow that silently reads zero.
     """
-    node = next(_iter(root, "ChangeInNAV"), None)
-    if node is None:
+    # A query configured with sub-periods emits one element per period. The
+    # Sankey covers the whole span, so take the widest rather than the first —
+    # document order is not guaranteed to put the summary in front.
+    nodes = list(_iter(root, "ChangeInNAV"))
+    if not nodes:
         return None
+    node = max(nodes, key=_span_days)
 
     out: dict = {name: _num(node, name) for name in NAV_CHANGE_FIELDS}
     out["from_date"] = _iso(node.get("fromDate") or "")
@@ -273,8 +288,19 @@ def parse_cash_transactions(root: ET.Element) -> list[dict]:
     received nine months ago at today's spot would misstate it, and the current
     `fx` map in portfolio.json is all the dashboard would otherwise have.
     """
+    # IBKR can emit the same movement twice, once as DETAIL and once as
+    # SUMMARY, depending on how the query's level of detail is configured.
+    # Counting both would silently double every dividend and every fee — the
+    # kind of error that looks like a good month rather than like a bug. Keep
+    # one level: DETAIL when the statement carries it, otherwise whatever it
+    # does carry.
+    nodes = list(_iter(root, "CashTransaction"))
+    levels = {(n.get("levelOfDetail") or "").upper() for n in nodes}
+    if "DETAIL" in levels and len(levels) > 1:
+        nodes = [n for n in nodes if (n.get("levelOfDetail") or "").upper() == "DETAIL"]
+
     out = []
-    for node in _iter(root, "CashTransaction"):
+    for node in nodes:
         stamp = (node.get("settleDate") or node.get("reportDate")
                  or node.get("dateTime", "")[:8])
         if not stamp:
