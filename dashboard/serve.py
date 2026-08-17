@@ -132,6 +132,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             return self._markets()
         if route == "/api/benchmark":
             return self._benchmark()
+        if route == "/api/attribution":
+            return self._attribution()
         # Prefix rather than equality — this is the one endpoint with the
         # instrument key in the path.
         if route.startswith("/api/instrument/"):
@@ -363,6 +365,49 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                                "available": catalogue, "benchmark": None})
 
         return self._json({"meta": meta, "available": catalogue, "benchmark": payload})
+
+    def _attribution(self):
+        """NAV flow and the monthly income/cost bars, behind the Performance tab.
+
+        Reads the two JSONL stores the Flex backfill writes. Both are absent
+        until the Change in NAV and Cash Transactions sections are enabled on
+        the Flex query, so `ready` says which of the two the page can draw and
+        the view renders an empty state for whichever is missing rather than an
+        error.
+        """
+        import attribution as attr  # noqa: PLC0415 — adapter/ is on sys.path
+        from store import CASH_PATH, NAV_CHANGE_PATH, _read
+
+        meta = {"source": "ibkr-flex", "error": None}
+        change_rows, cash_rows = [], []
+        try:
+            change_rows = _read(NAV_CHANGE_PATH)
+            cash_rows = _read(CASH_PATH)
+        except Exception as exc:
+            log.exception("could not read the attribution stores")
+            meta["error"] = str(exc)
+
+        # Newest period wins: Flex restates as trades settle.
+        latest = change_rows[-1] if change_rows else None
+        try:
+            flow = attr.flow(latest)
+            monthly = attr.monthly(cash_rows)
+        except Exception as exc:
+            log.exception("attribution build failed")
+            return self._json({"meta": {"source": "ibkr-flex", "error": str(exc)},
+                               "ready": {"flow": False, "monthly": False},
+                               "flow": None, "monthly": None})
+
+        return self._json({
+            "meta": meta,
+            "ready": {"flow": flow is not None,
+                      "monthly": bool(monthly.get("months"))},
+            "flow": flow,
+            "monthly": monthly,
+            # What the page tells the reader to do when a chart has no data.
+            "hint": ("Enable the Change in NAV and Cash Transactions sections on "
+                     "the Flex query, then run adapter/backfill.py"),
+        })
 
     def _snapshot(self):
         # Always 200, even when the feed is down or absent. The page needs the

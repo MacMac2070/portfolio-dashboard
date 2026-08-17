@@ -175,17 +175,160 @@ def _iso(value: str) -> str:
     return value
 
 
-def fetch_nav_history(config: dict | None = None) -> list[dict]:
+def _num(node, name: str) -> float:
+    """An attribute as a float, or 0.0. Flex writes "" for a field that had no
+    activity, which float() will not take."""
+    raw = (node.get(name) or "").strip()
+    if not raw:
+        return 0.0
+    try:
+        return float(raw)
+    except ValueError:
+        return 0.0
+
+
+# Every ChangeInNAV field this dashboard reads, in the order the Sankey stacks
+# them. IBKR emits one such element per report period, covering fromDate to
+# toDate — it is a summary, not a series.
+#
+# Names come from IBKR's Activity Flex schema. They are read defensively:
+# anything missing reads 0.0, and parse_change_in_nav reports back which
+# attributes the statement actually carried, so a name that turns out to differ
+# shows up as an unmapped field rather than as a silently absent flow.
+NAV_CHANGE_FIELDS = (
+    "startingValue", "mtm", "realized", "changeInUnrealized", "costAdjustments",
+    "transferredPnlAdjustments", "depositsWithdrawals", "internalCashTransfers",
+    "assetTransfers", "dividends", "withholdingTax", "withholdingTaxCollected",
+    "changeInDividendAccruals", "interest", "changeInInterestAccruals",
+    "advisorFees", "brokerFees", "brokerFeesSalesTax", "brokerInterest",
+    "bondInterest", "cashSettlingMtm", "realizedVm", "cfdCharges",
+    "fxTranslation", "otherFees", "other", "endingValue", "twr",
+    "corporateActionProceeds", "commissions",
+)
+
+
+def parse_change_in_nav(root: ET.Element) -> dict | None:
+    """The Change in NAV summary: what moved the account over the period.
+
+    This is the section the NAV flow chart is built from. Returns None when the
+    statement has no such element, which is the normal state until the section
+    is enabled on the Flex query.
+
+    `unmapped` lists any attribute the element carried that NAV_CHANGE_FIELDS
+    does not name. It exists so a schema difference surfaces as data rather
+    than as a flow that silently reads zero.
+    """
+    node = next(_iter(root, "ChangeInNAV"), None)
+    if node is None:
+        return None
+
+    out: dict = {name: _num(node, name) for name in NAV_CHANGE_FIELDS}
+    out["from_date"] = _iso(node.get("fromDate") or "")
+    out["to_date"] = _iso(node.get("toDate") or "")
+    out["currency"] = node.get("currency") or ""
+    skip = {"accountId", "acctAlias", "model", "currency", "fromDate", "toDate",
+            "reportDate", "levelOfDetail"}
+    out["unmapped"] = sorted(
+        k for k in node.attrib
+        if k not in skip and k not in NAV_CHANGE_FIELDS and (node.get(k) or "").strip()
+    )
+    out["source"] = "flex"
+    return out
+
+
+# CashTransaction.type values, normalised to the buckets the income and cost
+# charts draw. IBKR's exact strings vary a little by report vintage, so the
+# match is done on a lowercased substring rather than on equality.
+CASH_BUCKETS = (
+    ("payment in lieu", "dividends"),
+    ("dividend", "dividends"),
+    ("withholding", "withholding_tax"),
+    ("broker interest paid", "interest_paid"),
+    ("broker interest received", "interest_received"),
+    ("bond interest", "interest_received"),
+    ("interest", "interest_received"),
+    ("commission", "commissions"),
+    ("sales tax", "sales_tax"),
+    ("other fee", "other_fees"),
+    ("fee", "other_fees"),
+    ("deposit", "deposits_withdrawals"),
+    ("withdrawal", "deposits_withdrawals"),
+)
+
+
+def _bucket(kind: str) -> str:
+    low = (kind or "").lower()
+    for needle, name in CASH_BUCKETS:
+        if needle in low:
+            return name
+    return "other"
+
+
+def parse_cash_transactions(root: ET.Element) -> list[dict]:
+    """Dated cash movements: dividends, tax, interest, fees. Oldest first.
+
+    Every row is converted to base currency here rather than on the page, using
+    the `fxRateToBase` IBKR stamps on each transaction. That rate is the one
+    that applied on the day, which is the whole point — converting a dividend
+    received nine months ago at today's spot would misstate it, and the current
+    `fx` map in portfolio.json is all the dashboard would otherwise have.
+    """
+    out = []
+    for node in _iter(root, "CashTransaction"):
+        stamp = (node.get("settleDate") or node.get("reportDate")
+                 or node.get("dateTime", "")[:8])
+        if not stamp:
+            continue
+        amount = _num(node, "amount")
+        rate = _num(node, "fxRateToBase") or 1.0
+        kind = node.get("type") or ""
+        out.append({
+            "date": _iso(stamp)[:10],
+            "type": kind,
+            "bucket": _bucket(kind),
+            "amount": amount,
+            "currency": node.get("currency") or "",
+            "fx_to_base": rate,
+            "amount_gbp": round(amount * rate, 4),
+            "symbol": node.get("symbol") or "",
+            "con_id": int(node.get("conid") or 0) or None,
+            "tx_id": node.get("transactionID") or node.get("tradeID") or "",
+            "source": "flex",
+        })
+
+    out.sort(key=lambda row: (row["date"], row["tx_id"]))
+    return out
+
+
+def fetch_activity(config: dict | None = None) -> ET.Element:
+    """The Activity Statement root, fetched once.
+
+    Four sections are read off the same report — NAV history, Change in NAV,
+    Cash Transactions and Trades — and Flex is slow and rate limited, so the
+    callers that want more than one parse a single root rather than requesting
+    the statement again per section.
+    """
     config = config or load_config()
     query = str(config.get("nav_query_id", "")).strip()
     if not query or query.startswith("PASTE"):
         raise FlexNotConfigured("nav_query_id is not set")
-    return parse_nav_history(fetch_statement(config["flex_token"], query))
+    return fetch_statement(config["flex_token"], query)
+
+
+def fetch_nav_history(config: dict | None = None) -> list[dict]:
+    return parse_nav_history(fetch_activity(config))
 
 
 def fetch_trades(config: dict | None = None) -> list[dict]:
+    """Executions.
+
+    Falls back to the Activity Statement when no dedicated Trade Confirmation
+    query is configured: adding the Trades section to the query that already
+    serves NAV is one report rather than two, and the parser reads the same
+    Trade element either way.
+    """
     config = config or load_config()
     query = str(config.get("trades_query_id", "")).strip()
-    if not query or query.startswith("PASTE"):
-        raise FlexNotConfigured("trades_query_id is not set")
-    return parse_trades(fetch_statement(config["flex_token"], query))
+    if query and not query.startswith("PASTE"):
+        return parse_trades(fetch_statement(config["flex_token"], query))
+    return parse_trades(fetch_activity(config))

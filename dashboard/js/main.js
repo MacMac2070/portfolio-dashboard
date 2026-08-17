@@ -17,6 +17,7 @@ import * as search from "./search.js";
 import * as financials from "./financials.js";
 import * as ovholdings from "./ovholdings.js";
 import * as tape from "./tape.js";
+import * as performance from "./performance.js";
 
 const DATA_URL = "data/portfolio.json";
 const NAV_URL = "data/nav_history.jsonl";
@@ -686,6 +687,7 @@ function showTab(name) {
   if (name === "market") marketwatch.route();
   if (name === "stock") stock.route();
   if (name === "financials") financials.route();
+  if (name === "performance") performance.route();
   for (const item of document.querySelectorAll(".nav-item")) {
     if (item.dataset.nav) {
       item.toggleAttribute("aria-current", item.dataset.nav === name);
@@ -802,6 +804,7 @@ async function boot() {
   // later rather than waiting on a second request before showing anything.
   initBenchmark();
   initAllocation();
+  performance.init();
   // A name added from the stock page appears without waiting out the 20s poll.
   stock.onWatchAdded(() => pollWatchlist());
   const initial = tabFromHash();

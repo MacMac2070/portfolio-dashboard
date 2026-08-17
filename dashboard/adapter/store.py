@@ -11,6 +11,12 @@ from pathlib import Path
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 NAV_PATH = DATA_DIR / "nav_history.jsonl"
 TX_PATH = DATA_DIR / "transactions.jsonl"
+# The Change in NAV summary, one row per report period. Keyed on the period so
+# re-running the backfill over an overlapping window replaces rather than
+# accumulates.
+NAV_CHANGE_PATH = DATA_DIR / "nav_change.jsonl"
+# Dated cash movements: dividends, withholding tax, interest, fees.
+CASH_PATH = DATA_DIR / "cash_transactions.jsonl"
 
 
 def _read(path: Path) -> list[dict]:
@@ -81,6 +87,58 @@ def merge_transactions(new_rows: list[dict]) -> tuple[int, int]:
 
     merged = sorted(by_key.values(), key=lambda row: (row.get("time") or "", key(row)))
     _write(TX_PATH, merged)
+    return added, len(merged)
+
+
+def merge_nav_change(new_rows: list[dict]) -> tuple[int, int]:
+    """Upsert Change in NAV summaries keyed on their reporting period.
+
+    A later run over the same period wins: Flex restates a period as trades
+    settle, and the newer figure is the corrected one.
+    """
+    by_period = {}
+    for row in _read(NAV_CHANGE_PATH):
+        key = f"{row.get('from_date')}|{row.get('to_date')}"
+        if row.get("from_date"):
+            by_period[key] = row
+
+    added = 0
+    for row in new_rows:
+        if not row or not row.get("from_date"):
+            continue
+        key = f"{row.get('from_date')}|{row.get('to_date')}"
+        if key not in by_period:
+            added += 1
+        by_period[key] = row
+
+    merged = [by_period[k] for k in sorted(by_period)]
+    _write(NAV_CHANGE_PATH, merged)
+    return added, len(merged)
+
+
+def merge_cash(new_rows: list[dict]) -> tuple[int, int]:
+    """Upsert cash transactions keyed on IBKR's transaction id.
+
+    Falls back to a composite key for rows that carry none — some fee and tax
+    lines do not — so a re-run still recognises them instead of duplicating.
+    """
+    def key(row: dict) -> str:
+        if row.get("tx_id"):
+            return str(row["tx_id"])
+        return (f"{row.get('date')}|{row.get('type')}|{row.get('symbol')}"
+                f"|{row.get('amount')}|{row.get('currency')}")
+
+    by_key = {key(row): row for row in _read(CASH_PATH)}
+
+    added = 0
+    for row in new_rows:
+        k = key(row)
+        if k not in by_key:
+            added += 1
+        by_key[k] = row
+
+    merged = sorted(by_key.values(), key=lambda r: (r.get("date") or "", key(r)))
+    _write(CASH_PATH, merged)
     return added, len(merged)
 
 

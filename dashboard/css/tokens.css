@@ -189,6 +189,31 @@
   --fin-2: #00A2B2;   /* operating income / liabilities / investing */
   --fin-3: #BE8317;   /* net income / equity / financing */
 
+  /* Attribution series: the NAV flow and the monthly income/cost bars.
+   *
+   * The same three hexes as --fin-*, and separate tokens for the same reason
+   * --font-figure is separate from --font-display: they coincide today, they
+   * answer different questions, and a change to statement colours must not
+   * silently recolour what a commission costs. Never --cat-*, which is
+   * assigned by region rank and would repaint itself when a region leaves.
+   *
+   * Three, not five. Re-validated with the dataviz validator across all pairs
+   * in both themes — lightness band, chroma floor, CVD separation (worst pair
+   * ΔE 12.9 deutan), normal-vision floor (21.4) and 3:1 contrast all pass.
+   * Five- and four-hue candidates that avoided green and red — both reserved
+   * for P&L — all failed, the worst at ΔE 0.8 deutan. The itemisation lives in
+   * the tooltip instead; see COST_BANDS in adapter/attribution.py. */
+  --cost-1: var(--fin-1);   /* commissions   */
+  --cost-2: var(--fin-2);   /* fees and tax  */
+  --cost-3: var(--fin-3);   /* interest paid */
+
+  /* The NAV flow reads by role, not by identity: eleven labelled nodes would
+   * need eleven hues, which is past the point any palette separates. Position
+   * and label carry which flow is which; colour carries in / kept / taken. */
+  --flow-in:   #00A2B2;
+  --flow-kept: #8E6BF0;
+  --flow-cost: #BE8317;
+
   --t-ui: 180ms cubic-bezier(.22, 1, .36, 1);
 }
 

@@ -174,6 +174,119 @@
   color: var(--text-2);
 }
 
+/* ============ performance ============
+ *
+ * Three charts answering one question. The flow gets its own full-width row
+ * because a Sankey needs horizontal room for two label columns; income and
+ * costs sit side by side beneath it, since reading one against the other is
+ * most of the point.
+ */
+.view--scroll { overflow-y: auto; }
+
+.perf-card { display: flex; flex-direction: column; min-height: 0; }
+.perf-card + .perf-row, .perf-card ~ .perf-row { margin-top: var(--grid-gap); }
+.perf-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--grid-gap);
+}
+@media (max-width: 1100px) {
+  .perf-row { grid-template-columns: 1fr; }
+}
+
+.perf-card__period,
+.perf-card__total {
+  font-family: var(--font-figure);
+  font-size: 11.5px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: var(--ff-tabular);
+}
+.perf-card__total { font-weight: 600; color: var(--text); font-size: 13px; }
+
+/* The flow sizes itself to its labels — see sankey() — so this plot takes its
+   height from its content rather than a flex share, and neither it nor the
+   card around it may crop the result. Every other .plot fills its box.
+   Doubled class because the generic .plot rule is declared later in this file
+   and would otherwise win on equal specificity. */
+.plot.plot--flow { flex: none; min-height: 300px; height: auto; overflow: visible; }
+.plot.plot--flow svg { height: auto; }
+.perf-card { overflow: visible; }
+
+.plot--bars { min-height: 220px; }
+
+/* The drift / unmapped-fields note. Quiet, but present when it has something
+   to say — a Sankey that does not balance must not look like one that does. */
+.perf-card__foot {
+  margin: 0;
+  padding: 0 var(--s-5) var(--s-4);
+  font: 400 10.5px/1.5 var(--font-ui);
+  color: var(--text-3);
+}
+.perf-card__foot:empty { display: none; }
+
+.perf-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-4);
+  padding: 0 var(--s-5) var(--s-4);
+  font: 500 10.5px/1 var(--font-ui);
+  color: var(--text-2);
+}
+.perf-legend__item { display: inline-flex; align-items: center; gap: 6px; }
+.perf-legend__item i { width: 9px; height: 9px; border-radius: 2px; flex: none; }
+
+/* ---- sankey ---- */
+.flow__link {
+  opacity: 0.42;
+  transition: opacity var(--dur-fast) var(--ease-spring);
+}
+.flow__link:hover { opacity: 0.72; }
+.flow__node { opacity: 0.95; }
+.flow__name {
+  fill: var(--text);
+  font: 600 10.5px/1 var(--font-ui);
+}
+.flow__val {
+  fill: var(--text-2);
+  font-family: var(--font-figure);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: var(--ff-tabular);
+}
+/* Ties a label back to the band it names, for the thin flows whose text had
+   to be pushed clear of its neighbours. */
+.flow__leader {
+  fill: none;
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+
+/* The bold total that closes an itemised tooltip. */
+.tip__total {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-3);
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px solid var(--border-strong);
+  font: 600 11px/1 var(--font-ui);
+}
+.tip__total b {
+  margin-left: auto;
+  font-family: var(--font-figure);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: var(--ff-tabular);
+}
+/* Detail rows carry no swatch — they itemise beneath a drawn band rather than
+   naming one — so a dot keeps the column aligned without implying a colour. */
+.tip__pip {
+  width: 9px; height: 9px; flex: none;
+  border-radius: 2px;
+  background: var(--border-strong);
+}
+
 /* ============ ticker tape ============
  *
  * Seamless scroll with no JS: the track holds the same run of holdings twice,

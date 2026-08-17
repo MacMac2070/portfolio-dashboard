@@ -391,6 +391,50 @@
         </div>
       </section>
 
+      <!-- ---------------- Performance ----------------
+           Reached from the sidebar's Analysis group, which advertised
+           #performance long before there was a view to land on. NAV
+           attribution and the income/cost breakdowns are all answers to the
+           same question — where did the money go — so they share one view. -->
+      <section class="view view--scroll" id="view-performance" role="tabpanel"
+               aria-label="Performance" hidden>
+
+        <section class="card perf-card" aria-labelledby="flowTitle">
+          <div class="card__head">
+            <h2 class="eyebrow" id="flowTitle">NAV flow</h2>
+            <span class="perf-card__period" id="flowPeriod"></span>
+          </div>
+          <div class="plot plot--flow" id="flowPlot">
+            <svg id="flowSvg" role="img" aria-label="Where the account's value came from and went"></svg>
+          </div>
+          <p class="perf-card__foot" id="flowFoot"></p>
+        </section>
+
+        <div class="perf-row">
+          <section class="card perf-card" aria-labelledby="incomeTitle">
+            <div class="card__head">
+              <h2 class="eyebrow" id="incomeTitle">Dividend income</h2>
+              <span class="perf-card__total" id="incomeTotal"></span>
+            </div>
+            <div class="plot plot--bars" id="incomePlot">
+              <svg id="incomeSvg" role="img" aria-label="Dividend income by month"></svg>
+            </div>
+            <div class="perf-legend" id="incomeLegend"></div>
+          </section>
+
+          <section class="card perf-card" aria-labelledby="costTitle">
+            <div class="card__head">
+              <h2 class="eyebrow" id="costTitle">Costs</h2>
+              <span class="perf-card__total" id="costTotal"></span>
+            </div>
+            <div class="plot plot--bars" id="costPlot">
+              <svg id="costSvg" role="img" aria-label="Costs by month"></svg>
+            </div>
+            <div class="perf-legend" id="costLegend"></div>
+          </section>
+        </div>
+      </section>
+
       <!-- ---------------- Market watch ---------------- -->
       <section class="view" id="view-market" role="tabpanel" aria-label="Market watch" hidden>
 

@@ -627,6 +627,7 @@ export function priceChart(svg, {
  */
 export function groupedBars(svg, {
   periods, series, formatValue, formatPeriod, tooltip, chartLabel = "Trend",
+  stacked = false, detail = null, totalLabel = "Total",
 } = {}) {
   svg.replaceChildren();
   const live = (series || []).filter((s) => s.values?.some(Number.isFinite));
@@ -640,7 +641,11 @@ export function groupedBars(svg, {
   svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
   svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
 
-  const all = live.flatMap((s) => s.values).filter(Number.isFinite);
+  // Stacked, the axis has to reach the column total, not the tallest single
+  // series — otherwise every column overshoots the top of the plot.
+  const totals = periods.map((_, p) =>
+    live.reduce((sum, s) => sum + (Number.isFinite(s.values[p]) ? s.values[p] : 0), 0));
+  const all = stacked ? totals : live.flatMap((s) => s.values).filter(Number.isFinite);
   let lo = Math.min(0, ...all);          // zero is always in the domain
   let hi = Math.max(0, ...all);
   if (lo === hi) hi = lo + 1;
@@ -676,7 +681,8 @@ export function groupedBars(svg, {
 
   const gw = plotW / periods.length;
   const band = gw * 0.68;
-  const bw = band / live.length;
+  // Stacked: one column per period. Grouped: one column per series.
+  const bw = stacked ? band : band / live.length;
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   periods.forEach((label, p) => {
@@ -688,15 +694,30 @@ export function groupedBars(svg, {
     text.textContent = formatPeriod ? formatPeriod(label, p) : label;
     svg.append(text);
 
+    // Stacked segments accumulate from the zero line outward, so each one is
+    // drawn from where the previous ended rather than from the baseline.
+    let upTo = 0;
+
     live.forEach((s, i) => {
       const v = s.values[p];
       if (!Number.isFinite(v)) return;      // no bar at all — see the docstring
-      const top = Math.min(y(v), zeroY);
-      const height = Math.max(1, Math.abs(y(v) - zeroY));
-      // width - 2 gives the 2px surface gap between adjacent bars without
-      // stroking them, the same technique donut() uses for its segments.
+      let top, height, x;
+      if (stacked) {
+        if (v === 0) return;                // nothing to stack, and no 1px sliver
+        const base = upTo;
+        upTo += v;
+        top = Math.min(y(upTo), y(base));
+        // -2 leaves a gap of surface between segments, so touching bands stay
+        // countable — the same spacer donut() and the grouped path use.
+        height = Math.max(1, Math.abs(y(upTo) - y(base)) - 2);
+        x = gx;
+      } else {
+        top = Math.min(y(v), zeroY);
+        height = Math.max(1, Math.abs(y(v) - zeroY));
+        x = gx + bw * i;
+      }
       const rect = el("rect", {
-        x: gx + bw * i, y: top, width: Math.max(1, bw - 2), height,
+        x, y: top, width: Math.max(1, bw - (stacked ? 0 : 2)), height,
         rx: 2, fill: s.color,
       });
       const title = el("title");
@@ -743,14 +764,27 @@ export function groupedBars(svg, {
     tooltip.dataset.open = "true";
     // Every series for the hovered period, not just the bar under the cursor:
     // the comparison between them is the reason the chart is grouped.
+    //
+    // `detail` itemises further than the stack draws. The cost chart draws
+    // three bands because a five-hue palette does not separate, but the
+    // underlying five figures are still what a person wants to read — so the
+    // colour swatch belongs to the drawn series and the detail rows list
+    // without one. A bold total closes it, which premium-tracker's README
+    // calls the reusable half of this pattern.
+    const rows = (detail?.length ? detail : live);
+    const swatch = detail?.length ? null : true;
+    const money = (v) => (Number.isFinite(v) ? (formatValue ? formatValue(v, true) : v) : "—");
+    const sum = live.reduce(
+      (acc, s) => acc + (Number.isFinite(s.values[p]) ? s.values[p] : 0), 0);
     tooltip.innerHTML =
       `<div class="tip__date">${formatPeriod ? formatPeriod(periods[p], p, true) : periods[p]}</div>` +
-      live.map((s) => {
+      rows.map((s) => {
         const v = s.values[p];
-        return `<div class="tip__series"><i style="background:${s.color}"></i>` +
-          `<span>${s.label}</span><b>${Number.isFinite(v)
-            ? (formatValue ? formatValue(v, true) : v) : "—"}</b></div>`;
-      }).join("");
+        return `<div class="tip__series">`
+          + (swatch ? `<i style="background:${s.color}"></i>` : `<i class="tip__pip"></i>`)
+          + `<span>${s.label}</span><b>${money(v)}</b></div>`;
+      }).join("") +
+      `<div class="tip__total"><span>${totalLabel}</span><b>${money(sum)}</b></div>`;
     tooltip.style.left =
       `${Math.min(event.clientX + 14, window.innerWidth - tooltip.offsetWidth - 8)}px`;
     tooltip.style.top = `${event.clientY - 8}px`;
@@ -760,6 +794,213 @@ export function groupedBars(svg, {
     hover.setAttribute("opacity", 0);
     tooltip.dataset.open = "false";
   });
+}
+
+/* ---------------- sankey ---------------- */
+
+/**
+ * The NAV flow: what went into the pot, and what came back out of it.
+ *
+ * Two stages, as premium-tracker's README describes: sources feed one Gross
+ * Value node, which splits into Ending NAV and the cost stack. That separation
+ * is the point — "how big did the pot get" and "what was skimmed off it" are
+ * different questions, and a flat set of flows answers neither cleanly.
+ *
+ * Hand-laid out rather than pulled from d3-sankey. The topology is fixed and
+ * tiny — three columns, a handful of nodes — so a general solver would be a
+ * dependency and a build step to compute what four lines of arithmetic do.
+ *
+ * `data` is what adapter/attribution.flow() returns: {nodes, links, gross, …},
+ * every value a positive magnitude. A Sankey has no negative width; direction
+ * is carried by which column a node sits in.
+ */
+export function sankey(svg, data, { formatValue, tooltip } = {}) {
+  svg.replaceChildren();
+  if (!data?.links?.length || !(data.gross > 0)) return;
+
+  const ins0 = data.links.filter((l) => l.kind === "in");
+  const outs0 = data.links.filter((l) => l.kind !== "in");
+
+  const box = svg.getBoundingClientRect();
+  const w = Math.max(360, Math.round(box.width) || 780);
+  const LINE_H = 25;
+  const padY = 10;
+  // Bands are laid out against this height. The labels may then need more of
+  // it than the bands do — see the de-collision below — so the final height is
+  // settled after they are placed, not guessed at here.
+  const h = Math.max(220, Math.round(box.height) || 340);
+  svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+  svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+
+  const fmt = (v) => (formatValue ? formatValue(v) : String(Math.round(v)));
+  // Labels sit outside the columns, so the bars themselves get the middle.
+  const padX = 4, nodeW = 9, labelGap = 10;
+  const colGap = Math.max(120, (w - padX * 2 - nodeW * 3) / 2);
+  const xs = [padX, padX + nodeW + colGap, padX + nodeW * 2 + colGap * 2];
+  const plotH = h - padY * 2;
+
+  const ins = ins0;
+  const outs = outs0;
+  const total = ins.reduce((s, l) => s + l.value, 0) || 1;
+
+  // A gap between stacked bands, the same 2px-of-surface trick donut() and
+  // groupedBars() use, so touching flows stay countable.
+  const gap = 3;
+  const scale = (v) => (v / total) * (plotH - gap * Math.max(ins.length, outs.length));
+
+  function stack(links, x) {
+    let y = padY;
+    return links.map((l) => {
+      const th = Math.max(1, scale(l.value));
+      const seg = { ...l, x, y0: y, y1: y + th, h: th };
+      y += th + gap;
+      return seg;
+    });
+  }
+  const left = stack(ins, xs[0]);
+  const right = stack(outs, xs[2]);
+
+  // The middle node spans the whole flow, so both fans meet a single bar.
+  const midTop = padY;
+  const midBot = padY + Math.max(
+    left.at(-1) ? left.at(-1).y1 - padY : 0,
+    right.at(-1) ? right.at(-1).y1 - padY : 0,
+  );
+
+  const colour = (kind) =>
+    kind === "in" ? "var(--flow-in)" : kind === "out" ? "var(--flow-kept)" : "var(--flow-cost)";
+
+  // Ribbons first, so the node bars sit on top of their own ends.
+  let midInY = midTop, midOutY = midTop;
+  const ribbons = [];
+  for (const seg of left) {
+    const y0 = seg.y0, y1 = seg.y1;
+    const m0 = midInY, m1 = midInY + seg.h;
+    midInY = m1 + gap;
+    ribbons.push({ seg, d: ribbon(seg.x + nodeW, y0, y1, xs[1], m0, m1) });
+  }
+  for (const seg of right) {
+    const m0 = midOutY, m1 = midOutY + seg.h;
+    midOutY = m1 + gap;
+    ribbons.push({ seg, d: ribbon(xs[1] + nodeW, m0, m1, seg.x, seg.y0, seg.y1) });
+  }
+
+  function ribbon(x0, a0, a1, x1, b0, b1) {
+    const cx = (x0 + x1) / 2;
+    return `M${x0},${a0} C${cx},${a0} ${cx},${b0} ${x1},${b0}`
+      + ` L${x1},${b1} C${cx},${b1} ${cx},${a1} ${x0},${a1} Z`;
+  }
+
+  for (const { seg, d } of ribbons) {
+    const path = el("path", {
+      class: "flow__link", d, fill: colour(seg.kind),
+      "data-flow": seg.kind === "in" ? seg.source : seg.target,
+    });
+    const title = el("title");
+    const name = seg.kind === "in" ? seg.source : seg.target;
+    title.textContent = `${name} — ${fmt(seg.value)}`;
+    path.append(title);
+    if (tooltip) {
+      path.addEventListener("pointerenter", (event) => {
+        tooltip.dataset.open = "true";
+        tooltip.innerHTML =
+          `<div class="tip__date">${name}</div><div class="tip__val">${fmt(seg.value)}</div>`;
+        tooltip.style.left =
+          `${Math.min(event.clientX + 14, window.innerWidth - tooltip.offsetWidth - 8)}px`;
+        tooltip.style.top = `${event.clientY - 8}px`;
+      });
+      path.addEventListener("pointerleave", () => { tooltip.dataset.open = "false"; });
+    }
+    svg.append(path);
+  }
+
+  // Node bars, then labels outside them.
+  const bar = (x, y0, y1, fill) => el("rect", {
+    class: "flow__node", x, y: y0, width: nodeW, height: Math.max(1, y1 - y0),
+    rx: 2, fill,
+  });
+  svg.append(bar(xs[1], midTop, midBot, "var(--text-3)"));
+  for (const seg of left) svg.append(bar(seg.x, seg.y0, seg.y1, colour("in")));
+  for (const seg of right) svg.append(bar(seg.x, seg.y0, seg.y1, colour(seg.kind)));
+
+  /* Labels.
+   *
+   * A two-line block per node, which is taller than most bands: fees are a
+   * fraction of a percent of a portfolio, so their ribbons are a pixel or two
+   * and their labels would sit on top of each other. Each column is therefore
+   * de-collided greedily — walk down, and push any block that would overlap
+   * the one above it to just below it — and a leader line is drawn from the
+   * band to the label whenever it has been moved far enough to need one.
+   *
+   * The bands themselves are never adjusted. A Sankey's only job is that width
+   * is proportional to value; moving the text is honest, moving the ribbon is
+   * not. LINE_H is set above, where it also decides the chart's height.
+   */
+  function place(segs) {
+    let prev = -Infinity;
+    return segs.map((seg) => {
+      const want = (seg.y0 + seg.y1) / 2 - 2;
+      const y = Math.max(want, prev + LINE_H);
+      prev = y;
+      return { seg, y, want };
+    });
+  }
+
+  function draw(placed, anchor, textX, leaderFrom) {
+    for (const { seg, y, want } of placed) {
+      const g = el("g");
+      const name = anchor === "end" ? seg.target : seg.source;
+      const t1 = el("text", { class: "flow__name", x: textX, y, "text-anchor": anchor });
+      t1.textContent = name;
+      const t2 = el("text", { class: "flow__val", x: textX, y: y + 12, "text-anchor": anchor });
+      t2.textContent = fmt(seg.value);
+      g.append(t1, t2);
+      // Only when the text has actually been pushed off its band, and only far
+      // enough that the pairing is no longer obvious.
+      if (Math.abs(y - want) > 4) {
+        const bandY = (seg.y0 + seg.y1) / 2;
+        const x0 = leaderFrom;
+        const x1 = anchor === "end" ? textX + 4 : textX - 4;
+        g.append(el("path", {
+          class: "flow__leader",
+          d: `M${x0},${bandY} L${(x0 + x1) / 2},${bandY} L${(x0 + x1) / 2},${y - 3} L${x1},${y - 3}`,
+        }));
+      }
+      svg.append(g);
+    }
+  }
+
+  const placedLeft = place(left);
+  const placedRight = place(right);
+  draw(placedLeft, "start", xs[0] + nodeW + labelGap, xs[0] + nodeW);
+  draw(placedRight, "end", xs[2] - labelGap, xs[2]);
+
+  // Now the labels are placed, grow the canvas to whatever they needed. The
+  // cost bands sit near the bottom of the plot and de-collide downward from
+  // there, so the last one routinely lands below the band area — which is
+  // fine, as long as it is not cropped. Bands and ribbons keep the geometry
+  // they were laid out with; only the canvas below them gets taller.
+  const lowest = [...placedLeft, ...placedRight]
+    .reduce((m, p) => Math.max(m, p.y + 14), 0);
+  const finalH = Math.max(h, Math.ceil(lowest + padY));
+  if (finalH !== h) svg.setAttribute("viewBox", `0 0 ${w} ${finalH}`);
+  // Explicit, so the card grows with the chart rather than cropping it.
+  svg.style.height = `${finalH}px`;
+
+  const gtext = el("g");
+  const gy = (midTop + midBot) / 2 - 2;
+  const gn = el("text", { class: "flow__name", x: xs[1] + nodeW + labelGap, y: gy });
+  gn.textContent = "Gross value";
+  const gv = el("text", { class: "flow__val", x: xs[1] + nodeW + labelGap, y: gy + 12 });
+  gv.textContent = fmt(data.gross);
+  gtext.append(gn, gv);
+  svg.append(gtext);
+
+  const summary = el("title");
+  summary.textContent =
+    `NAV flow: ${fmt(data.gross)} gross, ${fmt(data.ending_derived)} retained across `
+    + `${outs.length - 1} cost categories.`;
+  svg.append(summary);
 }
 
 /* ---------------- count-up ---------------- */

@@ -8,11 +8,25 @@
   "_how_to_get_these": [
     "IBKR Account Management -> Settings -> Account Reporting -> Flex Web Service",
     "Generate a token (this is flex_token).",
-    "Then Settings -> Account Reporting -> Flex Queries:",
-    "  - Activity Statement query including the 'Net Asset Value (NAV) in Base'",
-    "    section, period 'Last 365 Days' -> its Query ID is nav_query_id",
-    "  - Trade Confirmation query (or Activity Statement with Trades)",
-    "    -> its Query ID is trades_query_id",
-    "Then: /opt/anaconda3/bin/python3 adapter/backfill.py"
+    "Then Settings -> Account Reporting -> Flex Queries, and create ONE",
+    "Activity Statement query, period 'Last 365 Days', with these sections:",
+    "  - Net Asset Value (NAV) in Base   the equity curve",
+    "  - Change in NAV                   the NAV flow chart on Performance",
+    "  - Cash Transactions               dividend income and the cost charts",
+    "  - Trades                          per-trade commissions",
+    "Its Query ID is nav_query_id.",
+    "",
+    "trades_query_id is optional: set it only if you keep a separate Trade",
+    "Confirmation query. With Trades in the Activity Statement above, leave it",
+    "empty and the backfill reads trades from that one report instead — one",
+    "Flex request rather than two.",
+    "",
+    "For Cash Transactions, include the types: Dividends, Payment In Lieu Of",
+    "Dividends, Withholding Tax, Broker Interest Paid, Broker Interest",
+    "Received, Other Fees, Deposits/Withdrawals.",
+    "",
+    "Then: /opt/anaconda3/bin/python3 adapter/backfill.py",
+    "It prints which sections the statement actually carried, and names any",
+    "that are still missing."
   ]
 }
