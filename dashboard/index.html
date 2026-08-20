@@ -22,8 +22,7 @@
   <!-- ================= sidebar ================= -->
   <aside class="sidebar">
     <div class="brand">
-      <span class="brand__mark" aria-hidden="true">P</span>
-      <span class="brand__name">Portfolio</span>
+      <span class="brand__name">PORTFOLIO</span>
     </div>
 
     <nav class="nav-group" aria-label="Main">
@@ -223,8 +222,8 @@
 
           <section class="card alloc reveal" style="animation-delay:240ms" aria-labelledby="allocTitle">
             <div class="card__head">
-              <h2 class="card-title" id="allocTitle">Asset Allocation</h2>
-              <a class="link-all" href="#allocation/region">View all <span aria-hidden="true">→</span></a>
+              <h2 class="card-title" id="allocTitle">Asset allocation</h2>
+              <a class="link-all" href="#allocation/region">By region <span aria-hidden="true">→</span></a>
             </div>
             <div class="alloc__figure"><svg id="donutSvg" role="img" aria-label="Allocation by region"></svg></div>
             <div class="legend" id="allocLegend"></div>
@@ -236,7 +235,7 @@
           <section class="card reveal" style="animation-delay:280ms" aria-labelledby="moversTitle">
             <div class="card__head">
               <h2 class="card-title" id="moversTitle">Top movers</h2>
-              <a class="link-all" href="#holdings">View all <span aria-hidden="true">→</span></a>
+              <a class="link-all" href="#holdings">Watchlist <span aria-hidden="true">→</span></a>
             </div>
             <div class="movers__cols">
               <div><p class="eyebrow movers__head movers__head--up">Gainers</p><div id="gainers"></div></div>
@@ -247,7 +246,7 @@
           <section class="card reveal" style="animation-delay:320ms" aria-labelledby="ccyTitle">
             <div class="card__head">
               <h2 class="card-title" id="ccyTitle">Currency exposure</h2>
-              <a class="link-all" href="#allocation/currency">View all <span aria-hidden="true">→</span></a>
+              <a class="link-all" href="#allocation/currency">By currency <span aria-hidden="true">→</span></a>
             </div>
             <div class="ccy" id="ccyList"></div>
           </section>
@@ -255,7 +254,7 @@
           <section class="card reveal" style="animation-delay:360ms" aria-labelledby="concTitle">
             <div class="card__head">
               <h2 class="card-title" id="concTitle">Concentration</h2>
-              <a class="link-all" href="#holdings">View all <span aria-hidden="true">→</span></a>
+              <a class="link-all" href="#holdings">All positions <span aria-hidden="true">→</span></a>
             </div>
             <div class="conc" id="concList"></div>
           </section>
@@ -266,7 +265,7 @@
         <!-- Below the fold: what you actually hold, largest first. Overlaid so
              it reflows nothing above it; fades out once you scroll. -->
         <button class="ov-cue" id="ovCue" type="button">
-          <span>Holdings</span>
+          <span>Positions</span>
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"
                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M8 3.5v9M4.5 9l3.5 3.5L11.5 9"/>
@@ -275,7 +274,7 @@
 
         <section class="positions ovpos" id="ovHoldings" aria-labelledby="ovBandTitle">
           <div class="band">
-            <h2 class="band__title" id="ovBandTitle">Holdings</h2>
+            <h2 class="band__title" id="ovBandTitle">Positions</h2>
             <span class="band__count" id="ovCount">—</span>
             <span class="band__rule" aria-hidden="true"></span>
             <span class="band__hint" id="ovHint">Largest first</span>
@@ -357,7 +356,7 @@
                 <span class="band__count" id="rowsCount"></span>
                 <span class="band__rule" aria-hidden="true"></span>
                 <span class="band__hint" id="listNote"></span>
-                <a class="band__action" href="#overview">Manage portfolio →</a>
+                <a class="band__action" href="#transactions">Transactions →</a>
               </div>
 
               <div class="prow phead" id="tableHead"></div>
@@ -373,7 +372,7 @@
                aria-label="Transactions" hidden>
         <section class="card tx-card" aria-labelledby="txTitle">
           <div class="card__head">
-            <h2 class="eyebrow" id="txTitle">Transactions</h2>
+            <h2 class="card-title" id="txTitle">Transactions</h2>
             <span class="perf-card__period" id="txMeta"></span>
           </div>
           <!-- Header and body are separate hosts so a sort rewrites one of
@@ -393,7 +392,7 @@
 
         <section class="card perf-card" aria-labelledby="flowTitle">
           <div class="card__head">
-            <h2 class="eyebrow" id="flowTitle">NAV flow</h2>
+            <h2 class="card-title" id="flowTitle">NAV flow</h2>
             <span class="perf-card__period" id="flowPeriod"></span>
           </div>
           <div class="plot plot--flow" id="flowPlot">
@@ -405,7 +404,7 @@
         <div class="perf-row">
           <section class="card perf-card" aria-labelledby="incomeTitle">
             <div class="card__head">
-              <h2 class="eyebrow" id="incomeTitle">Dividend income</h2>
+              <h2 class="card-title" id="incomeTitle">Dividend income</h2>
               <div class="ranges" id="incomeMode" role="group" aria-label="Show income or P&amp;L">
                 <button class="range" type="button" data-mode="income" aria-pressed="true">Income</button>
                 <button class="range" type="button" data-mode="pnl" aria-pressed="false">P&amp;L</button>
@@ -420,7 +419,7 @@
 
           <section class="card perf-card" aria-labelledby="costTitle">
             <div class="card__head">
-              <h2 class="eyebrow" id="costTitle">Costs</h2>
+              <h2 class="card-title" id="costTitle">Costs</h2>
               <span class="perf-card__total" id="costTotal"></span>
             </div>
             <div class="plot plot--bars" id="costPlot">
@@ -437,7 +436,7 @@
 
         <section class="card alloc-card" aria-labelledby="allocViewTitle">
           <div class="card__head">
-            <h2 class="eyebrow" id="allocViewTitle">Allocation</h2>
+            <h2 class="card-title" id="allocViewTitle">Allocation</h2>
             <div class="ranges" id="allocAxis" role="group" aria-label="Break allocation down by">
               <button class="range" type="button" data-axis="region" aria-pressed="true">Region</button>
               <button class="range" type="button" data-axis="sector" aria-pressed="false">Sector</button>
@@ -472,7 +471,7 @@
 
         <section class="card" aria-labelledby="allocPosTitle">
           <div class="card__head">
-            <h2 class="eyebrow" id="allocPosTitle">Positions by weight</h2>
+            <h2 class="card-title" id="allocPosTitle">Positions by weight</h2>
             <span class="perf-card__period" id="allocPosNote"></span>
           </div>
           <div class="allocpos" id="allocPositions"></div>
@@ -500,6 +499,7 @@
           <span class="board-bar__count num" id="mktCount">—</span>
           <span class="board-bar__rule" aria-hidden="true"></span>
           <span class="board-bar__note" id="orderNote">grouped by region</span>
+          <span class="board-bar__note" id="expoNote"></span>
 
           <div class="board-bar__controls">
             <div class="ranges" role="group" aria-label="Order markets by">

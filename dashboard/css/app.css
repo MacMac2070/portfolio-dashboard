@@ -41,31 +41,18 @@
   padding: 0 var(--s-2) 0 var(--s-1);
 }
 
-.brand__mark {
-  display: grid;
-  place-items: center;
-  width: 34px; height: 34px;
-  border-radius: var(--r-md);
-  background: var(--brand);
-  color: #fff;
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 16px;
+/* The wordmark rhymes with the tape: Geist Mono caps behind a thin brand
+ * rule — the same selection grammar as the nav, not a gradient letter-badge.
+ * min-height keeps the sidebar's rhythm where the 34px mark used to sit. */
+.brand { min-height: 34px; }
+.brand__name {
+  font: 600 13px/1 var(--font-figure);
+  letter-spacing: var(--tracking-label);
+  color: var(--text);
+  padding-left: 10px;
+  box-shadow: inset 2px 0 0 var(--brand);
 }
 
-.brand__name { font-size: 15px; font-weight: 600; letter-spacing: var(--tracking-num); }
-
-.brand__collapse {
-  margin-left: auto;
-  display: grid; place-items: center;
-  width: 28px; height: 28px;
-  border-radius: var(--r-sm);
-  color: var(--text-3);
-  transition: color var(--dur-fast) var(--ease-spring),
-              background-color var(--dur-fast) var(--ease-spring);
-}
-.brand__collapse:hover { color: var(--text); background: var(--border); }
-.brand__collapse:active { transform: scale(0.94); }
 
 .nav-group { display: grid; gap: 2px; }
 .nav-group__label { padding: 0 var(--s-3) var(--s-2); }
@@ -305,6 +292,26 @@
   stroke: var(--border-strong);
   stroke-width: 1;
 }
+
+/* Operational empty states: the section names, config keys and the command
+ * are the app's own runbook, so they are set as a terminal block rather than
+ * flowed through greeting-card prose. */
+.setup {
+  display: block;
+  margin: 10px auto 0;
+  padding: 10px 14px;
+  width: max-content;
+  max-width: 100%;
+  text-align: left;
+  font: 500 11px/1.7 var(--font-figure);
+  color: var(--text-2);
+  background: var(--wash-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  white-space: pre;
+  overflow-x: auto;
+}
+.setup b { color: var(--text); font-weight: 600; }
 
 /* The bold total that closes an itemised tooltip. */
 .tip__total {

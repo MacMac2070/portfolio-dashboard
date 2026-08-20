@@ -137,9 +137,10 @@ function render() {
           <rect x="6" y="9" width="36" height="30" rx="4"/><path d="M6 18h36M14 26h12M14 32h8"/>
         </svg>
         <h3>No transactions yet</h3>
-        <p>Add the <b>Trades</b> section to the Flex query behind
-           <code>nav_query_id</code>, or set <code>trades_query_id</code> to a
-           Trade Confirmation query, then run <code>adapter/backfill.py</code>.</p>
+        <p><span class="setup">query    nav_query_id
+section  <b>Trades</b>   ← enable, or point trades_query_id at a
+         Trade Confirmation query
+then     /opt/anaconda3/bin/python3 adapter/backfill.py</span></p>
       </div>`;
     return;
   }

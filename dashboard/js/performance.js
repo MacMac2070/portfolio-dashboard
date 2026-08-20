@@ -91,10 +91,11 @@ function empty(host, title, body) {
     </div>`;
 }
 
-/** The standard "switch this Flex section on" copy. */
-const flexHint = (section) =>
-  `Add the <b>${esc(section)}</b> section to the Flex query behind
-   <code>nav_query_id</code>, then run <code>adapter/backfill.py</code>.`;
+/** The standard "switch this Flex section on" runbook, as a terminal block. */
+const flexHint = (section) => `
+  <span class="setup">query    nav_query_id
+section  <b>${esc(section)}</b>   ← enable in Account Management
+then     /opt/anaconda3/bin/python3 adapter/backfill.py</span>`;
 
 function renderFlow() {
   const host = $("flowPlot");

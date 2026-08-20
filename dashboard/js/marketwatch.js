@@ -148,10 +148,11 @@ function othersRows(m) {
  */
 function exposureBand(m) {
   if (!m.exposure_known) {
+    // Said once, in the board bar — eight cards repeating "waiting for the
+    // live feed" turns one condition into a wall of apology.
     return `
       <div class="mexpo">
         <span class="mexpo__label">Your exposure</span>
-        <span class="mexpo__none">Waiting for the live feed</span>
         <span class="mexpo__figures"><span class="mexpo__value num" data-held="false">${DASH}</span></span>
       </div>`;
   }
@@ -266,6 +267,10 @@ function render() {
   const markets = ordered(board.markets || []);
   $("mktCount").textContent = markets.length || DASH;
   $("orderNote").textContent = ORDER_NOTE[sortMode];
+  // The feed-down condition, stated once for the whole board — the cards
+  // themselves just show an em-dash (see exposureBand).
+  $("expoNote").textContent = markets.length && markets.every((m) => !m.exposure_known)
+    ? "· exposure waiting for the live feed" : "";
 
   if (!markets.length) { grid.innerHTML = EMPTY; structureKey = ""; return; }
 
