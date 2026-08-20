@@ -467,6 +467,43 @@ rows; day-change falls back from openbb → IBKR price + openbb prior close →
 IBKR `dailyPnL`; a missing Flex config skips the backfill with an explanation.
 The snapshot completes even when the network does not.
 
+## The de-AI pass (20 Aug 2026)
+
+A six-critic design audit hunted everything that read as "made by AI" —
+template defaults rather than choices — and the fixes landed as departures
+from the pinned references, each signed off by Mac:
+
+- **Brand re-toned and flattened.** The soft-lavender `#7c55e8` becomes a
+  deeper, higher-chroma `#6d2ef5` (`#5314d6` light); every gradient and glow
+  is gone. The accent's one device is the thin rule + wash the hero plates
+  already used. Elevated surfaces, hero shadows, scrollbars and hairlines
+  lose their violet cast — violet now means selection, ownership and focus,
+  nothing else.
+- **One sans.** Inter (body) and Manrope (UI) are retired; Archivo — already
+  the display face — takes every sans role, with Geist Mono keeping every
+  figure. 27 letter-spacing literals collapsed to five tokens; nothing is set
+  below 9.5px; no 800 weight below display sizes.
+- **The categorical ramp is re-stepped** (the invitation at the bottom of
+  this file, taken): green and rose leave the ramp — both reserved for P&L —
+  with Korea marine, the UK plum, the US a deeper in-band gold. Every dataviz
+  validator check now passes in both themes, including the two failures
+  documented below, which are gone.
+- **Charts lose their defaults**: no gradient washes (the world board's eight
+  red/green mountains are line-only), axis ticks come from `niceTicks`,
+  square bar ends, solid gridlines (the benchmark's dash is the page's only
+  dashed vocabulary), the Sankey reads as tinted glass, and teal leads the
+  attribution series with violet held back. Dense contexts (tape, tables,
+  market rows) show deltas as bare signed mono — sign plus hue, never hue
+  alone — with the full chip kept for KPI tiles and heroes.
+- **The light theme is finished.** The Holdings ink family is aliased onto
+  the themed system, so the three views that were dark-only render in both
+  themes and the regression cannot be reintroduced.
+- **Chrome honesty**: the gradient "P" badge is a mono wordmark; Settings,
+  Log out and the collapse button — none of which did anything — are gone;
+  the sidebar footer carries the feed truth and the theme toggle; titles are
+  sentence case with the eyebrow demoted back to labelling figures; links
+  say where they go; the feed-down condition is said once per view.
+
 ## Two deliberate departures from `Design.pdf`
 
 1. **The equity curve is real, so it looks different.** The reference chart is
@@ -540,6 +577,5 @@ the right test for a donut since any segment may be compared to any other:
 
 The labelled legend means identity is never carried by colour alone, so the
 chart stays usable — but those pairs are genuinely hard to tell apart in the
-ring. Kept as-is because the reference pins the palette. Re-stepping Japan and
-Singapore a few steps apart would fix it without changing the design's
-character; say the word.
+ring. Resolved in the de-AI pass above: the word was said, and the re-stepped ramp
+passes every validator check in both themes.
