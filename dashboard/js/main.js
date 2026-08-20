@@ -246,6 +246,10 @@ function renderBenchBar(bench) {
 
   const drawing = Boolean(bench.points);
   key.hidden = !drawing;
+  // The portfolio swatch inherits the curve's direction colour via CSS.
+  const pts = sliceRange(navHistory, activeRange);
+  const dir = pts.length >= 2 ? (pts.at(-1).value >= pts[0].value ? "up" : "down") : "";
+  if (bar.dataset.direction !== dir) bar.dataset.direction = dir;
 
   setText(note, bench.reason || (drawing && benchmark?.currency && benchmark.currency !== "GBP"
     ? `${benchmark.currency} · unhedged`
@@ -594,29 +598,31 @@ function renderFreshness(data) {
     const at = meta.last_refresh ? new Date(meta.last_refresh) : null;
     const age = at ? Date.now() - at.getTime() : Infinity;
     stale = !meta.connected || age > LIVE_STALE_MS;
+    // Branch on the timestamp rather than printing a dash into the sentence:
+    // "last live — —" and "received at — —" both shipped as broken copy.
     label = stale
-      ? `Disconnected · last live ${at ? clock(meta.last_refresh) : "—"}`
+      ? (at ? `Disconnected · last live ${clock(meta.last_refresh)}` : "Disconnected")
       : `Live · ${clock(meta.last_refresh)} · delayed 15 min`;
-    $("staleTime").textContent = at ? clock(meta.last_refresh) : "—";
+    setText($("staleCopy"), at
+      ? `Feed disconnected. These are the last values received at ${clock(meta.last_refresh)} — don't trade on them.`
+      : "Feed disconnected — don't trade on these values.");
   } else {
     // No feed: we are showing a snapshot written by build.py.
     const generated = meta.generated_at ? new Date(meta.generated_at) : null;
     const age = generated ? Date.now() - generated.getTime() : Infinity;
     stale = meta.gateway !== "ok" || age > SNAPSHOT_STALE_MS;
     label = stale
-      ? `Stale · last ${clock(meta.generated_at)}`
+      ? (generated ? `Stale · last ${clock(meta.generated_at)}` : "Stale")
       : `${stamp(meta.generated_at)} · delayed 15 min`;
-    $("staleTime").textContent = clock(meta.generated_at);
+    setText($("staleCopy"), generated
+      ? `Snapshot from ${stamp(meta.generated_at)} — the live feed is not running.`
+      : "Feed disconnected — don't trade on these values.");
   }
 
   root.dataset.state = stale ? "stale" : "ready";
   $("feed").dataset.state = stale ? "stale" : "live";
   setText($("feedLabel"), label);
 
-  const tx = (data.fills || []).length;
-  setText($("txCopy"), tx
-    ? `${tx} execution${tx === 1 ? "" : "s"} recorded today. Older trades appear once the Flex import is configured.`
-    : "Trade history is collected from the daily job and, once configured, backfilled from your IBKR Flex statement.");
 }
 
 /* ---------------- shell interactions ---------------- */
@@ -713,7 +719,7 @@ async function boot() {
     root.dataset.state = "stale";
     $("feed").dataset.state = "stale";
     $("feedLabel").textContent = "No data";
-    $("staleTime").textContent = "—";
+    setText($("staleCopy"), "Feed disconnected — don't trade on these values.");
     console.error("could not load portfolio data", error);
     return;
   }

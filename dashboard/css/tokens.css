@@ -132,32 +132,28 @@
    *
    * Same hue in both cases, minimum lift to clear 4.5:1.
    */
-  --font-display-holdings: "Archivo", "Helvetica Neue", Arial, sans-serif;
   --font-ui: "Manrope", "Helvetica Neue", Arial, sans-serif;
 
-  --ink-page:   #0A0C0F;
-  --ink-rail:   #0C0F13;
-  --ink-panel:  #0F1216;
-  --ink-raised: #181722;
-  --ink-chip:   #14181D;
+  /* The Holdings-page surface and hairline family, re-plumbed as aliases of
+   * the themed system. These began as verbatim imports from Holdings.dc.html
+   * with dark hexes only, which made three whole views dark-only and falsified
+   * this file's own header. As aliases they follow whichever theme is active
+   * and a second family of near-identical greys stops existing. The violet
+   * hairline hues they carried move to the border family — the violet accent
+   * lives in the inset rule, not in every hairline (see README departures). */
+  --ink-page:   var(--bg-page);
+  --ink-rail:   var(--bg-sidebar);
+  --ink-panel:  var(--surface);
+  --ink-raised: var(--surface-2);
+  --ink-chip:   var(--track);
 
-  --violet-200: #D5C6FF;
-  --violet-300: #B69CFF;
-  --violet-400: #9A79F2;
-  --violet-500: #7C55E8;
-  --violet-600: #6B45D6;
-  --violet-tint-18: rgba(124, 85, 232, 0.18);
+  --hair-1: var(--border);
+  --hair-2: var(--border);
+  --hair-3: var(--border-strong);
 
-  --hair-1: rgba(150, 124, 255, 0.09);
-  --hair-2: rgba(150, 124, 255, 0.11);
-  --hair-3: rgba(160, 136, 255, 0.20);
-  --wash-hover: rgba(124, 85, 232, 0.12);
-
-  --text-primary:  #EEF1F5;
-  --text-body:     #B9C1CB;
-  --text-muted:    #8B95A2;
-  --text-faint:    #828D9B;
-  --text-disabled: #788391;   /* lifted for AA — see note above */
+  --text-primary: var(--text);
+  /* --text-body/-muted/-faint/-disabled and the violet text tints are per-theme
+   * — see the theme blocks. The disabled step keeps its documented AA lift. */
 
   /* Gain and loss, on the Holdings/stock/market surfaces.
    *
@@ -174,7 +170,7 @@
    * neither a gain nor a loss. Not a P&L colour, so it keeps its own hex — it
    * only has to stay distinct from the two above, which violet against emerald
    * and rose comfortably is. */
-  --hold-soft: #8A7BC8;
+  /* per-theme; see the theme blocks */
 
   /* Statement trend series. Three hues in one lightness band, so they separate
    * by hue rather than by lightness alone and survive colourblind viewing.
@@ -253,6 +249,23 @@
   --pos:          #34d399;   /* emerald-400 */
   --neg:          #fb7185;   /* rose-400    */
   --flat:         #7a8490;
+
+  /* Holdings text ramp and violet tints, dark values (unchanged hexes). */
+  --text-body:     #B9C1CB;
+  --text-muted:    #8B95A2;
+  --text-faint:    #828D9B;
+  --text-disabled: #788391;   /* AA-lifted — see the note above the ink family */
+  --violet-200: #D5C6FF;
+  --violet-300: #B69CFF;
+  --violet-500: #7C55E8;
+  --violet-tint-18: rgba(124, 85, 232, 0.18);
+  --wash-hover: rgba(124, 85, 232, 0.12);
+  --hold-soft: #8A7BC8;
+  /* Row-hover / zebra washes: white-alpha here, ink-alpha in light — a raw
+   * rgba(255,255,255,…) is invisible on a white card. */
+  --wash-1: rgba(255, 255, 255, 0.03);
+  --wash-2: rgba(255, 255, 255, 0.05);
+  --wash-3: rgba(255, 255, 255, 0.07);
   /* The benchmark line and its swatch. Deliberately neutral — it is context,
    * not a P&L figure, and must never be mistaken for one. Measures 3.56:1 on
    * the card, past the 3:1 that WCAG asks of a non-text graphic. */
@@ -314,6 +327,28 @@
   --pos:          #047857;   /* emerald-700 */
   --neg:          #be123c;   /* rose-700    */
   --flat:         #5b6673;
+
+  --text-body:     #3d4753;
+  --text-muted:    #5b6673;
+  --text-faint:    #64707e;
+  --text-disabled: #6c7785;   /* AA 4.55:1 on white, same bar as --text-3 */
+  --violet-200: #4a22b8;      /* text over the violet tint chip: dark ink */
+  --violet-300: #5a2fd0;
+  --violet-500: #6635e0;
+  --violet-tint-18: rgba(102, 53, 224, 0.12);
+  --wash-hover: rgba(102, 53, 224, 0.08);
+  --hold-soft: #6b55b8;
+  --wash-1: rgba(12, 15, 19, 0.03);
+  --wash-2: rgba(12, 15, 19, 0.05);
+  --wash-3: rgba(12, 15, 19, 0.07);
+  /* Chart inks, one stop darker so they carry on white; the Sankey link
+   * opacity is raised in app.css for the same reason. */
+  --fin-1: #6a3fd6;
+  --fin-2: #087584;
+  --fin-3: #8a5d0e;
+  --flow-in:   #087584;
+  --flow-kept: #6a3fd6;
+  --flow-cost: #8a5d0e;
   /* Ink rather than white, or the line would be invisible on a white card —
    * the dark value measures 1.00:1 here. 0.50 clears 3:1 on both --surface
    * (3.46) and --bg-page (3.42); 0.45 does not (2.96 on the latter). */
@@ -347,6 +382,14 @@
     --brand: #6635e0; --brand-soft: #7c55e8; --brand-pale: #5a2fd0;
     --brand-glow: rgba(102,53,224,.28);
     --pos: #047857; --neg: #be123c; --flat: #5b6673;
+    --text-body: #3d4753; --text-muted: #5b6673;
+    --text-faint: #64707e; --text-disabled: #6c7785;
+    --violet-200: #4a22b8; --violet-300: #5a2fd0; --violet-500: #6635e0;
+    --violet-tint-18: rgba(102,53,224,.12); --wash-hover: rgba(102,53,224,.08);
+    --hold-soft: #6b55b8;
+    --wash-1: rgba(12,15,19,.03); --wash-2: rgba(12,15,19,.05); --wash-3: rgba(12,15,19,.07);
+    --fin-1: #6a3fd6; --fin-2: #087584; --fin-3: #8a5d0e;
+    --flow-in: #087584; --flow-kept: #6a3fd6; --flow-cost: #8a5d0e;
     --pos-bg: rgba(4,120,87,.10); --neg-bg: rgba(190,18,60,.10);
     --bench-line: rgba(16,20,26,.50);
     --cat-1: #2f6fd0; --cat-2: #b87816; --cat-3: #12855f;

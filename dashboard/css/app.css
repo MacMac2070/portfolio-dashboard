@@ -85,7 +85,7 @@
               transform var(--dur-fast) var(--ease-spring);
 }
 .nav-item svg { width: 18px; height: 18px; flex: none; }
-.nav-item:hover { color: var(--text); background: rgba(255, 255, 255, 0.045); }
+.nav-item:hover { color: var(--text); background: var(--wash-2); }
 .nav-item:active { transform: translateX(1px); }
 
 .nav-item[aria-current="page"] {
@@ -276,6 +276,14 @@
   transition: opacity var(--dur-fast) var(--ease-spring);
 }
 .flow__link:hover { opacity: 0.72; }
+/* The inks are one stop darker in light (tokens.css) but the ribbons still
+   compost to pastel on white at dark's alpha; both states step up. */
+:root[data-theme="light"] .flow__link { opacity: 0.55; }
+:root[data-theme="light"] .flow__link:hover { opacity: 0.8; }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .flow__link { opacity: 0.55; }
+  :root:not([data-theme]) .flow__link:hover { opacity: 0.8; }
+}
 .flow__node { opacity: 0.95; }
 .flow__name {
   fill: var(--text);
@@ -554,7 +562,7 @@
   transition: color var(--dur-fast) var(--ease-spring),
               background-color var(--dur-fast) var(--ease-spring);
 }
-.range:hover { color: var(--text); background: rgba(255, 255, 255, 0.05); }
+.range:hover { color: var(--text); background: var(--wash-2); }
 .range:active { transform: scale(0.96); }
 .range[aria-pressed="true"] {
   color: var(--text);
@@ -616,7 +624,12 @@
 }
 .benchbar__key { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .benchbar__swatch { width: 14px; height: 0; flex: none; }
-.benchbar__swatch--port { border-top: 2px solid var(--pos); border-radius: 2px; }
+/* Colour set from js — the curve strokes by window direction, and a legend key
+   must not disagree with the line it names (an emerald key beside a rose line
+   was exactly what shipped). Falls back to --flat before the first draw. */
+.benchbar__swatch--port { border-top: 2px solid var(--flat); border-radius: 2px; }
+.benchbar[data-direction="up"] .benchbar__swatch--port { border-top-color: var(--pos); }
+.benchbar[data-direction="down"] .benchbar__swatch--port { border-top-color: var(--neg); }
 .benchbar__swatch--bench { border-top: 1.5px dashed var(--bench-line); }
 
 /* The picker and its swatch read as one legend entry. */
@@ -794,11 +807,11 @@
    same. .is-active is set from JS and therefore also covers the arc-hover and
    keyboard-focus routes into it. */
 .legend__row:hover,
-.legend__row.is-active { background: rgba(255, 255, 255, 0.04); }
+.legend__row.is-active { background: var(--wash-2); }
 .legend__row:focus-visible {
   outline: 2px solid var(--brand-soft);
   outline-offset: -2px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--wash-2);
 }
 
 .legend__dot { width: 10px; height: 10px; border-radius: 3px; }
@@ -974,7 +987,7 @@
   padding: 0 6px;
   margin-right: var(--s-2);
   border-radius: var(--r-sm);
-  background: rgba(255, 255, 255, 0.07);
+  background: var(--wash-3);
   font-size: 12px;
   font-weight: 600;
   color: var(--text-2);
@@ -1014,7 +1027,7 @@
   padding: 0 11px;
   border-radius: 8px;
   background: var(--ink-chip);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--border);
   color: var(--text-muted);
   font: 600 11.5px/1 var(--font-ui);
   letter-spacing: -0.005em;
@@ -1036,7 +1049,7 @@
 .sector-pill[aria-current="page"] .sector-pill__count { color: rgba(255, 255, 255, 0.62); }
 .sector-pill__rule {
   width: 1px; height: 12px; flex: none;
-  background: rgba(255, 255, 255, 0.07);
+  background: var(--wash-3);
 }
 .sector-pill[aria-current="page"] .sector-pill__rule { background: rgba(160, 136, 255, 0.5); }
 .sector-pill__day {
@@ -1087,7 +1100,7 @@
   margin: 0;
   font: 800 31px/1.02 var(--font-display);
   letter-spacing: -0.035em;
-  color: #f5f7fa;
+  color: var(--text);
 }
 .hero-sector__meta { font: 500 11.5px/1.3 var(--font-ui); color: var(--text-muted); }
 
@@ -1103,7 +1116,7 @@
 .hstat__value {
   font: 700 23px/1 var(--font-figure);
   letter-spacing: -0.02em;
-  color: #f5f7fa;
+  color: var(--text);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
   font-feature-settings: var(--ff-tabular);
@@ -1125,7 +1138,7 @@
   gap: 18px;
   flex-wrap: wrap;
   padding: 11px 22px 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--border);
 }
 .breadth__bar {
   display: flex;
@@ -1133,7 +1146,7 @@
   flex: none;
   border-radius: 3px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.07);
+  background: var(--wash-3);
 }
 .breadth__up { display: block; height: 100%; background: var(--gain-soft); }
 .breadth__down { display: block; height: 100%; background: var(--loss-soft); }
@@ -1144,7 +1157,7 @@
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-.breadth__rule { width: 1px; height: 13px; flex: none; background: rgba(255, 255, 255, 0.09); }
+.breadth__rule { width: 1px; height: 13px; flex: none; background: var(--border-strong); }
 .breadth__item { font: 500 10.5px/1 var(--font-ui); color: var(--text-muted); white-space: nowrap; }
 .breadth__figure {
   font: 600 10.5px/1 var(--font-figure);
@@ -1220,7 +1233,7 @@
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
 }
-.band__rule { width: 1px; height: 12px; flex: none; background: rgba(255, 255, 255, 0.1); }
+.band__rule { width: 1px; height: 12px; flex: none; background: var(--border-strong); }
 .band__hint { font: 400 10.5px/1 var(--font-ui); color: var(--text-muted); white-space: nowrap; }
 .band__action {
   margin-left: auto;
@@ -1236,7 +1249,7 @@
 .phead {
   align-items: end;
   padding-bottom: 8px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+  border-bottom: 1px solid var(--border-strong);
 }
 .phead button {
   display: flex;
@@ -1267,7 +1280,7 @@
 .prow--pos {
   position: relative;
   height: 52px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+  border-bottom: 1px solid var(--border);
   transition: background var(--t-ui);
 }
 .prow--pos:hover { background: var(--wash-hover); }
@@ -1458,7 +1471,7 @@
   flex: 0 0 88px;
   height: 3px;
   border-radius: 2px;
-  background: linear-gradient(90deg, rgba(255, 255, 255, .06), rgba(150, 124, 255, .22));
+  background: linear-gradient(90deg, var(--wash-2), rgba(150, 124, 255, .22));
 }
 .prange__dot {
   position: absolute;
@@ -1473,7 +1486,7 @@
   padding: 10px 20px 12px;
   font: 400 9.5px/1.4 var(--font-ui);
   color: var(--text-disabled);
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  border-top: 1px solid var(--border);
 }
 
 /* Delta chip, as the design's DeltaValue renders it. */
@@ -1495,7 +1508,7 @@
  * and it is what gives these chips a light-mode value. */
 .dchip--up { color: var(--gain-soft); background: var(--pos-bg); }
 .dchip--down { color: var(--loss-soft); background: var(--neg-bg); }
-.dchip--flat { color: var(--text-muted); background: rgba(255, 255, 255, 0.06); }
+.dchip--flat { color: var(--text-muted); background: var(--wash-2); }
 
 .hempty {
   display: grid;
@@ -1670,7 +1683,7 @@
   width: 5px; height: 5px;
   flex: none;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.24);
+  background: var(--border-strong);
 }
 .livedot[data-on="true"] {
   background: var(--gain-soft);
@@ -1718,7 +1731,7 @@
   margin: 0;
   font: 800 21px/1.02 var(--font-display);
   letter-spacing: -0.035em;
-  color: #f5f7fa;
+  color: var(--text);
 }
 .board-hero__trading {
   display: flex;
@@ -1735,7 +1748,7 @@
   align-items: center;
   flex-wrap: wrap;
   padding: 0 22px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--border);
 }
 .clockstrip__item {
   display: flex;
@@ -1744,7 +1757,7 @@
   flex: none;
   padding: 6px 12px 7px 0;
   margin-right: 12px;
-  border-right: 1px solid rgba(255, 255, 255, 0.07);
+  border-right: 1px solid var(--border);
   white-space: nowrap;
 }
 .clockstrip__code {
@@ -1789,7 +1802,7 @@
   font: 600 10.5px/1 var(--font-ui);
   color: var(--text-faint);
 }
-.board-bar__rule { width: 1px; height: 12px; flex: none; background: rgba(255, 255, 255, 0.1); }
+.board-bar__rule { width: 1px; height: 12px; flex: none; background: var(--border-strong); }
 .board-bar__note {
   font: 400 10.5px/1 var(--font-ui);
   color: var(--text-muted);
@@ -1847,7 +1860,7 @@
   flex: none;
   border-radius: 5px;
   background: var(--ink-chip);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--border);
   font: 800 9px/1 var(--font-display);
   letter-spacing: 0.02em;
   color: var(--text-muted);
@@ -1876,8 +1889,8 @@
   height: 18px;
   padding: 0 6px;
   border-radius: 5px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: var(--wash-2);
+  border: 1px solid var(--border);
   white-space: nowrap;
 }
 .mcard[data-open="true"] .msess {
@@ -1938,7 +1951,7 @@
 .mbench__level {
   font: 800 17px/1 var(--font-display);
   letter-spacing: -0.038em;
-  color: #f5f7fa;
+  color: var(--text);
   white-space: nowrap;
 }
 .mbench__perf { display: flex; align-items: baseline; gap: 5px; }
@@ -1978,7 +1991,7 @@
   flex: none;
   display: flex;
   flex-direction: column;
-  border-top: 1px solid rgba(255, 255, 255, 0.055);
+  border-top: 1px solid var(--border);
 }
 .mcard__others + .mexpo { border-top: 0; }
 .mrow {
@@ -1987,7 +2000,7 @@
   align-items: center;
   gap: 6px;
   padding: 6px 11px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.035);
+  border-bottom: 1px solid var(--border);
 }
 /* The last row keeps its rule — as in the design, it is what separates the
  * others list from the exposure band below it. */
@@ -2028,8 +2041,8 @@
   padding: 6px 11px 7px;
   /* The others list already ends on a hairline, and its last row drops its own,
    * so this is exactly one rule in both card shapes — never two. */
-  border-top: 1px solid rgba(255, 255, 255, 0.055);
-  background: rgba(255, 255, 255, 0.018);
+  border-top: 1px solid var(--border);
+  background: var(--wash-1);
 }
 .mexpo__label {
   font: 600 9.5px/1 var(--font-ui);
@@ -2043,7 +2056,7 @@
   height: 4px;
   min-width: 40px;
   border-radius: 2px;
-  background: rgba(255, 255, 255, 0.07);
+  background: var(--wash-3);
   overflow: hidden;
 }
 .mexpo__fill {
@@ -2182,7 +2195,7 @@
   margin: 0;
   font: 800 23px/1.04 var(--font-display);
   letter-spacing: -0.032em;
-  color: #f5f7fa;
+  color: var(--text);
 }
 .shero__tk {
   display: flex; align-items: center; height: 21px; padding: 0 8px;
@@ -2208,7 +2221,7 @@
   height: 32px; padding: 0 12px;
   border-radius: var(--r-sm);
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  border: 1px solid var(--border-strong);
   color: var(--text-body);
   font: 600 11.5px/1 var(--font-ui);
   cursor: pointer;
@@ -2233,7 +2246,7 @@
 .sfig__row { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
 .sfig__px {
   font: 800 40px/1 var(--font-figure);
-  letter-spacing: -0.04em; color: #f5f7fa; white-space: nowrap;
+  letter-spacing: -0.04em; color: var(--text); white-space: nowrap;
 }
 .sfig__delta { display: flex; align-items: center; gap: 9px; padding-bottom: 4px; }
 .sfig__abs {
@@ -2281,7 +2294,7 @@
   letter-spacing: -0.014em; color: var(--text-primary); white-space: nowrap;
 }
 .scard__rule {
-  width: 1px; height: 12px; flex: 0 0 auto; background: rgba(255, 255, 255, 0.1);
+  width: 1px; height: 12px; flex: 0 0 auto; background: var(--border-strong);
 }
 .scard__note { font: 400 10.5px/1 var(--font-ui); color: var(--text-muted); }
 
@@ -2294,8 +2307,8 @@
 .sranges {
   display: flex; align-items: center; gap: 2px; padding: 2px;
   border-radius: var(--r-sm);
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.055);
+  background: var(--wash-1);
+  border: 1px solid var(--border);
 }
 .srange {
   display: flex; align-items: center; height: 24px; padding: 0 10px;
@@ -2342,7 +2355,7 @@
   background: var(--flat);
 }
 .slegend__line--dash {
-  height: 0; background: none; border-top: 2px dashed rgba(255, 255, 255, 0.34);
+  height: 0; background: none; border-top: 2px dashed var(--border-strong);
 }
 
 .schart__plot { flex: none; height: 292px; padding: 0 6px 8px; }
@@ -2367,7 +2380,7 @@
 .srow {
   display: flex; align-items: baseline; justify-content: space-between;
   gap: 14px; padding: 7px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+  border-bottom: 1px solid var(--border);
 }
 .srow__k { font: 400 11.5px/1.2 var(--font-ui); color: var(--text-muted); white-space: nowrap; }
 .srow__v {
@@ -2398,8 +2411,8 @@
      four 150px cells would wrap to 3+1. This keeps the design's single row. */
   display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
   gap: 1px;
-  background: rgba(255, 255, 255, 0.055);
-  border-top: 1px solid rgba(255, 255, 255, 0.055);
+  background: var(--wash-2);
+  border-top: 1px solid var(--border);
   border-radius: 0 0 12px 12px;
   overflow: hidden;
 }
@@ -2417,7 +2430,7 @@
 .snewsitem {
   display: flex; flex-direction: column; gap: 6px;
   padding: 10px 16px 11px;
-  border-top: 1px solid rgba(255, 255, 255, 0.045);
+  border-top: 1px solid var(--border);
   transition: background-color var(--t-ui);
 }
 a.snewsitem:hover { background: var(--wash-hover); }
@@ -2433,12 +2446,12 @@ a.snewsitem:hover { background: var(--wash-hover); }
 /* ---- analyst ---- */
 .sanalyst {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  border-top: 1px solid rgba(255, 255, 255, 0.055);
+  border-top: 1px solid var(--border);
 }
 .sanalyst__col {
   display: flex; flex-direction: column; gap: 11px;
   padding: 14px 18px 16px;
-  border-right: 1px solid rgba(255, 255, 255, 0.055);
+  border-right: 1px solid var(--border);
 }
 .sanalyst__col:last-child { border-right: none; }
 .sanalyst__col--est { gap: 0; }
@@ -2452,7 +2465,7 @@ a.snewsitem:hover { background: var(--wash-hover); }
 .srating__k { font: 600 11px/1 var(--font-ui); color: var(--text-muted); white-space: nowrap; }
 .srating__track {
   display: block; height: 7px; border-radius: 4px;
-  background: rgba(255, 255, 255, 0.06); overflow: hidden;
+  background: var(--wash-2); overflow: hidden;
 }
 .srating__fill { display: block; height: 100%; }
 .srating__n {
@@ -2473,7 +2486,7 @@ a.snewsitem:hover { background: var(--wash-hover); }
 }
 .starget__track {
   position: relative; display: block; height: 5px; margin-top: 3px;
-  border-radius: 3px; background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px; background: var(--border);
 }
 .starget__band {
   position: absolute; top: 0; bottom: 0; border-radius: 3px;
@@ -2481,7 +2494,7 @@ a.snewsitem:hover { background: var(--wash-hover); }
 }
 .starget__mark {
   position: absolute; top: -3px; width: 2px; height: 11px;
-  border-radius: 1px; background: #f5f7fa;
+  border-radius: 1px; background: var(--text);
 }
 .starget__scale {
   display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
@@ -2516,7 +2529,7 @@ a.snewsitem:hover { background: var(--wash-hover); }
 /* ---- responsive ---- */
 @media (max-width: 1024px) {
   .shero__stats { margin-left: 0; width: 100%; gap: 20px; }
-  .sanalyst__col { border-right: none; border-bottom: 1px solid rgba(255, 255, 255, 0.055); }
+  .sanalyst__col { border-right: none; border-bottom: 1px solid var(--border); }
 }
 @media (max-width: 760px) {
   .sfig__px { font-size: 32px; }
@@ -2550,7 +2563,7 @@ a.snewsitem:hover { background: var(--wash-hover); }
   height: 30px; padding: 0 10px;
   border-radius: var(--r-sm);
   background: var(--ink-chip);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--border);
   transition: border-color var(--t-ui);
 }
 .search__field:focus-within,
@@ -2570,8 +2583,8 @@ a.snewsitem:hover { background: var(--wash-hover); }
   display: flex; align-items: center; flex: 0 0 auto;
   height: 17px; padding: 0 5px;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: var(--wash-2);
+  border: 1px solid var(--border);
   font: 600 9.5px/1 var(--font-ui); letter-spacing: 0.04em;
   color: var(--text-disabled);
 }
@@ -2592,7 +2605,7 @@ a.snewsitem:hover { background: var(--wash-hover); }
   display: grid; grid-template-columns: 44px minmax(0, 1fr) auto;
   align-items: center; gap: 10px;
   padding: 8px 11px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+  border-bottom: 1px solid var(--border);
   transition: background-color var(--t-ui);
 }
 .sresult:last-child { border-bottom: none; }
@@ -2603,8 +2616,8 @@ a.snewsitem:hover { background: var(--wash-hover); }
   display: flex; align-items: center; justify-content: center;
   height: 19px; border-radius: 4px;
   font: 700 9px/1 var(--font-ui); letter-spacing: 0.06em;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: var(--wash-2);
+  border: 1px solid var(--border-strong);
   color: var(--text-muted);
 }
 .sresult__kind[data-kind="ETF"] {
@@ -2639,7 +2652,7 @@ a.snewsitem:hover { background: var(--wash-hover); }
 }
 .search__foot {
   padding: 8px 11px;
-  border-top: 1px solid rgba(255, 255, 255, 0.045);
+  border-top: 1px solid var(--border);
   font: 400 9.5px/1 var(--font-ui); color: var(--text-faint); text-align: center;
 }
 
@@ -2812,7 +2825,7 @@ a.prow--pos:active { background: rgba(124, 85, 232, 0.18); }
 
 .fintable__foot {
   margin: 0; padding: 10px 16px 14px;
-  border-top: 1px solid rgba(255, 255, 255, 0.045);
+  border-top: 1px solid var(--border);
   font: 400 10px/1.5 var(--font-ui); color: var(--text-faint);
 }
 
@@ -2836,7 +2849,7 @@ a.prow--pos:active { background: rgba(124, 85, 232, 0.18); }
    chart range the provider has no data for. */
 .spill[aria-disabled="true"] {
   color: var(--text-disabled);
-  border-color: rgba(255, 255, 255, 0.07);
+  border-color: var(--border);
   background: transparent;
   cursor: not-allowed;
   opacity: 0.55;
@@ -3001,7 +3014,7 @@ a.prow--pos:active { background: rgba(124, 85, 232, 0.18); }
   transition: opacity var(--dur-fast) var(--ease-spring),
               background-color var(--dur-fast) var(--ease-spring);
 }
-.allocpos__row:hover { background: rgba(255, 255, 255, 0.04); }
+.allocpos__row:hover { background: var(--wash-2); }
 /* Hovering a slice narrows the list to it without removing anything: a row
    that left the screen would make the list look shorter than the portfolio. */
 .allocpos__row.is-dim { opacity: 0.32; }
@@ -3055,7 +3068,7 @@ a.prow--pos:active { background: rgba(124, 85, 232, 0.18); }
    separate hosts — the header is rewritten on every sort, the body on every
    sort *and* every load, and re-rendering both together would be the only
    alternative. */
-.tx-card { display: flex; flex-direction: column; min-height: 0; }
+.tx-card { display: flex; flex-direction: column; min-height: 0; flex: 1; }
 .txhead,
 .txrow {
   display: grid;
@@ -3096,7 +3109,7 @@ a.prow--pos:active { background: rgba(124, 85, 232, 0.18); }
   line-height: 1.2;
 }
 .txrow:last-child { border-bottom: 0; }
-.txrow:hover { background: rgba(255, 255, 255, 0.03); }
+.txrow:hover { background: var(--wash-1); }
 
 .txrow__date { color: var(--text-2); font-size: 12.5px; }
 .txrow__sym {
