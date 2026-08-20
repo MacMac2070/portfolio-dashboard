@@ -28,7 +28,7 @@ import time
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 BASE = "https://ndcdyn.interactivebrokers.com/AccountManagement/FlexWebService"
@@ -39,6 +39,15 @@ VERSION = "3"
 POLL_ATTEMPTS = 12
 POLL_SECONDS = 5
 TIMEOUT = 45
+
+# IBKR paces SendRequest at one request per second *and* ten per minute. The
+# per-minute cap is the binding one here: a backfill walks one window per month
+# since inception, which is already more than ten, so spacing them a second
+# apart would be refused partway through. 6.5s clears both without having to
+# track a sliding window. Only SendRequest is paced — GetStatement polling is
+# not subject to it, and POLL_SECONDS already spaces that out.
+SEND_INTERVAL = 6.5
+_last_send = 0.0
 
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.local.json"
 
@@ -74,9 +83,34 @@ def _get(url: str, params: dict) -> bytes:
         return response.read()
 
 
-def fetch_statement(token: str, query_id: str) -> ET.Element:
-    """Run one Flex query and return the parsed statement root."""
-    root = ET.fromstring(_get(SEND_URL, {"t": token, "q": query_id, "v": VERSION}))
+def _pace() -> None:
+    """Hold SendRequest to IBKR's documented rate. Cheap when already spaced."""
+    global _last_send
+    wait = SEND_INTERVAL - (time.monotonic() - _last_send)
+    if wait > 0:
+        log.debug("pacing SendRequest, sleeping %.1fs", wait)
+        time.sleep(wait)
+    _last_send = time.monotonic()
+
+
+def fetch_statement(token: str, query_id: str, *,
+                    from_date: date | None = None,
+                    to_date: date | None = None) -> ET.Element:
+    """Run one Flex query and return the parsed statement root.
+
+    `from_date`/`to_date` are IBKR's `fd`/`td` overrides. They must be sent as a
+    pair, cap out at 365 days apart, and are mutually exclusive with the query's
+    own configured period — passing them replaces whatever range the query was
+    saved with. Omitting both leaves the saved period in force, which is what
+    every caller wanting the whole span does.
+    """
+    params = {"t": token, "q": query_id, "v": VERSION}
+    if from_date and to_date:
+        params["fd"] = from_date.strftime("%Y%m%d")
+        params["td"] = to_date.strftime("%Y%m%d")
+
+    _pace()
+    root = ET.fromstring(_get(SEND_URL, params))
 
     status = (root.findtext("Status") or "").strip()
     if status != "Success":
@@ -176,6 +210,12 @@ def _iso(value: str) -> str:
     return value
 
 
+# The longest span still counted as a single month. Flex month periods run
+# 28-31 days; 31 would reject a month whose period is stamped inclusively, so
+# allow a little slack. Anything wider is a summary covering several months.
+MONTH_SPAN_DAYS = 32
+
+
 def _span_days(node) -> int:
     """How many days a period element covers, for picking the widest of several."""
     try:
@@ -200,7 +240,9 @@ def _num(node, name: str) -> float:
 
 # Every ChangeInNAV field this dashboard reads, in the order the Sankey stacks
 # them. IBKR emits one such element per report period, covering fromDate to
-# toDate — it is a summary, not a series.
+# toDate. A query with no sub-periods emits exactly one, and it is a summary
+# rather than a series; a query configured with monthly sub-periods emits one
+# per month as well, which is what the monthly P&L bars read.
 #
 # Names come from IBKR's Activity Flex schema. They are read defensively:
 # anything missing reads 0.0, and parse_change_in_nav reports back which
@@ -214,41 +256,77 @@ NAV_CHANGE_FIELDS = (
     "advisorFees", "brokerFees", "brokerFeesSalesTax", "brokerInterest",
     "bondInterest", "cashSettlingMtm", "realizedVm", "cfdCharges",
     "fxTranslation", "otherFees", "other", "endingValue", "twr",
-    "corporateActionProceeds", "commissions",
+    "corporateActionProceeds", "commissions", "transactionTax",
 )
 
 
-def parse_change_in_nav(root: ET.Element) -> dict | None:
-    """The Change in NAV summary: what moved the account over the period.
+# Attributes that identify a period rather than describe a flow. Excluded from
+# `unmapped` so a schema difference stands out against them.
+_CHANGE_SKIP = {"accountId", "acctAlias", "model", "currency", "fromDate",
+                "toDate", "reportDate", "levelOfDetail"}
 
-    This is the section the NAV flow chart is built from. Returns None when the
-    statement has no such element, which is the normal state until the section
-    is enabled on the Flex query.
+
+def _change_row(node) -> dict:
+    """One ChangeInNAV element as a flat row.
 
     `unmapped` lists any attribute the element carried that NAV_CHANGE_FIELDS
-    does not name. It exists so a schema difference surfaces as data rather
-    than as a flow that silently reads zero.
-    """
-    # A query configured with sub-periods emits one element per period. The
-    # Sankey covers the whole span, so take the widest rather than the first —
-    # document order is not guaranteed to put the summary in front.
-    nodes = list(_iter(root, "ChangeInNAV"))
-    if not nodes:
-        return None
-    node = max(nodes, key=_span_days)
+    does not name *and* that carries a non-zero figure. It exists so a schema
+    difference surfaces as data rather than as a flow that silently reads zero.
 
+    Non-zero is the whole point of the check. IBKR emits every field it knows
+    about on every element, so a plain "not in our list" test names about
+    thirty of them — billPay, carbonCredits, paxosTransfers — every single
+    time, all of them zero, and the Sankey prints the lot underneath itself.
+    A field holding no money is not drift; a field holding money we did not
+    map is, and that is the one worth interrupting someone for.
+    """
     out: dict = {name: _num(node, name) for name in NAV_CHANGE_FIELDS}
     out["from_date"] = _iso(node.get("fromDate") or "")
     out["to_date"] = _iso(node.get("toDate") or "")
     out["currency"] = node.get("currency") or ""
-    skip = {"accountId", "acctAlias", "model", "currency", "fromDate", "toDate",
-            "reportDate", "levelOfDetail"}
+    out["span_days"] = _span_days(node)
     out["unmapped"] = sorted(
         k for k in node.attrib
-        if k not in skip and k not in NAV_CHANGE_FIELDS and (node.get(k) or "").strip()
+        if k not in _CHANGE_SKIP and k not in NAV_CHANGE_FIELDS
+        and (node.get(k) or "").strip()
+        and _num(node, k)
     )
     out["source"] = "flex"
     return out
+
+
+def parse_change_in_nav(root: ET.Element) -> dict | None:
+    """The widest Change in NAV summary: what moved the account over the period.
+
+    This is the section the NAV flow chart is built from. Returns None when the
+    statement has no such element, which is the normal state until the section
+    is enabled on the Flex query.
+    """
+    # One element per *request*, not per month: the section has no sub-period
+    # breakdown of its own (see `month_windows`). The store therefore holds a
+    # mix of whole-span and per-month rows, gathered by separate requests, and
+    # the Sankey wants the whole span — so take the widest rather than the
+    # first, since document order guarantees nothing.
+    nodes = list(_iter(root, "ChangeInNAV"))
+    if not nodes:
+        return None
+    return _change_row(max(nodes, key=_span_days))
+
+
+def parse_change_in_nav_periods(root: ET.Element) -> list[dict]:
+    """Every Change in NAV element in this statement, one row per period.
+
+    In practice that is a single row, because the section reports one element
+    for the range it was asked for. It stays a list because the caller merges
+    the results of *many* requests into one store keyed on the period, and
+    because reading whatever IBKR sent is cheaper than asserting a count.
+
+    `parse_change_in_nav` keeps only the widest, since the Sankey covers the
+    whole span. The monthly P&L bars want the narrow rows, which arrive from
+    the month-scoped requests the backfill makes; each reader picks the spans
+    it wants by `span_days`.
+    """
+    return [_change_row(node) for node in _iter(root, "ChangeInNAV")]
 
 
 # CashTransaction.type values, normalised to the buckets the income and cost
@@ -326,19 +404,72 @@ def parse_cash_transactions(root: ET.Element) -> list[dict]:
     return out
 
 
-def fetch_activity(config: dict | None = None) -> ET.Element:
+def fetch_activity(config: dict | None = None, *,
+                   from_date: date | None = None,
+                   to_date: date | None = None) -> ET.Element:
     """The Activity Statement root, fetched once.
 
     Four sections are read off the same report — NAV history, Change in NAV,
     Cash Transactions and Trades — and Flex is slow and rate limited, so the
     callers that want more than one parse a single root rather than requesting
     the statement again per section.
+
+    `from_date`/`to_date` narrow the report to one window; see `month_windows`
+    for why the backfill asks for a month at a time.
     """
     config = config or load_config()
     query = str(config.get("nav_query_id", "")).strip()
     if not query or query.startswith("PASTE"):
         raise FlexNotConfigured("nav_query_id is not set")
-    return fetch_statement(config["flex_token"], query)
+    return fetch_statement(config["flex_token"], query,
+                           from_date=from_date, to_date=to_date)
+
+
+def snap_to_reported(windows: list[tuple[date, date]],
+                     reported: list[str]) -> list[tuple[date, date]]:
+    """Pull each window's ends in to days IBKR actually reported on.
+
+    A calendar month's first and last day are frequently not trading days, and
+    Flex refuses some of those outright: 2026-01-01 -> 2026-01-31 comes back
+    "1003 Statement is not available" while 2026-01-02 -> 2026-01-30, the same
+    month bounded by its real trading days, succeeds. The refusal is not
+    consistent enough to predict — 2025-11-01 (a Saturday) is accepted — so the
+    ends are snapped rather than nudged by a weekday rule.
+
+    `reported` is `store.nav_dates()`: the days the NAV series carries, which
+    are by definition days the broker reported. A window containing none of
+    them is dropped, because there is nothing in it to ask for.
+    """
+    out: list[tuple[date, date]] = []
+    for first, last in windows:
+        lo, hi = first.isoformat(), last.isoformat()
+        inside = [d for d in reported if lo <= d <= hi]
+        if not inside:
+            continue
+        out.append((date.fromisoformat(inside[0]), date.fromisoformat(inside[-1])))
+    return out
+
+
+def month_windows(start: date, end: date) -> list[tuple[date, date]]:
+    """Calendar months spanning start..end inclusive, clipped at both ends.
+
+    Change in NAV reports one element for whatever range it is asked for — it
+    has no monthly breakdown of its own — so a month of granularity means a
+    request per month. The first and last windows are clipped rather than
+    widened, so a mid-month inception does not pull days before the account
+    existed and the current month stops at `end` instead of running into the
+    future.
+    """
+    if start > end:
+        return []
+
+    out: list[tuple[date, date]] = []
+    cursor = start.replace(day=1)
+    while cursor <= end:
+        nxt = (cursor.replace(day=28) + timedelta(days=4)).replace(day=1)
+        out.append((max(cursor, start), min(nxt - timedelta(days=1), end)))
+        cursor = nxt
+    return out
 
 
 def fetch_nav_history(config: dict | None = None) -> list[dict]:

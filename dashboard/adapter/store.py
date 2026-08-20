@@ -6,6 +6,7 @@ backfill, or the daily job firing twice, never duplicates a row.
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
@@ -144,3 +145,53 @@ def merge_cash(new_rows: list[dict]) -> tuple[int, int]:
 
 def nav_count() -> int:
     return len(_read(NAV_PATH))
+
+
+def nav_latest() -> str | None:
+    """The most recent date the NAV series carries, ISO, or None.
+
+    This is the edge of what IBKR has actually reported. Activity Statements
+    are generated at close of business, so *today* is not available until the
+    day is over — asking Flex for a window ending today is refused outright
+    with "1003 Statement is not available". Callers building date windows end
+    them here rather than at date.today().
+    """
+    dates = [r["date"] for r in _read(NAV_PATH) if r.get("date")]
+    return max(dates) if dates else None
+
+
+def nav_dates() -> list[str]:
+    """Every date the NAV series carries, ISO, ascending.
+
+    These are exactly the days IBKR reported on, which is what a Flex date
+    window has to be bounded by — see `nav_latest`.
+    """
+    return sorted({r["date"] for r in _read(NAV_PATH) if r.get("date") and r.get("nav_gbp")})
+
+
+def nav_change_stale(hours: float = 20) -> bool:
+    """Whether the Change in NAV store is old enough to be worth re-pulling.
+
+    Activity Statement data only changes once a day, at IBKR's close of
+    business. Pulling twice in one day spends paced Flex requests to be handed
+    back what is already stored, so the daily job checks this first and a
+    manual midday re-run costs nothing.
+    """
+    if not NAV_CHANGE_PATH.exists():
+        return True
+    return (time.time() - NAV_CHANGE_PATH.stat().st_mtime) >= hours * 3600
+
+
+def nav_inception() -> str | None:
+    """The first date the account actually held anything, ISO, or None.
+
+    Flex pads the NAV series with zero-value rows back to the start of its
+    reporting year, so the earliest row in the file is not the earliest
+    *position* — this account's file opens on 2025-07-30 at zero and does not
+    reach a real figure until 2025-10-13. Anything asking "since inception"
+    wants that second date; taking rows[0] gets a flat zero line instead.
+    """
+    for row in _read(NAV_PATH):
+        if row.get("date") and row.get("nav_gbp"):
+            return row["date"]
+    return None
