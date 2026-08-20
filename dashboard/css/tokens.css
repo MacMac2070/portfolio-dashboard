@@ -26,8 +26,13 @@
   --r-pill: 999px;
 
   /* ---- type ---- */
-  --font-display: "Archivo", "Inter", system-ui, sans-serif;
-  --font-body: "Inter", system-ui, -apple-system, sans-serif;
+  /* One sans. Archivo was already the display voice; Inter (body) and Manrope
+   * (UI) were the two most default faces an LLM reaches for, and three sans
+   * families read as three sessions' work stitched together. Consolidating
+   * into the face with actual character — plus Geist Mono for every figure —
+   * gives the app one voice and drops half the font payload. */
+  --font-display: "Archivo", system-ui, sans-serif;
+  --font-body: "Archivo", system-ui, sans-serif;
 
   /* The figure face. A separate token from --font-display because it is a
    * separate job: --font-display sets titles and prose headings, this sets
@@ -64,8 +69,17 @@
   --t-sm:     13px;
   --t-label:  11px;   /* uppercase letterspaced eyebrows */
 
-  --tracking-tight: -0.03em;
-  --tracking-label:  0.09em;
+  /* Five trackings, replacing 27 distinct literals — transcription noise, not
+   * optical tuning. Display-negative, figure-negative (two steps), and caps-
+   * positive (two steps). */
+  --tracking-tight: -0.03em;   /* display >=17px */
+  --tracking-fig:   -0.02em;   /* large mono figures */
+  --tracking-num:   -0.01em;   /* table-size mono figures */
+  --tracking-caps:   0.04em;   /* small caps beside data */
+  --tracking-label:  0.09em;   /* uppercase eyebrows */
+  /* Display steps for the view heroes (were 31/23/21px ad hoc). */
+  --t-d1: 30px;
+  --t-d2: 22px;
   --leading-body: 1.7;
 
   /* ---- trend icons ----
@@ -132,7 +146,7 @@
    *
    * Same hue in both cases, minimum lift to clear 4.5:1.
    */
-  --font-ui: "Manrope", "Helvetica Neue", Arial, sans-serif;
+  --font-ui: var(--font-body);
 
   /* The Holdings-page surface and hairline family, re-plumbed as aliases of
    * the themed system. These began as verbatim imports from Holdings.dc.html
