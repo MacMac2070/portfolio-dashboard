@@ -176,6 +176,109 @@ Management, no Claude involved):
 
 `config.local.json` holds a live credential — keep it out of version control.
 
+Add the **Change in NAV** and **Cash Transactions** sections to that same query
+while you are there — the NAV flow, income and cost charts all read them, and
+each says which section it is waiting for until you do.
+
+There is no monthly setting to find. Change in NAV reports **one element for
+whatever range it is asked for**, and the Flex query's own *Period* option
+(Last Month, Last 365 Calendar Days, Month to Date, …) picks that range rather
+than breaking it down. So month-level granularity comes from asking a month at
+a time: `backfill.py` runs one whole-span request for the Sankey, then one
+`fd`/`td`-scoped request per calendar month since inception for the P&L bars.
+
+That second pass is paced. IBKR allows one SendRequest per second **and** ten
+per minute, so the requests go out 6.5s apart and a full year takes a few
+minutes. `--months N` limits it to the last N months:
+
+```bash
+/opt/anaconda3/bin/python3 adapter/backfill.py --months 1   # one month, to check
+/opt/anaconda3/bin/python3 adapter/backfill.py              # everything
+```
+
+A window that comes back wider than it was asked for is refused rather than
+stored: it means `fd`/`td` were ignored, and filing a whole-span row under a
+month's key would make the P&L chart count all of history as one month.
+
+The daily job keeps it current by itself, at two requests rather than a dozen —
+`refresh.py` re-pulls only the whole span and the current month, which is the
+only one whose figures can still move, and skips even that if the store was
+written within the day. Activity Statement data only changes once, at IBKR's
+close of business.
+
+## Performance: attribution
+
+Three charts, all from Flex sections that are off by default, so each has an
+empty state naming the section to switch on rather than an empty axis.
+
+- **NAV flow** — a two-stage Sankey: sources feed one *Gross value* node, which
+  splits into *Ending NAV* and the cost stack. FX is its own labelled node
+  rather than netted into mark-to-market, because with the exposure
+  concentrated in Hong Kong, China, Korea and Japan, currency is too large a
+  part of the answer to hide inside another figure. Drawn from the widest
+  reporting period in the store; if the flows and IBKR's own ending value
+  disagree the difference is printed under the chart rather than smoothed away.
+- **Dividend income / Monthly P&L** — one card with a toggle. Income is
+  dividends, plus cash interest when IBKR pays any. P&L is mark-to-market plus
+  realised plus the change in unrealised, read per month off the sub-periods,
+  so deposits are excluded by construction rather than netted out.
+- **Costs** — drawn bands over itemised figures, all read off the *Change in
+  NAV* sub-periods rather than off cash transactions. IBKR has no Commissions
+  cash-transaction type at all — commission is charged inside the trade record
+  — so sourcing this from cash left the largest cost at zero and the card
+  totalled £3.53 against £168.57 actually paid. Transaction tax, the second
+  largest, was missing for the same reason. Both charts on the page now read
+  the same section and cannot disagree. Bands that are zero in every month are
+  dropped rather than drawn flat, because a legend entry that visibly does
+  nothing when clicked reads as a broken toggle rather than as "you have paid
+  no interest"; the tooltip still itemises the genuine zero. Green and red stay
+  reserved for the P&L convention, and the remaining hues were checked for
+  colour-vision separation (the worst rejected pair measured ΔE 0.8 for
+  deuteranopia), which is why the stack draws fewer bands than it itemises.
+
+Clicking a legend band switches it off: the axis rescales, the tooltip total
+follows, and a hidden band takes its detail rows with it. The last visible band
+cannot be switched off.
+
+## Allocation: the same holdings, three ways
+
+Region answers *where is this exposure*, sector answers *what kind of business
+is this*, currency answers *what am I exposed to when sterling moves*. They are
+separate axes — XDJP is Japan by region and an ETF by sector, and both are
+correct — so `#allocation/region|sector|currency` switches one ring between
+them rather than showing three rings at once.
+
+One ring, not three, for a second reason: `--cat-1..7` are assigned per entity
+and never cycled, so a hue means one thing for as long as that entity is in the
+portfolio. Two rings on one screen would make the same hue mean "Hong Kong /
+China" here and "Semiconductors" there.
+
+Hovering or keyboard-focusing a slice swaps the ring's centre, the KPI strip
+above it and the highlighted rows in the positions list underneath — one piece
+of state, three readouts. The ring and its hover behaviour live in `js/alloc.js`
+and are shared with Overview's donut, so there is one implementation of it.
+
+## Transactions
+
+`data/transactions.jsonl`, written by `store.merge_transactions` from
+`flex.parse_trades` and read straight off disk by `js/transactions.js` — a
+static file like `nav_history.jsonl`, because there is nothing to derive
+server-side and the browser can sort a few hundred fills itself.
+
+Seven sortable columns; date descending by default, since the first question a
+trade log answers is what happened most recently. Consideration stays in the
+trade's **own** currency: Flex carries no FX rate per execution, and converting
+at today's spot would restate a year-old trade at a rate that never applied to
+it. Commission is formatted as cash at two decimals rather than through
+`price()`, whose magnitude rule gives a £2.41 fee three places.
+
+Buy and sell read as words, with the tint as the second cue — the same rule the
+P&L colours follow. IBKR's own `BOT`/`SLD` never reach the screen.
+
+Empty until the **Trades** section is added to the Flex query behind
+`nav_query_id`, or `trades_query_id` is pointed at a Trade Confirmation query;
+the empty state names both routes.
+
 ## Holdings: the sector page
 
 Implements `Holdings.dc.html` from the Claude Design project *Portfolio overview

@@ -387,11 +387,15 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             log.exception("could not read the attribution stores")
             meta["error"] = str(exc)
 
-        # Newest period wins: Flex restates as trades settle.
-        latest = change_rows[-1] if change_rows else None
+        # The store holds one row per reporting period. The Sankey covers the
+        # whole span, so it takes the widest row rather than the newest — with
+        # monthly sub-periods enabled the newest row is one month, not the
+        # summary. The sub-periods themselves go to monthly() for the P&L bars.
+        widest = max(change_rows, key=lambda r: r.get("span_days") or 0,
+                     default=None) if change_rows else None
         try:
-            flow = attr.flow(latest)
-            monthly = attr.monthly(cash_rows)
+            flow = attr.flow(widest)
+            monthly = attr.monthly(cash_rows, change_rows)
         except Exception as exc:
             log.exception("attribution build failed")
             return self._json({"meta": {"source": "ibkr-flex", "error": str(exc)},
@@ -401,7 +405,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         return self._json({
             "meta": meta,
             "ready": {"flow": flow is not None,
-                      "monthly": bool(monthly.get("months"))},
+                      "monthly": bool(monthly.get("months")),
+                      "pnl": bool(monthly.get("pnl_available"))},
             "flow": flow,
             "monthly": monthly,
             # What the page tells the reader to do when a chart has no data.
