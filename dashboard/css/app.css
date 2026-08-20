@@ -261,10 +261,10 @@
 
 /* ---- sankey ---- */
 .flow__link {
-  opacity: 0.42;
+  opacity: 0.24;
   transition: opacity var(--dur-fast) var(--ease-spring);
 }
-.flow__link:hover { opacity: 0.72; }
+.flow__link:hover { opacity: 0.5; }
 /* The inks are one stop darker in light (tokens.css) but the ribbons still
    compost to pastel on white at dark's alpha; both states step up. */
 :root[data-theme="light"] .flow__link { opacity: 0.55; }
@@ -3163,3 +3163,29 @@ a.prow--pos:active { background: var(--violet-tint-18); }
   .txrow > :nth-child(n + 6) { display: none; }
   .txrow__venue { display: none; }
 }
+
+/* ---- bare deltas in dense contexts ----
+ * The tape, the position tables and the market-card index rows carry dozens
+ * of deltas at once; a tinted pill with an arrow on every one of them said
+ * the same thing four ways and carpeted the page in emerald and rose. In
+ * these containers the delta is a bare signed mono figure — sign plus hue,
+ * which still never rests on hue alone. The full chip (tint + arrow) stays
+ * on the KPI row and the heroes, where one figure has room to be furniture. */
+.tape .dchip,
+.prow .dchip,
+.mrow .dchip,
+.mbench__row .dchip,
+.mbench__perf .dchip {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+}
+.tape .dchip::before,
+.prow .dchip::before,
+.mrow .dchip::before,
+.mbench__row .dchip::before,
+.mbench__perf .dchip::before { display: none; }
+.tape .dchip--up, .prow .dchip--up, .mrow .dchip--up,
+.mbench__row .dchip--up, .mbench__perf .dchip--up { color: var(--pos); }
+.tape .dchip--down, .prow .dchip--down, .mrow .dchip--down,
+.mbench__row .dchip--down, .mbench__perf .dchip--down { color: var(--neg); }

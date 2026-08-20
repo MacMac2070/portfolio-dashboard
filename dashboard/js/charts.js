@@ -86,22 +86,11 @@ export function sparkline(svg, series, { direction = "flat" } = {}) {
     : direction === "down" ? "var(--neg)" : "var(--flat)";
 
   const points = series.map((v, i) => `${x(i).toFixed(2)},${y(v).toFixed(2)}`);
-  const id = `sparkfill-${Math.random().toString(36).slice(2, 9)}`;
 
-  const defs = el("defs");
-  const grad = el("linearGradient", { id, x1: 0, y1: 0, x2: 0, y2: 1 });
-  grad.append(
-    el("stop", { offset: "0%", "stop-color": stroke, "stop-opacity": 0.28 }),
-    el("stop", { offset: "100%", "stop-color": stroke, "stop-opacity": 0 }),
-  );
-  defs.append(grad);
-
+  // Line only. The gradient wash under every 88x26 spark — and under all
+  // eight market cards at once — was the loudest default on the board; at
+  // this size the fill carried no information the stroke does not.
   svg.append(
-    defs,
-    el("polygon", {
-      points: `0,${h} ${points.join(" ")} ${w},${h}`,
-      fill: `url(#${id})`,
-    }),
     el("polyline", {
       points: points.join(" "),
       fill: "none", stroke,
@@ -289,13 +278,14 @@ export function equityCurve(svg, points, {
   // gridlines + y labels — fewer of them when the plot is short, so the
   // labels never collide
   const grid = el("g");
-  const ticks = h < 150 ? 2 : h < 220 ? 3 : 4;
-  for (let i = 0; i <= ticks; i++) {
-    const value = lo + ((hi - lo) * i) / ticks;
+  // Rounded tick values from the helper this file already had — "£50,406" as
+  // an axis label is a value nobody chose. Out-of-range ticks are skipped the
+  // way groupedBars already does.
+  for (const value of niceTicks(lo, hi, h < 150 ? 3 : h < 220 ? 4 : 5)) {
+    if (value < lo || value > hi) continue;
     const yy = y(value);
     grid.append(el("line", {
       class: "plot__grid", x1: padL, x2: w - padR, y1: yy, y2: yy,
-      "stroke-dasharray": "2 4",
     }));
     const label = el("text", {
       class: "plot__axis", x: padL - 8, y: yy + 3, "text-anchor": "end",
@@ -321,18 +311,11 @@ export function equityCurve(svg, points, {
 
   const path = points.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(2)},${y(p.value).toFixed(2)}`).join(" ");
 
-  const defs = el("defs");
-  const grad = el("linearGradient", { id, x1: 0, y1: 0, x2: 0, y2: 1 });
-  grad.append(
-    el("stop", { offset: "0%", "stop-color": stroke, "stop-opacity": 0.24 }),
-    el("stop", { offset: "100%", "stop-color": stroke, "stop-opacity": 0 }),
-  );
-  defs.append(grad);
-  svg.append(defs);
-
+  // Flat, faint, no gradient: the fill's one job is separating above-the-line
+  // from below it; a fade adds a second, meaningless encoding of "recentness".
   svg.append(el("path", {
     d: `${path} L${x(points.length - 1)},${h - padB} L${padL},${h - padB} Z`,
-    fill: `url(#${id})`, stroke: "none",
+    fill: stroke, "fill-opacity": 0.07, stroke: "none",
   }));
 
   // Benchmark under the portfolio line: it is context, not the subject, so it
@@ -489,13 +472,11 @@ export function priceChart(svg, {
   const id = `px-${Math.random().toString(36).slice(2, 9)}`;
 
   const grid = el("g");
-  const ticks = h < 170 ? 2 : h < 240 ? 3 : 4;
-  for (let i = 0; i <= ticks; i++) {
-    const value = lo + ((hi - lo) * i) / ticks;
+  for (const value of niceTicks(lo, hi, h < 170 ? 3 : h < 240 ? 4 : 5)) {
+    if (value < lo || value > hi) continue;
     const yy = y(value);
     grid.append(el("line", {
       class: "plot__grid", x1: padL, x2: w - padR, y1: yy, y2: yy,
-      "stroke-dasharray": "2 4",
     }));
     const label = el("text", {
       class: "plot__axis", x: padL - 8, y: yy + 3, "text-anchor": "end",
@@ -522,18 +503,11 @@ export function priceChart(svg, {
     .map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(2)},${y(v).toFixed(2)}`)
     .join(" ");
 
-  const defs = el("defs");
-  const grad = el("linearGradient", { id, x1: 0, y1: 0, x2: 0, y2: 1 });
-  grad.append(
-    el("stop", { offset: "0%", "stop-color": stroke, "stop-opacity": 0.24 }),
-    el("stop", { offset: "100%", "stop-color": stroke, "stop-opacity": 0 }),
-  );
-  defs.append(grad);
-  svg.append(defs);
-
+  // Flat, faint, no gradient: the fill's one job is separating above-the-line
+  // from below it; a fade adds a second, meaningless encoding of "recentness".
   svg.append(el("path", {
     d: `${path} L${x(series.length - 1)},${h - padB} L${padL},${h - padB} Z`,
-    fill: `url(#${id})`, stroke: "none",
+    fill: stroke, "fill-opacity": 0.07, stroke: "none",
   }));
 
   // Benchmark under the instrument line: it is context, not the subject. Drawn
@@ -688,7 +662,7 @@ export function groupedBars(svg, {
     if (yy < padT - 1 || yy > h - padB + 1) continue;
     grid.append(el("line", {
       class: "plot__grid", x1: padL, x2: w - padR, y1: yy, y2: yy,
-      "stroke-dasharray": "2 4",
+
     }));
     const label = el("text", {
       class: "plot__axis", x: padL - 8, y: yy + 3, "text-anchor": "end",
@@ -748,7 +722,7 @@ export function groupedBars(svg, {
       const fill = typeof s.color === "function" ? s.color(v) : s.color;
       const rect = el("rect", {
         x, y: top, width: Math.max(1, bw - (stacked ? 0 : 2)), height,
-        rx: 2, fill,
+        rx: 0, fill,
       });
       const title = el("title");
       title.textContent =
@@ -977,7 +951,7 @@ export function sankey(svg, data, { formatValue, tooltip } = {}) {
   // Node bars, then labels outside them.
   const bar = (x, y0, y1, fill) => el("rect", {
     class: "flow__node", x, y: y0, width: nodeW, height: Math.max(1, y1 - y0),
-    rx: 2, fill,
+    rx: 0, fill,
   });
   svg.append(bar(xs[1], midTop, midBot, "var(--text-3)"));
   for (const seg of left) svg.append(bar(seg.x, seg.y0, seg.y1, colour("in")));
