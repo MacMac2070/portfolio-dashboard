@@ -26,7 +26,6 @@
     </div>
 
     <nav class="nav-group" aria-label="Main">
-      <p class="eyebrow nav-group__label">Main</p>
       <a class="nav-item" href="#overview" data-nav="overview" aria-current="page">
         <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6">
           <rect x="2.6" y="2.6" width="6" height="6" rx="1.6"/><rect x="11.4" y="2.6" width="6" height="6" rx="1.6"/>
@@ -47,7 +46,6 @@
     </nav>
 
     <nav class="nav-group" aria-label="Analysis">
-      <p class="eyebrow nav-group__label">Analysis</p>
       <a class="nav-item" href="#performance" data-nav="performance">
         <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">
           <path d="M2.6 13.4 7 8.6l3.2 3 4.8-5.4"/><path d="M12.6 6.2h3v3"/>
@@ -58,9 +56,11 @@
         </svg>Allocation</a>
     </nav>
 
-    <!-- Filled by the batch-F footer: feed status, last sync, theme. Until
-         then it stays empty rather than holding controls that do nothing. -->
-    <div class="sidebar__foot"></div>
+    <div class="sidebar__foot">
+      <p class="foot-meta" id="footMeta">—</p>
+      <button class="foot-theme" type="button" id="themeToggle"
+              aria-label="Switch colour theme">Theme · Auto</button>
+    </div>
   </aside>
 
   <!-- ================= main ================= -->
@@ -370,7 +370,7 @@
 
       <section class="view view--scroll" id="view-transactions" role="tabpanel"
                aria-label="Transactions" hidden>
-        <section class="card tx-card" aria-labelledby="txTitle">
+        <section class="card card--anchor tx-card" aria-labelledby="txTitle">
           <div class="card__head">
             <h2 class="card-title" id="txTitle">Transactions</h2>
             <span class="perf-card__period" id="txMeta"></span>
@@ -390,7 +390,7 @@
       <section class="view view--scroll" id="view-performance" role="tabpanel"
                aria-label="Performance" hidden>
 
-        <section class="card perf-card" aria-labelledby="flowTitle">
+        <section class="card card--anchor perf-card" aria-labelledby="flowTitle">
           <div class="card__head">
             <h2 class="card-title" id="flowTitle">NAV flow</h2>
             <span class="perf-card__period" id="flowPeriod"></span>
@@ -434,7 +434,7 @@
       <section class="view view--scroll" id="view-allocation" role="tabpanel"
                aria-label="Allocation" hidden>
 
-        <section class="card alloc-card" aria-labelledby="allocViewTitle">
+        <section class="card card--anchor alloc-card" aria-labelledby="allocViewTitle">
           <div class="card__head">
             <h2 class="card-title" id="allocViewTitle">Allocation</h2>
             <div class="ranges" id="allocAxis" role="group" aria-label="Break allocation down by">
@@ -444,28 +444,29 @@
             </div>
           </div>
 
-          <!-- Swaps to the hovered slice. The figures are written by
-               js/allocation.js off the same active state the ring holds. -->
-          <div class="allockpi" id="allocKpi" aria-live="polite">
-            <div class="allockpi__cell">
-              <p class="eyebrow" data-k="label">Invested</p>
-              <p class="allockpi__v num" data-k="value">—</p>
-            </div>
-            <div class="allockpi__cell">
-              <p class="eyebrow">Positions</p>
-              <p class="allockpi__v num" data-k="count">—</p>
-            </div>
-            <div class="allockpi__cell">
-              <p class="eyebrow">Unrealised P/L</p>
-              <p class="allockpi__v num" data-k="pnl">—</p>
-            </div>
-          </div>
-
           <div class="alloc-split">
             <div class="alloc-ring">
               <svg id="allocDonut" role="img" aria-label="Allocation breakdown"></svg>
             </div>
             <div class="legend" id="allocViewLegend"></div>
+            <!-- Swaps to the hovered slice — written by js/allocation.js off
+                 the same active state the ring holds. Stacked in the right
+                 third, where the slice-hover eye already is; fixed rows so the
+                 swap never reflows the card. -->
+            <div class="allockpi" id="allocKpi" aria-live="polite">
+              <div class="allockpi__cell">
+                <p class="eyebrow" data-k="label">Invested</p>
+                <p class="allockpi__v num" data-k="value">—</p>
+              </div>
+              <div class="allockpi__cell">
+                <p class="eyebrow">Positions</p>
+                <p class="allockpi__v num" data-k="count">—</p>
+              </div>
+              <div class="allockpi__cell">
+                <p class="eyebrow">Unrealised P/L</p>
+                <p class="allockpi__v num" data-k="pnl">—</p>
+              </div>
+            </div>
           </div>
         </section>
 

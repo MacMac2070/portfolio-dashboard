@@ -622,6 +622,10 @@ function renderFreshness(data) {
   root.dataset.state = stale ? "stale" : "ready";
   $("feed").dataset.state = stale ? "stale" : "live";
   setText($("feedLabel"), label);
+  // The sidebar footer carries the same truth in fewer words.
+  setText($("footMeta"), livePolling
+    ? (stale ? "Feed down" : "Feed live")
+    : (meta.generated_at ? `Snapshot ${stamp(meta.generated_at)}` : "No snapshot"));
 
 }
 
@@ -661,6 +665,31 @@ function showTab(name) {
 function tabFromHash() {
   const name = (location.hash || "").replace(/^#/, "").split("/")[0];
   return document.getElementById(`view-${name}`) ? name : null;
+}
+
+/* The theme toggle the tokens file always promised ("a toggle is a one-line
+ * change rather than a redesign"). Auto follows the OS; the explicit states
+ * stamp data-theme, which is what every token block keys on. */
+const THEME_KEY = "pd.theme";
+const THEME_ORDER = ["auto", "dark", "light"];
+
+function applyTheme(mode) {
+  if (mode === "auto") document.documentElement.removeAttribute("data-theme");
+  else document.documentElement.dataset.theme = mode;
+  const label = $("themeToggle");
+  if (label) label.textContent = `Theme · ${mode[0].toUpperCase()}${mode.slice(1)}`;
+}
+
+function initTheme() {
+  let mode = null;
+  try { mode = localStorage.getItem(THEME_KEY); } catch { /* private mode */ }
+  if (!THEME_ORDER.includes(mode)) mode = "auto";
+  applyTheme(mode);
+  $("themeToggle")?.addEventListener("click", () => {
+    mode = THEME_ORDER[(THEME_ORDER.indexOf(mode) + 1) % THEME_ORDER.length];
+    applyTheme(mode);
+    try { localStorage.setItem(THEME_KEY, mode); } catch { /* private mode */ }
+  });
 }
 
 function wireShell() {
@@ -769,6 +798,7 @@ async function boot() {
   // later rather than waiting on a second request before showing anything.
   initBenchmark();
   initAllocation();
+  initTheme();
   performance.init();
   allocationView.init();
   transactions.init();
