@@ -233,8 +233,42 @@
   font: 500 10.5px/1 var(--font-ui);
   color: var(--text-2);
 }
-.perf-legend__item { display: inline-flex; align-items: center; gap: 6px; }
-.perf-legend__item i { width: 9px; height: 9px; border-radius: 2px; flex: none; }
+/* A legend row is a button that switches its band off — see legend() in
+   js/performance.js. The off state changes the swatch's *shape* (filled to
+   hollow) as well as the ink, so it does not read by colour alone. */
+.perf-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 7px;
+  margin: -3px -1px;
+  border-radius: var(--r-sm);
+  transition: color var(--dur-fast) var(--ease-spring),
+              background-color var(--dur-fast) var(--ease-spring);
+}
+.perf-legend__item i {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  flex: none;
+  background: var(--swatch, var(--text-3));
+  transition: background-color var(--dur-fast) var(--ease-spring),
+              box-shadow var(--dur-fast) var(--ease-spring);
+}
+.perf-legend__item:hover { color: var(--text); background: var(--wash-hover); }
+.perf-legend__item:active { transform: scale(0.97); }
+
+.perf-legend__item[aria-pressed="false"] { color: var(--text-3); }
+.perf-legend__item[aria-pressed="false"] i {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--swatch, var(--text-3));
+}
+
+/* The last band still showing. Not an error state — the reader is told why it
+   will not move rather than being left to click at something inert. */
+.perf-legend__item:disabled { cursor: default; opacity: 0.62; }
+.perf-legend__item:disabled:hover { background: none; color: inherit; }
+.perf-legend__item:disabled:active { transform: none; }
 
 /* ---- sankey ---- */
 .flow__link {
@@ -245,12 +279,12 @@
 .flow__node { opacity: 0.95; }
 .flow__name {
   fill: var(--text);
-  font: 600 10.5px/1 var(--font-ui);
+  font: 600 12px/1 var(--font-ui);
 }
 .flow__val {
   fill: var(--text-2);
   font-family: var(--font-figure);
-  font-size: 10px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
   font-feature-settings: var(--ff-tabular);
 }
@@ -313,7 +347,6 @@
   width: max-content;
   animation: tape-slide 60s linear infinite;
 }
-.tape:hover .tape__track { animation-play-state: paused; }
 .tape__run { display: flex; flex: none; }
 
 @keyframes tape-slide {
@@ -672,12 +705,20 @@
  * clipped. */
 .alloc {
   display: grid;
+  /* Ring beside the legend rather than above it. Stacked, the two split the
+   * card's height and the ring got whatever the legend left — which on a
+   * viewport-locked Overview was not much. Side by side they split its
+   * *width* instead, so the ring is bounded by the full row height. Matches
+   * the Allocation view's .alloc-split, so the same chart is laid out the
+   * same way in both places. */
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
   /* A hard floor on the donut row: with minmax(0,1fr) the legend's natural
    * height eats the whole card and the ring silently disappears. */
-  grid-template-rows: auto minmax(104px, 1fr) auto;
+  grid-template-rows: auto minmax(104px, 1fr);
   min-height: 0;
   overflow: hidden;
 }
+.alloc .card__head { grid-column: 1 / -1; }
 .alloc__figure {
   display: grid;
   place-items: center;
@@ -687,7 +728,10 @@
 .alloc__figure svg {
   width: auto;
   height: 100%;
-  max-height: 240px;
+  /* Bounded by its cell, not by a fixed ceiling: the row is the constraint now
+   * that the legend is no longer beneath it. max-width keeps a tall, narrow
+   * cell from pushing the ring into the legend. */
+  max-width: 100%;
   aspect-ratio: 1;
 }
 
@@ -721,6 +765,21 @@
 .donut__caption { fill: var(--text-2); font-size: 13px; }
 
 .legend { display: grid; gap: 0; padding: 0 var(--s-5) var(--s-3); line-height: 1.25; }
+
+/* Overview's legend sits in a column beside the ring, so it is set a step down
+ * from the Allocation view's: there the ring is the thing being read and these
+ * rows are its key, whereas the Allocation view's legend is a primary readout
+ * and keeps the larger scale. */
+.alloc .legend {
+  align-content: center;
+  padding: 0 var(--s-4) var(--s-2) 0;
+  row-gap: clamp(1px, 0.2vh, 4px);
+}
+.alloc .legend__name { font-size: clamp(11px, 1.55vh, 13.5px); }
+.alloc .legend__pct  { font-size: clamp(9.5px, 1.25vh, 11.5px); }
+.alloc .legend__val  { font-size: clamp(10.5px, 1.45vh, 13px); min-width: 72px; }
+.alloc .legend__dot  { width: 8px; height: 8px; border-radius: 2.5px; }
+.alloc .legend__row  { gap: var(--s-2); padding: clamp(1px, 0.14vh, 5px) var(--s-2); }
 
 .legend__row {
   display: grid;
@@ -2866,3 +2925,220 @@ a.prow--pos:active { background: rgba(124, 85, 232, 0.18); }
 
 /* The view is the scroll container, so the cue anchors to it. */
 #view-overview { position: relative; }
+
+/* ---- allocation view ---- */
+
+/* One ring on a three-way switch rather than three rings: --cat-* are assigned
+   per entity and never cycled, so two rings on one screen would make one hue
+   mean two things. See js/allocation.js. */
+.alloc-card { display: flex; flex-direction: column; min-height: 0; }
+.alloc-card + .card { margin-top: var(--grid-gap); }
+
+/* The strip that swaps to the hovered slice. Fixed three columns so a slice
+   name replacing "Invested" cannot reflow the row underneath it. */
+.allockpi {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s-5);
+  padding: var(--s-3) var(--s-5) var(--s-4);
+}
+.allockpi__cell {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  padding-left: var(--s-4);
+  border-left: 1px solid var(--border);
+}
+.allockpi__cell:first-child { padding-left: 0; border-left: 0; }
+/* The label is the one thing that moves; give it a line so a two-word slice
+   name and a one-word default sit at the same height. */
+.allockpi__cell .eyebrow {
+  min-height: 1.1em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.allockpi__v {
+  font-family: var(--font-figure);
+  font-size: clamp(20px, 2.9vh, 30px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: var(--ff-tabular);
+}
+
+/* Ring and legend read as one block. Left at 1fr the legend stretches the full
+   card and opens a void between each name and its figures — the two columns
+   stop looking like one reading. */
+.alloc-split {
+  display: grid;
+  grid-template-columns: minmax(200px, 300px) minmax(0, 460px);
+  justify-content: center;
+  align-items: center;
+  gap: var(--s-6);
+  padding-bottom: var(--s-3);
+}
+.alloc-ring { display: grid; place-items: center; padding: var(--s-2) var(--s-5); }
+.alloc-ring svg { width: 100%; height: auto; max-width: 260px; aspect-ratio: 1; }
+@media (max-width: 900px) {
+  .alloc-split { grid-template-columns: 1fr; }
+}
+
+/* Every holding, largest first, carrying the slice it sits in on the current
+   axis — the per-position region/sector the payload has always had and no view
+   showed. */
+.allocpos { padding: var(--s-2) var(--s-5) var(--s-4); }
+.allocpos__row {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) 150px 62px 96px 88px;
+  align-items: center;
+  gap: var(--s-3);
+  padding: 7px var(--s-2);
+  border-radius: var(--r-sm);
+  line-height: 1.3;
+  transition: opacity var(--dur-fast) var(--ease-spring),
+              background-color var(--dur-fast) var(--ease-spring);
+}
+.allocpos__row:hover { background: rgba(255, 255, 255, 0.04); }
+/* Hovering a slice narrows the list to it without removing anything: a row
+   that left the screen would make the list look shorter than the portfolio. */
+.allocpos__row.is-dim { opacity: 0.32; }
+
+.allocpos__sym {
+  font-family: var(--font-figure);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+}
+.allocpos__name {
+  font-size: var(--t-sm);
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.allocpos__slice {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: var(--t-label);
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.allocpos__slice i { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+.allocpos__pct, .allocpos__val {
+  justify-self: end;
+  font-family: var(--font-figure);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: var(--ff-tabular);
+}
+.allocpos__pct { font-size: var(--t-sm); color: var(--text-2); }
+.allocpos__val { font-size: 13px; font-weight: 600; color: var(--text); }
+.allocpos__bar {
+  height: 5px;
+  border-radius: var(--r-pill);
+  background: var(--track);
+  overflow: hidden;
+}
+.allocpos__bar i { display: block; height: 100%; border-radius: var(--r-pill); background: var(--brand); }
+
+@media (max-width: 1100px) {
+  .allocpos__row { grid-template-columns: 58px minmax(0, 1fr) 60px 92px; }
+  .allocpos__slice, .allocpos__bar { display: none; }
+}
+
+/* ---- transactions ---- */
+/* Header and body share one grid template so the columns line up across two
+   separate hosts — the header is rewritten on every sort, the body on every
+   sort *and* every load, and re-rendering both together would be the only
+   alternative. */
+.tx-card { display: flex; flex-direction: column; min-height: 0; }
+.txhead,
+.txrow {
+  display: grid;
+  grid-template-columns:
+    minmax(88px, 0.9fr) minmax(120px, 1.4fr) minmax(64px, 0.6fr)
+    minmax(80px, 0.8fr) minmax(88px, 0.9fr) minmax(112px, 1.1fr) minmax(96px, 0.9fr);
+  gap: var(--s-3);
+  align-items: center;
+}
+.txhead {
+  padding: 0 var(--s-4) var(--s-2);
+  border-bottom: 1px solid var(--border);
+}
+.txhead__cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: var(--s-1) 0;
+  font: 600 11px/1 var(--font-ui);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  border-radius: var(--r-sm);
+  transition: color var(--dur-fast) var(--ease-spring);
+}
+.txhead__cell:hover { color: var(--text); }
+.txhead__cell:focus-visible {
+  outline: 2px solid var(--brand-soft);
+  outline-offset: 2px;
+}
+.txhead__cell[aria-sort]:not([aria-sort="none"]) { color: var(--text); }
+.txhead__arrow { font-size: 10px; color: var(--brand-soft); }
+
+.txbody { overflow-y: auto; min-height: 0; }
+.txrow {
+  padding: var(--s-2) var(--s-4);
+  border-bottom: 1px solid var(--border-soft);
+  line-height: 1.2;
+}
+.txrow:last-child { border-bottom: 0; }
+.txrow:hover { background: rgba(255, 255, 255, 0.03); }
+
+.txrow__date { color: var(--text-2); font-size: 12.5px; }
+.txrow__sym {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  font-family: var(--font-figure);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+}
+.txrow__venue { font: 400 10.5px/1 var(--font-ui); color: var(--text-3); }
+.txrow__n {
+  text-align: right;
+  justify-self: end;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: var(--ff-tabular);
+  font-size: 12.5px;
+  color: var(--text);
+}
+.txrow__ccy { margin-left: 4px; font-size: 10px; color: var(--text-3); }
+.txrow__fee { color: var(--text-2); }
+
+/* Buy and sell read as words first; the tint is the second cue, never the
+   only one — the same rule the P&L colours follow. */
+.txpill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font: 600 11px/1.4 var(--font-ui);
+  border: 1px solid transparent;
+}
+.txpill.is-buy   { color: var(--pos); background: var(--pos-bg); border-color: var(--pos-bg); }
+.txpill.is-sell  { color: var(--neg); background: var(--neg-bg); border-color: var(--neg-bg); }
+.txpill.is-flat  { color: var(--text-3); border-color: var(--border); }
+
+@media (max-width: 1080px) {
+  /* Consideration and venue are the first things to go: the trade is still
+     legible from quantity and price without them. */
+  .txhead,
+  .txrow { grid-template-columns: minmax(78px, 1fr) minmax(96px, 1.2fr) 56px 1fr 1fr; }
+  .txhead__cell:nth-child(n + 6),
+  .txrow > :nth-child(n + 6) { display: none; }
+  .txrow__venue { display: none; }
+}

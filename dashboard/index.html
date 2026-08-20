@@ -188,6 +188,8 @@
                 <button class="range" type="button" data-range="1D">1D</button>
                 <button class="range" type="button" data-range="7D">7D</button>
                 <button class="range" type="button" data-range="1M" aria-pressed="true">1M</button>
+                <button class="range" type="button" data-range="3M">3M</button>
+                <button class="range" type="button" data-range="6M">6M</button>
                 <button class="range" type="button" data-range="1Y">1Y</button>
                 <button class="range" type="button" data-range="ALL">All</button>
               </div>
@@ -235,7 +237,7 @@
           <section class="card alloc reveal" style="animation-delay:240ms" aria-labelledby="allocTitle">
             <div class="card__head">
               <h2 class="card-title" id="allocTitle">Asset Allocation</h2>
-              <a class="link-all" href="#allocation">View all <span aria-hidden="true">→</span></a>
+              <a class="link-all" href="#allocation/region">View all <span aria-hidden="true">→</span></a>
             </div>
             <div class="alloc__figure"><svg id="donutSvg" role="img" aria-label="Allocation by region"></svg></div>
             <div class="legend" id="allocLegend"></div>
@@ -258,7 +260,7 @@
           <section class="card reveal" style="animation-delay:320ms" aria-labelledby="ccyTitle">
             <div class="card__head">
               <h2 class="card-title" id="ccyTitle">Currency exposure</h2>
-              <a class="link-all" href="#allocation">View all <span aria-hidden="true">→</span></a>
+              <a class="link-all" href="#allocation/currency">View all <span aria-hidden="true">→</span></a>
             </div>
             <div class="ccy" id="ccyList"></div>
           </section>
@@ -380,15 +382,18 @@
         </section>
       </section>
 
-      <!-- ---------------- placeholder tabs ---------------- -->
-      <section class="view" id="view-transactions" role="tabpanel" aria-label="Transactions" hidden>
-        <div class="card empty">
-          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.4">
-            <rect x="6" y="9" width="36" height="30" rx="4"/><path d="M6 18h36M14 26h12M14 32h8"/>
-          </svg>
-          <h2>No transactions yet</h2>
-          <p id="txCopy">Trade history is collected from the daily job and, once configured, backfilled from your IBKR Flex statement.</p>
-        </div>
+      <section class="view view--scroll" id="view-transactions" role="tabpanel"
+               aria-label="Transactions" hidden>
+        <section class="card tx-card" aria-labelledby="txTitle">
+          <div class="card__head">
+            <h2 class="eyebrow" id="txTitle">Transactions</h2>
+            <span class="perf-card__period" id="txMeta"></span>
+          </div>
+          <!-- Header and body are separate hosts so a sort rewrites one of
+               them, not both. -->
+          <div class="txhead" id="txHead" role="row"></div>
+          <div class="txbody" id="txBody" role="table" aria-labelledby="txTitle"></div>
+        </section>
       </section>
 
       <!-- ---------------- Performance ----------------
@@ -414,6 +419,10 @@
           <section class="card perf-card" aria-labelledby="incomeTitle">
             <div class="card__head">
               <h2 class="eyebrow" id="incomeTitle">Dividend income</h2>
+              <div class="ranges" id="incomeMode" role="group" aria-label="Show income or P&amp;L">
+                <button class="range" type="button" data-mode="income" aria-pressed="true">Income</button>
+                <button class="range" type="button" data-mode="pnl" aria-pressed="false">P&amp;L</button>
+              </div>
               <span class="perf-card__total" id="incomeTotal"></span>
             </div>
             <div class="plot plot--bars" id="incomePlot">
@@ -436,6 +445,53 @@
       </section>
 
       <!-- ---------------- Market watch ---------------- -->
+      <section class="view view--scroll" id="view-allocation" role="tabpanel"
+               aria-label="Allocation" hidden>
+
+        <section class="card alloc-card" aria-labelledby="allocViewTitle">
+          <div class="card__head">
+            <h2 class="eyebrow" id="allocViewTitle">Allocation</h2>
+            <div class="ranges" id="allocAxis" role="group" aria-label="Break allocation down by">
+              <button class="range" type="button" data-axis="region" aria-pressed="true">Region</button>
+              <button class="range" type="button" data-axis="sector" aria-pressed="false">Sector</button>
+              <button class="range" type="button" data-axis="currency" aria-pressed="false">Currency</button>
+            </div>
+          </div>
+
+          <!-- Swaps to the hovered slice. The figures are written by
+               js/allocation.js off the same active state the ring holds. -->
+          <div class="allockpi" id="allocKpi" aria-live="polite">
+            <div class="allockpi__cell">
+              <p class="eyebrow" data-k="label">Invested</p>
+              <p class="allockpi__v num" data-k="value">—</p>
+            </div>
+            <div class="allockpi__cell">
+              <p class="eyebrow">Positions</p>
+              <p class="allockpi__v num" data-k="count">—</p>
+            </div>
+            <div class="allockpi__cell">
+              <p class="eyebrow">Unrealised P/L</p>
+              <p class="allockpi__v num" data-k="pnl">—</p>
+            </div>
+          </div>
+
+          <div class="alloc-split">
+            <div class="alloc-ring">
+              <svg id="allocDonut" role="img" aria-label="Allocation breakdown"></svg>
+            </div>
+            <div class="legend" id="allocViewLegend"></div>
+          </div>
+        </section>
+
+        <section class="card" aria-labelledby="allocPosTitle">
+          <div class="card__head">
+            <h2 class="eyebrow" id="allocPosTitle">Positions by weight</h2>
+            <span class="perf-card__period" id="allocPosNote"></span>
+          </div>
+          <div class="allocpos" id="allocPositions"></div>
+        </section>
+      </section>
+
       <section class="view" id="view-market" role="tabpanel" aria-label="Market watch" hidden>
 
         <section class="board-hero" aria-labelledby="boardDate">

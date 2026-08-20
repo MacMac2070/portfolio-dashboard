@@ -9,7 +9,7 @@ import {
   money, moneyCompact, moneySigned, pctSigned, pct, qty,
   direction, stamp, clock, initials, esc,
 } from "./format.js";
-import { sparkline, donut, donutActive, equityCurve, countUp } from "./charts.js";
+import { sparkline, equityCurve, countUp } from "./charts.js";
 import * as holdings from "./holdings.js";
 import * as marketwatch from "./marketwatch.js";
 import * as stock from "./stock.js";
@@ -18,6 +18,9 @@ import * as financials from "./financials.js";
 import * as ovholdings from "./ovholdings.js";
 import * as tape from "./tape.js";
 import * as performance from "./performance.js";
+import { allocRing } from "./alloc.js";
+import * as allocationView from "./allocation.js";
+import * as transactions from "./transactions.js";
 
 const DATA_URL = "data/portfolio.json";
 const NAV_URL = "data/nav_history.jsonl";
@@ -74,14 +77,15 @@ function setStyle(node, prop, value) {
 }
 
 /** Region colour comes from its fixed index, so it never shifts on filtering. */
-const catColor = (index) => `var(--cat-${Math.min((index ?? 6) + 1, 7)})`;
 
-const RANGE_DAYS = { "1D": 2, "7D": 7, "1M": 30, "1Y": 365, ALL: Infinity };
-const RANGE_LABEL = { "1D": "1D", "7D": "7D", "1M": "1M", "1Y": "1Y", ALL: "All" };
+const RANGE_DAYS = { "1D": 2, "7D": 7, "1M": 30, "3M": 90, "6M": 180, "1Y": 365, ALL: Infinity };
+const RANGE_LABEL = { "1D": "1D", "7D": "7D", "1M": "1M", "3M": "3M", "6M": "6M", "1Y": "1Y", ALL: "All" };
 const RANGE_NOTE = {
   "1D": "past day · daily close",
   "7D": "past week · daily close",
   "1M": "past month · daily close",
+  "3M": "past three months · daily close",
+  "6M": "past six months · daily close",
   "1Y": "past year · daily close",
   ALL: "since inception · daily close",
 };
@@ -109,10 +113,35 @@ async function loadNavHistory() {
       .map((line) => { try { return JSON.parse(line); } catch { return null; } })
       .filter((row) => row && row.date && Number.isFinite(row.nav_gbp))
       .map((row) => ({ date: row.date, value: row.nav_gbp }))
-      .sort((a, b) => a.date.localeCompare(b.date));
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .filter(sinceInception());
   } catch {
     return [];
   }
+}
+
+/**
+ * Drops the zero-NAV rows Flex pads the front of the series with.
+ *
+ * The statement reports back to the start of its reporting year, not to the
+ * account's first position, so this file opens on 2025-07-30 at £0 and does
+ * not reach a real figure until 2025-10-13. Those 53 rows are true — the
+ * account really did hold nothing — but drawn they cost the left quarter of
+ * the plot to a flat zero line, put £0 in the All low, and pull the axis floor
+ * below zero on a long-only account.
+ *
+ * Leading only: a zero *after* inception would mean the account was emptied,
+ * which is a real event and stays on the chart. Filtered here rather than in
+ * the store so the Flex import stays faithful to what IBKR sent.
+ *
+ * `_since_inception` in adapter/benchmark.py is the deliberate mirror of this:
+ * the benchmark series is length-checked against this one before it will draw,
+ * so if you change the rule here, change it there. Change one and the
+ * benchmark line quietly stops appearing.
+ */
+function sinceInception() {
+  let started = false;
+  return (row) => (started ||= row.value !== 0);
 }
 
 /* ---------------- chips ---------------- */
@@ -182,7 +211,13 @@ function benchmarkFor(range, expected) {
   if (slot.withheld === "funding") {
     // The server judged this window to be dominated by deposits rather than
     // performance. Say so — an absent line with no explanation reads as a bug.
-    return { points: null, reason: "not shown over this range · deposits dominate the change" };
+    // `funding` travels with it because the same verdict disqualifies the
+    // percentage chip: see renderChart.
+    return {
+      points: null,
+      funding: true,
+      reason: "not shown over this range · deposits dominate the change",
+    };
   }
   // Length parity is the server's contract, but assert it rather than trust it:
   // a mismatch would plot every point against the wrong date, and a silently
@@ -289,7 +324,13 @@ function renderChart() {
     $(id).textContent = `${RANGE_LABEL[activeRange]} ${suffix}`;
   }
 
-  if (points.length < MIN_CURVE_POINTS) {
+  // Gated on how much history exists, not on how many points this range
+  // happens to slice to. Those are different questions, and conflating them
+  // made 1D — two daily closes, by definition — fall into the empty state and
+  // announce "221 of 5 daily points recorded", which is both wrong and
+  // nonsense. With enough history every range draws; a short one is simply a
+  // short line.
+  if (navHistory.length < MIN_CURVE_POINTS) {
     // No chart at all here, so the key must not keep advertising a benchmark
     // from whichever range was shown before this one.
     renderBenchBar({ points: null, reason: "" });
@@ -325,7 +366,13 @@ function renderChart() {
   const first = points[0].value;
   const last = points[points.length - 1].value;
   const values = points.map((p) => p.value);
-  const changePct = first ? ((last - first) / first) * 100 : null;
+  // A simple return is only a return when the money in the account did the
+  // moving. Over the whole span this account went from a £10 opening balance
+  // to £51k almost entirely on deposits, which reads as "+513,314%" — true,
+  // and worthless. The server already makes that call for the benchmark line;
+  // the chip stands down on the same verdict rather than inventing a second
+  // rule, so the chip and the note under the chart never disagree.
+  const changePct = bench.funding || !first ? null : ((last - first) / first) * 100;
 
   paintChip($("chartChip"), changePct);
   $("chartChip").className = $("chartChip").className.replace("kpi__chip ", "");
@@ -339,116 +386,30 @@ function renderChart() {
 
 /* ---------------- allocation ---------------- */
 
-/* Which allocation segment the pointer or keyboard focus is on, or null for
- * none. Held here rather than inside donut() because the ring is redrawn on
- * every live tick and state living inside it would be lost each time. */
-let allocActive = null;
-/* The rows currently drawn, so the centre label can be recomputed on hover
- * without a re-render or a second pass over the payload. */
-let allocRows = [];
+/* The donut, its legend and the hover swap all live in js/alloc.js, because
+ * the Allocation view draws the same thing on three axes and drives a KPI
+ * strip off the same active state. Built lazily so the DOM exists by then. */
+let overviewRing = null;
 
-/** What the middle of the ring should read, given what is hovered. */
-function allocCentre(invested) {
-  const row = allocActive == null ? null : allocRows[allocActive];
-  if (!row) return { value: money(invested), caption: "Invested", pct: "" };
-  return {
-    value: money(row.value_gbp),
-    caption: row.name,
-    // Same precision as the legend row directly beneath it. A centre reading
-    // 31.3% above a row reading 31% looks like two different numbers rather
-    // than one number twice.
-    pct: pct(row.weight_pct, 0),
-  };
-}
-
-/** Paint the ring's active state and centre. Cheap; safe to call on any tick. */
-function paintAlloc(invested) {
-  donutActive($("donutSvg"), allocActive, allocCentre(invested));
-  for (const row of document.querySelectorAll(".legend__row")) {
-    const on = allocActive != null && Number(row.dataset.index) === allocActive;
-    if (row.classList.contains("is-active") !== on) row.classList.toggle("is-active", on);
+/* Built on first use rather than at a fixed point in boot: the first render
+ * happens before initAllocation() is reached, and an ordering dependency
+ * between the two is the kind that fails silently — the card just draws
+ * nothing. */
+function ring() {
+  if (!overviewRing) {
+    const svg = $("donutSvg");
+    const legend = $("allocLegend");
+    if (!svg || !legend) return null;
+    overviewRing = allocRing({ svg, legend, caption: "Invested" });
   }
-}
-
-function setAllocActive(index, invested) {
-  if (allocActive === index) return;
-  allocActive = index;
-  paintAlloc(invested);
+  return overviewRing;
 }
 
 function renderAllocation(data) {
-  const rows = data.regions || [];
-  const invested = data.kpis?.invested ?? 0;
-
-  allocRows = rows;
-  // A region that has left the portfolio must not leave a stale index pointing
-  // at a row that no longer exists.
-  if (allocActive != null && allocActive >= rows.length) allocActive = null;
-
-  drawAlloc(rows, invested);
-
-  // Rows are focusable so the breakdown is reachable without a pointer: the
-  // hover swap is the only route to a region's own value, and a keyboard user
-  // should not be shut out of it.
-  $("allocLegend").innerHTML = rows.map((r, i) => `
-    <div class="legend__row" data-region="${esc(r.name)}" data-index="${i}" tabindex="0">
-      <span class="legend__dot" style="background:${catColor(r.color_index)}"></span>
-      <span class="legend__name">${esc(r.name)}</span>
-      <span class="legend__pct num" data-f="pct">${pct(r.weight_pct, 0)}</span>
-      <span class="legend__val num" data-f="val">${money(r.value_gbp)}</span>
-    </div>`).join("");
-
-  paintAlloc(invested);
+  ring()?.render(data.regions || [], data.kpis?.invested ?? 0);
 }
 
-/** The ring itself. Separated so the live tick can redraw without rebuilding
- *  the legend, and so both paths pass the same hover handler. */
-function drawAlloc(rows, invested) {
-  donut($("donutSvg"), rows.map((r) => ({
-    label: r.name,
-    value: r.value_gbp,
-    color: catColor(r.color_index),
-    display: `${pct(r.weight_pct, 0)} · ${money(r.value_gbp)}`,
-  })), {
-    centreValue: money(invested),
-    centreCaption: "Invested",
-    onHover: (i) => setAllocActive(i, invested),
-  });
-}
-
-/**
- * Hover and focus on the legend, delegated.
- *
- * Delegation rather than per-row listeners because renderAllocation replaces
- * the legend's innerHTML whenever the set of regions changes, which would
- * discard bound handlers. pointerover/pointerout and focusin/focusout all
- * bubble; mouseenter/mouseleave do not, which is why they are not used here.
- */
-function initAllocation() {
-  const legend = $("allocLegend");
-  if (!legend) return;
-
-  const invested = () => portfolio?.kpis?.invested ?? 0;
-  const indexFrom = (event) => {
-    const row = event.target.closest?.(".legend__row");
-    return row ? Number(row.dataset.index) : null;
-  };
-
-  legend.addEventListener("pointerover", (e) => {
-    const i = indexFrom(e);
-    if (i != null) setAllocActive(i, invested());
-  });
-  legend.addEventListener("pointerout", (e) => {
-    // Ignore moves between a row's own children.
-    if (e.relatedTarget?.closest?.(".legend__row") === e.target.closest?.(".legend__row")) return;
-    setAllocActive(null, invested());
-  });
-  legend.addEventListener("focusin", (e) => {
-    const i = indexFrom(e);
-    if (i != null) setAllocActive(i, invested());
-  });
-  legend.addEventListener("focusout", () => setAllocActive(null, invested()));
-}
+function initAllocation() { ring(); }
 
 /* ---------------- movers ---------------- */
 
@@ -562,25 +523,10 @@ function applyLive(data) {
   tape.update(data);
 
   // --- allocation: donut arcs + legend figures ---
-  const regions = data.regions || [];
-  const legendKeys = [...document.querySelectorAll(".legend__row")]
-    .map((r) => r.dataset.region).join(",");
-  if (legendKeys !== regions.map((r) => r.name).join(",")) {
-    renderAllocation(data);                       // composition changed
-  } else {
-    allocRows = regions;
-    drawAlloc(regions, invested);
-    for (const r of regions) {
-      const row = document.querySelector(`.legend__row[data-region="${CSS.escape(r.name)}"]`);
-      if (!row) continue;
-      setText(row.querySelector('[data-f="pct"]'), pct(r.weight_pct, 0));
-      setText(row.querySelector('[data-f="val"]'), money(r.value_gbp));
-    }
-    // The ring was just rebuilt from scratch, so re-apply whatever the pointer
-    // or keyboard was on. Without this the centre label would snap back to the
-    // portfolio total every three seconds while someone is reading a region.
-    paintAlloc(invested);
-  }
+  // render() rebuilds the legend only when the membership changes and patches
+  // its figures in place otherwise, so hover and focus survive the tick.
+  renderAllocation(data);
+  allocationView.update(data);
 
   // --- movers: rebuild only if the tickers changed, else retint the chips ---
   const key = moversKey(data);
@@ -682,12 +628,20 @@ function showTab(name) {
   for (const view of document.querySelectorAll(".view")) {
     view.hidden = view.id !== `view-${name}`;
   }
+  // Every other view re-renders when it is shown; Overview never did, and its
+  // charts size their viewBox from a real pixel box. Boot on any other route —
+  // #performance, #allocation, a #stock deep link — and the equity curve is
+  // drawn at zero size, falling back to a 780x260 viewBox that then sits
+  // letterboxed in a 526x90 box for the rest of the session. Redraw on show.
+  if (name === "overview") renderChart();
   // Holdings owns a sub-route; re-enter it so a deep link survives tab changes.
   if (name === "holdings") holdings.route();
   if (name === "market") marketwatch.route();
   if (name === "stock") stock.route();
   if (name === "financials") financials.route();
   if (name === "performance") performance.route();
+  if (name === "allocation") allocationView.route();
+  if (name === "transactions") transactions.route();
   for (const item of document.querySelectorAll(".nav-item")) {
     if (item.dataset.nav) {
       item.toggleAttribute("aria-current", item.dataset.nav === name);
@@ -726,10 +680,14 @@ function wireShell() {
       }
     });
   }
-  for (const button of document.querySelectorAll(".range")) {
+  // Scoped to [data-range]. `.range` is the shared pressed-button look and is
+  // worn by other groups too — Market watch's sort order, Performance's income
+  // toggle — and an unscoped selector bound this handler to those as well,
+  // blanking the time range whenever one of them was clicked.
+  for (const button of document.querySelectorAll(".range[data-range]")) {
     button.addEventListener("click", () => {
       activeRange = button.dataset.range;
-      for (const other of document.querySelectorAll(".range")) {
+      for (const other of document.querySelectorAll(".range[data-range]")) {
         other.setAttribute("aria-pressed", String(other === button));
       }
       renderChart();
@@ -784,6 +742,7 @@ async function boot() {
   renderKpis(portfolio);
   renderChart();
   renderAllocation(portfolio);
+  allocationView.update(portfolio);
   renderMovers(portfolio);
   renderCurrencies(portfolio);
   renderConcentration(portfolio);
@@ -805,6 +764,8 @@ async function boot() {
   initBenchmark();
   initAllocation();
   performance.init();
+  allocationView.init();
+  transactions.init();
   // A name added from the stock page appears without waiting out the 20s poll.
   stock.onWatchAdded(() => pollWatchlist());
   const initial = tabFromHash();

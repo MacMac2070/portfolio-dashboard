@@ -28,12 +28,30 @@ function el(name, attrs = {}) {
 function niceTicks(lo, hi, target = 5) {
   const span = hi - lo;
   if (!(span > 0)) return [lo];
+
+  const build = (step) => {
+    const out = [];
+    for (let v = Math.ceil(lo / step) * step; v <= hi + step * 1e-9; v += step) {
+      out.push(Math.abs(v) < step * 1e-9 ? 0 : v);
+    }
+    return out;
+  };
+
   const raw = span / Math.max(1, target);
   const mag = 10 ** Math.floor(Math.log10(raw));
-  const step = [1, 2, 2.5, 5, 10].find((m) => raw <= m * mag) * mag;
-  const out = [];
-  for (let v = Math.ceil(lo / step) * step; v <= hi + step * 1e-9; v += step) {
-    out.push(Math.abs(v) < step * 1e-9 ? 0 : v);
+  const step = ([1, 2, 2.5, 5, 10].find((m) => raw <= m * mag) ?? 10) * mag;
+  let out = build(step);
+
+  // Rounding the step up can overshoot a domain that straddles zero
+  // off-centre: monthly P&L over -£1,255..+£1,823 with a low tick target lands
+  // on a step of 2,000 and labels nothing but £0. Fall to the widest narrower
+  // step that puts a real scale on the axis — an axis with one tick is not one.
+  if (out.length < 3) {
+    for (const candidate of [10, 5, 2.5, 2, 1, 0.5, 0.25, 0.2, 0.1].map((m) => m * mag)) {
+      if (candidate >= step) continue;
+      out = build(candidate);
+      if (out.length >= 3) break;
+    }
   }
   return out;
 }
@@ -252,7 +270,14 @@ export function equityCurve(svg, points, {
   const benchValues = (benchmark || []).filter(Number.isFinite);
   let [lo, hi] = extent(benchValues.length ? values.concat(benchValues) : values);
   const headroom = (hi - lo) * 0.12;
-  lo -= headroom; hi += headroom;
+  // Headroom below the minimum must not carry a non-negative series past zero.
+  // Over the whole span the low is the account's £10 opening balance, and 12%
+  // of a £53k range is £6.4k — enough to print "-£6,434" on the axis of a
+  // long-only portfolio. Clamped only when the subtraction actually crosses
+  // zero, so an ordinary £48k-£53k window keeps its full headroom and does not
+  // get flattened against a 0 baseline.
+  lo = lo >= 0 ? Math.max(0, lo - headroom) : lo - headroom;
+  hi += headroom;
 
   const x = (i) => padL + (i / (points.length - 1)) * (w - padL - padR);
   const y = (v) => padT + (1 - (v - lo) / (hi - lo)) * (h - padT - padB);
@@ -716,9 +741,14 @@ export function groupedBars(svg, {
         height = Math.max(1, Math.abs(y(v) - zeroY));
         x = gx + bw * i;
       }
+      // A series may hand back a colour per value rather than one for the
+      // whole run. That is for a signed series like monthly P&L, where the
+      // sign is the identity and one hue across the zero line would say the
+      // opposite of what the bar means.
+      const fill = typeof s.color === "function" ? s.color(v) : s.color;
       const rect = el("rect", {
         x, y: top, width: Math.max(1, bw - (stacked ? 0 : 2)), height,
-        rx: 2, fill: s.color,
+        rx: 2, fill,
       });
       const title = el("title");
       title.textContent =
@@ -781,7 +811,9 @@ export function groupedBars(svg, {
       rows.map((s) => {
         const v = s.values[p];
         return `<div class="tip__series">`
-          + (swatch ? `<i style="background:${s.color}"></i>` : `<i class="tip__pip"></i>`)
+          + (swatch
+              ? `<i style="background:${typeof s.color === "function" ? s.color(v) : s.color}"></i>`
+              : `<i class="tip__pip"></i>`)
           + `<span>${s.label}</span><b>${money(v)}</b></div>`;
       }).join("") +
       `<div class="tip__total"><span>${totalLabel}</span><b>${money(sum)}</b></div>`;
@@ -823,7 +855,10 @@ export function sankey(svg, data, { formatValue, tooltip } = {}) {
 
   const box = svg.getBoundingClientRect();
   const w = Math.max(360, Math.round(box.width) || 780);
-  const LINE_H = 25;
+  // Tall enough to clear a two-line label block (12px name + 11px value) plus
+  // breathing room, because it is what keeps the fanned-out bands from
+  // colliding — see stack().
+  const LINE_H = 29;
   const padY = 10;
   // Bands are laid out against this height. The labels may then need more of
   // it than the bands do — see the de-collision below — so the final height is
@@ -833,10 +868,13 @@ export function sankey(svg, data, { formatValue, tooltip } = {}) {
   svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
 
   const fmt = (v) => (formatValue ? formatValue(v) : String(Math.round(v)));
-  // Labels sit outside the columns, so the bars themselves get the middle.
-  const padX = 4, nodeW = 9, labelGap = 10;
-  const colGap = Math.max(120, (w - padX * 2 - nodeW * 3) / 2);
-  const xs = [padX, padX + nodeW + colGap, padX + nodeW * 2 + colGap * 2];
+  // Every column's labels are right-aligned into a gutter to its left, name
+  // over value, the way the reference lays them out — clear of the ribbons
+  // rather than printed on top of them.
+  const padX = 4, nodeW = 9, labelGap = 12;
+  const gutter = Math.max(92, Math.min(150, Math.round(w * 0.17)));
+  const xs = [gutter, 0, w - padX - nodeW];
+  xs[1] = Math.round((xs[0] + xs[2]) / 2);
   const plotH = h - padY * 2;
 
   const ins = ins0;
@@ -848,24 +886,43 @@ export function sankey(svg, data, { formatValue, tooltip } = {}) {
   const gap = 3;
   const scale = (v) => (v / total) * (plotH - gap * Math.max(ins.length, outs.length));
 
-  function stack(links, x) {
-    let y = padY;
+  /**
+   * Stack one column.
+   *
+   * `minPitch` holds consecutive band *centres* that far apart so a two-line
+   * label fits beside each one. Only the gaps grow: every band keeps a height
+   * proportional to its value, which is the one thing a Sankey may not fudge.
+   *
+   * Spreading the outer columns is also what gives the ribbons their shape.
+   * With the middle node packed tight and the outer ones fanned out, each link
+   * has somewhere to travel and the bezier reads as a flow. Stack both ends
+   * the same way — which is what this did before — and every control point
+   * lands level with its anchor, so the curves come out as dead-flat
+   * rectangles and the whole chart reads as a stacked bar.
+   */
+  function stack(links, x, minPitch = 0) {
+    let y = padY, prevCentre = -Infinity;
     return links.map((l) => {
       const th = Math.max(1, scale(l.value));
-      const seg = { ...l, x, y0: y, y1: y + th, h: th };
-      y += th + gap;
-      return seg;
+      let top = y;
+      if (minPitch && prevCentre > -Infinity) {
+        top = Math.max(top, prevCentre + minPitch - th / 2);
+      }
+      prevCentre = top + th / 2;
+      y = top + th + gap;
+      return { ...l, x, y0: top, y1: top + th, h: th };
     });
   }
-  const left = stack(ins, xs[0]);
-  const right = stack(outs, xs[2]);
+  const left = stack(ins, xs[0], LINE_H);
+  const right = stack(outs, xs[2], LINE_H);
 
-  // The middle node spans the whole flow, so both fans meet a single bar.
+  // The middle node spans the whole flow, so both fans meet a single bar. Its
+  // height is the sum of what arrives, not the extent of the spread-out outer
+  // columns — those are fanned for their labels and are taller than the flow.
+  const span = (segs) =>
+    segs.reduce((sum, seg) => sum + seg.h, 0) + gap * Math.max(0, segs.length - 1);
   const midTop = padY;
-  const midBot = padY + Math.max(
-    left.at(-1) ? left.at(-1).y1 - padY : 0,
-    right.at(-1) ? right.at(-1).y1 - padY : 0,
-  );
+  const midBot = padY + Math.max(span(left), span(right));
 
   const colour = (kind) =>
     kind === "in" ? "var(--flow-in)" : kind === "out" ? "var(--flow-kept)" : "var(--flow-cost)";
@@ -896,10 +953,13 @@ export function sankey(svg, data, { formatValue, tooltip } = {}) {
       class: "flow__link", d, fill: colour(seg.kind),
       "data-flow": seg.kind === "in" ? seg.source : seg.target,
     });
-    const title = el("title");
     const name = seg.kind === "in" ? seg.source : seg.target;
-    title.textContent = `${name} — ${fmt(seg.value)}`;
-    path.append(title);
+    // Named for assistive tech through aria-label, not a <title> child: the
+    // browser renders <title> as its own native tooltip, so hovering a ribbon
+    // produced two tooltips at once — the styled one and a grey OS bubble
+    // floating over it. aria-label carries the same text with no chrome.
+    path.setAttribute("role", "img");
+    path.setAttribute("aria-label", `${name} — ${fmt(seg.value)}`);
     if (tooltip) {
       path.addEventListener("pointerenter", (event) => {
         tooltip.dataset.open = "true";
@@ -949,10 +1009,13 @@ export function sankey(svg, data, { formatValue, tooltip } = {}) {
   function draw(placed, anchor, textX, leaderFrom) {
     for (const { seg, y, want } of placed) {
       const g = el("g");
-      const name = anchor === "end" ? seg.target : seg.source;
+      // Keyed off the link's direction, not the text anchor. Both columns are
+      // right-aligned now, so anchor no longer tells the two apart — reading it
+      // instead labelled every source with its shared target, "Gross Value".
+      const name = seg.kind === "in" ? seg.source : seg.target;
       const t1 = el("text", { class: "flow__name", x: textX, y, "text-anchor": anchor });
       t1.textContent = name;
-      const t2 = el("text", { class: "flow__val", x: textX, y: y + 12, "text-anchor": anchor });
+      const t2 = el("text", { class: "flow__val", x: textX, y: y + 13, "text-anchor": anchor });
       t2.textContent = fmt(seg.value);
       g.append(t1, t2);
       // Only when the text has actually been pushed off its band, and only far
@@ -972,7 +1035,9 @@ export function sankey(svg, data, { formatValue, tooltip } = {}) {
 
   const placedLeft = place(left);
   const placedRight = place(right);
-  draw(placedLeft, "start", xs[0] + nodeW + labelGap, xs[0] + nodeW);
+  // Both columns anchor "end" into the gutter on their left, so a name and its
+  // figure line up down a single edge instead of ragging against the ribbons.
+  draw(placedLeft, "end", xs[0] - labelGap, xs[0]);
   draw(placedRight, "end", xs[2] - labelGap, xs[2]);
 
   // Now the labels are placed, grow the canvas to whatever they needed. The
@@ -989,9 +1054,11 @@ export function sankey(svg, data, { formatValue, tooltip } = {}) {
 
   const gtext = el("g");
   const gy = (midTop + midBot) / 2 - 2;
-  const gn = el("text", { class: "flow__name", x: xs[1] + nodeW + labelGap, y: gy });
+  const gn = el("text", { class: "flow__name", x: xs[1] - labelGap, y: gy,
+                          "text-anchor": "end" });
   gn.textContent = "Gross value";
-  const gv = el("text", { class: "flow__val", x: xs[1] + nodeW + labelGap, y: gy + 12 });
+  const gv = el("text", { class: "flow__val", x: xs[1] - labelGap, y: gy + 13,
+                          "text-anchor": "end" });
   gv.textContent = fmt(data.gross);
   gtext.append(gn, gv);
   svg.append(gtext);
