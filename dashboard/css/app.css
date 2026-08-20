@@ -46,12 +46,11 @@
   place-items: center;
   width: 34px; height: 34px;
   border-radius: var(--r-md);
-  background: linear-gradient(150deg, var(--brand-soft), var(--brand));
+  background: var(--brand);
   color: #fff;
   font-family: var(--font-display);
   font-weight: 700;
   font-size: 16px;
-  box-shadow: 0 2px 10px var(--brand-glow);
 }
 
 .brand__name { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
@@ -88,10 +87,13 @@
 .nav-item:hover { color: var(--text); background: var(--wash-2); }
 .nav-item:active { transform: translateX(1px); }
 
+/* Selection is the app's own signature device — a wash plus a thin violet
+ * rule, the same grammar as the held-row rail and the hero plate's inset
+ * edge — not a glowing gradient pill. */
 .nav-item[aria-current="page"] {
-  color: #fff;
-  background: linear-gradient(180deg, var(--brand-soft), var(--brand));
-  box-shadow: 0 2px 12px var(--brand-glow);
+  color: var(--text);
+  background: var(--violet-tint-18);
+  box-shadow: inset 2px 0 0 var(--brand);
 }
 
 .sidebar__foot { margin-top: auto; display: grid; gap: 2px; }
@@ -513,7 +515,7 @@
 
 .kpi--hero {
   background: var(--surface-2);
-  border-color: rgba(124, 85, 232, 0.42);
+  border-color: var(--brand-line-strong);
   box-shadow: var(--shadow-hero);
 }
 .kpi--hero .kpi__value { font-size: var(--t-hero); }
@@ -566,8 +568,8 @@
 .range:active { transform: scale(0.96); }
 .range[aria-pressed="true"] {
   color: var(--text);
-  background: rgba(124, 85, 232, 0.22);
-  box-shadow: inset 0 0 0 1px rgba(124, 85, 232, 0.36);
+  background: var(--violet-tint-18);
+  box-shadow: inset 0 0 0 1px var(--brand-line);
 }
 
 /* ---- equity curve ---- */
@@ -1038,7 +1040,7 @@
 .sector-pill:hover { border-color: var(--hair-3); color: var(--text-primary); }
 .sector-pill[aria-current="page"] {
   background: var(--violet-500);
-  border-color: rgba(160, 136, 255, 0.5);
+  border-color: var(--brand-line-strong);
   color: #fff;
 }
 .sector-pill__count {
@@ -1051,7 +1053,7 @@
   width: 1px; height: 12px; flex: none;
   background: var(--wash-3);
 }
-.sector-pill[aria-current="page"] .sector-pill__rule { background: rgba(160, 136, 255, 0.5); }
+.sector-pill[aria-current="page"] .sector-pill__rule { background: var(--brand-line-strong); }
 .sector-pill__day {
   font: 600 10px/1 var(--font-figure);
   letter-spacing: -0.01em;
@@ -1071,13 +1073,13 @@
   flex-direction: column;
   flex: none;
   background: var(--ink-raised);
-  border: 1px solid rgba(160, 136, 255, 0.26);
+  border: 1px solid var(--brand-line);
   border-radius: 12px;
   /* The violet inset top edge is what makes this plate read as raised rather
    * than merely lighter — it is the design's signature on this page. */
   box-shadow: inset 0 2px 0 var(--violet-500),
-              0 0 0 1px rgba(124, 85, 232, 0.10),
-              0 26px 54px -34px rgba(124, 85, 232, 0.42);
+              0 0 0 1px var(--border),
+              0 18px 40px -30px rgba(0, 0, 0, 0.6);
   animation: riseIn 420ms var(--ease-spring) 60ms both;
 }
 
@@ -1189,11 +1191,11 @@
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scrollbar-width: thin;
-  scrollbar-color: rgba(150, 124, 255, 0.28) transparent;
+  scrollbar-color: var(--border-strong) transparent;
 }
 .positions__scroll::-webkit-scrollbar { height: 8px; }
 .positions__scroll::-webkit-scrollbar-thumb {
-  background: rgba(150, 124, 255, 0.24);
+  background: var(--border-strong);
   border-radius: 4px;
 }
 /* 1020px is what the nine tracks need at their minima plus gaps and padding.
@@ -1296,7 +1298,7 @@
 
 /* The last held row carries a stronger hairline — enough to feel the change of
  * register between held and watched without splitting the table in two. */
-.prow--boundary { border-bottom-color: rgba(150, 124, 255, 0.22); }
+.prow--boundary { border-bottom-color: var(--brand-line); }
 
 .pid { display: flex; align-items: center; gap: 10px; min-width: 0; overflow: hidden; }
 
@@ -1343,7 +1345,7 @@
   padding: 0 5px;
   border-radius: 4px;
   background: var(--violet-tint-18);
-  border: 1px solid rgba(160, 136, 255, 0.3);
+  border: 1px solid var(--brand-line);
   font: 700 8px/15px var(--font-ui);
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -1471,7 +1473,7 @@
   flex: 0 0 88px;
   height: 3px;
   border-radius: 2px;
-  background: linear-gradient(90deg, var(--wash-2), rgba(150, 124, 255, .22));
+  background: var(--track);
 }
 .prange__dot {
   position: absolute;
@@ -1556,14 +1558,13 @@
 .btn {
   padding: 10px var(--s-5);
   border-radius: var(--r-md);
-  background: linear-gradient(180deg, var(--brand-soft), var(--brand));
+  background: var(--brand);
   color: #fff;
   font-weight: 600;
-  box-shadow: 0 2px 12px var(--brand-glow);
   transition: transform var(--dur-fast) var(--ease-spring),
-              box-shadow var(--dur-fast) var(--ease-spring);
+              background-color var(--dur-fast) var(--ease-spring);
 }
-.btn:hover { transform: translateY(-1px); box-shadow: 0 6px 18px var(--brand-glow); }
+.btn:hover { transform: translateY(-1px); background: var(--brand-soft); }
 .btn:active { transform: translateY(0) scale(0.985); }
 
 /* ============ tooltip ============ */
@@ -1697,12 +1698,12 @@
   display: flex;
   flex-direction: column;
   background: var(--ink-raised);
-  border: 1px solid rgba(160, 136, 255, 0.26);
+  border: 1px solid var(--brand-line);
   border-radius: 12px;
   box-shadow:
     inset 0 2px 0 var(--violet-500),
-    0 0 0 1px rgba(124, 85, 232, 0.10),
-    0 26px 54px -34px rgba(124, 85, 232, 0.42);
+    0 0 0 1px var(--border),
+    0 18px 40px -30px rgba(0, 0, 0, 0.6);
   animation: riseIn 420ms var(--ease-spring) both;
 }
 /* The index feed can be down while IB is perfectly healthy, so the board owns
@@ -1849,7 +1850,7 @@
   overflow: hidden;
   animation: riseIn 300ms var(--ease-spring) both;
 }
-.mcard[data-open="true"] { border-color: rgba(160, 136, 255, 0.22); }
+.mcard[data-open="true"] { border-color: var(--brand-line); }
 
 .mcard__head { display: flex; align-items: center; gap: 7px; padding: 9px 11px 7px; }
 
@@ -1867,7 +1868,7 @@
 }
 .mcard[data-open="true"] .mcode {
   background: var(--violet-tint-18);
-  border-color: rgba(160, 136, 255, 0.34);
+  border-color: var(--brand-line);
   color: var(--violet-200);
 }
 .mcard__name {
@@ -2062,7 +2063,7 @@
 .mexpo__fill {
   display: block;
   height: 100%;
-  background: rgba(150, 124, 255, 0.6);
+  background: var(--brand-soft);
   transform-origin: left;
   animation: bar-grow var(--dur-slow) var(--ease-spring) both;
 }
@@ -2139,11 +2140,11 @@
   padding-bottom: var(--s-5);
   overflow-y: auto;
   scrollbar-width: thin;
-  scrollbar-color: rgba(150, 124, 255, 0.22) transparent;
+  scrollbar-color: var(--border-strong) transparent;
 }
 #view-stock::-webkit-scrollbar { width: 8px; }
 #view-stock::-webkit-scrollbar-thumb {
-  background: rgba(150, 124, 255, 0.22); border-radius: 4px;
+  background: var(--border-strong); border-radius: 4px;
 }
 
 /* ---- breadcrumb ---- */
@@ -2172,13 +2173,13 @@
 .shero {
   display: flex; flex-direction: column; flex: none;
   background: var(--ink-raised);
-  border: 1px solid rgba(160, 136, 255, 0.26);
+  border: 1px solid var(--brand-line);
   border-radius: 12px;
   /* Layered and violet-tinted, per the design: an inset top rule, a hairline
      ring, and a wide low-opacity drop. Never a flat shadow. */
   box-shadow: inset 0 2px 0 var(--violet-500),
-              0 0 0 1px rgba(124, 85, 232, 0.10),
-              0 26px 54px -34px rgba(124, 85, 232, 0.42);
+              0 0 0 1px var(--border),
+              0 18px 40px -30px rgba(0, 0, 0, 0.6);
   animation: riseIn 420ms var(--ease-spring) both;
 }
 .shero__top {
@@ -2201,15 +2202,15 @@
   display: flex; align-items: center; height: 21px; padding: 0 8px;
   border-radius: 5px;
   background: var(--violet-tint-18);
-  border: 1px solid rgba(160, 136, 255, 0.34);
+  border: 1px solid var(--brand-line);
   font: 700 11px/1 var(--font-ui); letter-spacing: 0.05em;
   color: var(--violet-200);
 }
 .shero__owned {
   display: flex; align-items: center; height: 21px; padding: 0 8px;
   border-radius: 5px;
-  background: rgba(124, 85, 232, 0.10);
-  border: 1px solid rgba(160, 136, 255, 0.24);
+  background: var(--wash-hover);
+  border: 1px solid var(--brand-line);
   font: 700 9.5px/1 var(--font-ui);
   letter-spacing: 0.07em; text-transform: uppercase;
   color: var(--violet-300);
@@ -2233,7 +2234,7 @@
 }
 .sbtn:active { transform: scale(0.97); }
 .sbtn[aria-pressed="true"] {
-  background: var(--violet-tint-18); border-color: rgba(160, 136, 255, 0.34);
+  background: var(--violet-tint-18); border-color: var(--brand-line);
   color: var(--violet-200);
 }
 
@@ -2490,7 +2491,7 @@ a.snewsitem:hover { background: var(--wash-hover); }
 }
 .starget__band {
   position: absolute; top: 0; bottom: 0; border-radius: 3px;
-  background: rgba(150, 124, 255, 0.42);
+  background: var(--brand-line-strong);
 }
 .starget__mark {
   position: absolute; top: -3px; width: 2px; height: 11px;
@@ -2597,7 +2598,7 @@ a.snewsitem:hover { background: var(--wash-hover); }
   border: 1px solid var(--hair-3);
   border-radius: var(--r-md);
   box-shadow: 0 26px 54px -26px rgba(0, 0, 0, 0.85),
-              0 0 0 1px rgba(124, 85, 232, 0.12);
+              0 0 0 1px var(--brand-line);
 }
 .search__panel[hidden] { display: none; }
 
@@ -2622,7 +2623,7 @@ a.snewsitem:hover { background: var(--wash-hover); }
 }
 .sresult__kind[data-kind="ETF"] {
   background: var(--violet-tint-18);
-  border-color: rgba(160, 136, 255, 0.32);
+  border-color: var(--brand-line);
   color: var(--violet-200);
 }
 .sresult__kind[data-kind="GDR"] { color: var(--text-faint); }
@@ -2684,7 +2685,7 @@ a.prow--pos:focus-visible {
   outline-offset: -2px;
   background: var(--wash-hover);
 }
-a.prow--pos:active { background: rgba(124, 85, 232, 0.18); }
+a.prow--pos:active { background: var(--violet-tint-18); }
 
 /* Search states introduced by the wider directory + remote lookup. */
 
@@ -2722,11 +2723,11 @@ a.prow--pos:active { background: rgba(124, 85, 232, 0.18); }
   padding-bottom: var(--s-5);
   overflow-y: auto;
   scrollbar-width: thin;
-  scrollbar-color: rgba(150, 124, 255, 0.22) transparent;
+  scrollbar-color: var(--border-strong) transparent;
 }
 #view-financials::-webkit-scrollbar { width: 8px; }
 #view-financials::-webkit-scrollbar-thumb {
-  background: rgba(150, 124, 255, 0.22); border-radius: 4px;
+  background: var(--border-strong); border-radius: 4px;
 }
 
 .finhero .shero__top { padding-bottom: 16px; }
@@ -2745,7 +2746,7 @@ a.prow--pos:active { background: rgba(124, 85, 232, 0.18); }
   display: flex; align-items: center; height: 19px; padding: 0 8px;
   border-radius: 5px;
   background: var(--violet-tint-18);
-  border: 1px solid rgba(160, 136, 255, 0.34);
+  border: 1px solid var(--brand-line);
   font: 600 9.5px/1 var(--font-ui); letter-spacing: 0.04em;
   color: var(--violet-200); white-space: nowrap;
 }
@@ -2795,7 +2796,7 @@ a.prow--pos:active { background: rgba(124, 85, 232, 0.18); }
    above runs oldest-first, because a time axis reads left to right. The latest
    column is marked so the two directions read as deliberate. */
 .fintable .is-latest { color: var(--violet-200); }
-.fintable td.is-latest { background: rgba(124, 85, 232, 0.06); }
+.fintable td.is-latest { background: var(--brand-faint); }
 
 .fintable tbody th {
   text-align: left;
@@ -2836,7 +2837,7 @@ a.prow--pos:active { background: rgba(124, 85, 232, 0.18); }
   height: 28px; padding: 0 12px;
   border-radius: 7px;
   background: var(--violet-tint-10);
-  border: 1px solid rgba(160, 136, 255, 0.28);
+  border: 1px solid var(--brand-line);
   color: var(--violet-200);
   font: 600 11px/1 var(--font-ui); white-space: nowrap;
   transition: background-color var(--t-ui), border-color var(--t-ui);
@@ -2911,8 +2912,8 @@ a.prow--pos:active { background: rgba(124, 85, 232, 0.18); }
   padding: 0 11px;
   border-radius: var(--r-pill);
   background: var(--ink-raised);
-  border: 1px solid rgba(160, 136, 255, 0.3);
-  box-shadow: 0 10px 24px -12px rgba(124, 85, 232, 0.6);
+  border: 1px solid var(--brand-line);
+  box-shadow: var(--shadow-float);
   color: var(--violet-200);
   font: 600 10.5px/1 var(--font-ui);
   letter-spacing: 0.06em;

@@ -221,8 +221,8 @@
   --bg-page:      #0a0c0f;
   --bg-sidebar:   #0c0f13;
   --surface:      #0f1215;   /* base card */
-  --surface-2:    #16151f;   /* elevated / hero card */
-  --surface-3:    #1c1b28;   /* floating: menus, tooltips */
+  --surface-2:    #14181e;   /* elevated / hero card */
+  --surface-3:    #1a1f26;   /* floating: menus, tooltips */
   --track:        #0d1014;   /* progress-bar troughs */
 
   --border:       rgba(255, 255, 255, 0.07);
@@ -232,10 +232,18 @@
   --text-2:       #7a8490;
   --text-3:       #737e8b;   /* AA 4.55:1 — drives chart axis labels */
 
-  --brand:        #7c55e8;
-  --brand-soft:   #9a79f2;
-  --brand-pale:   #c0adf4;
-  --brand-glow:   rgba(124, 85, 232, 0.45);
+  /* Re-toned at Mac's direction: same violet family, more aggressive — deeper
+   * and higher-chroma than the soft lavender it replaces (#7c55e8), which had
+   * become the default AI-dashboard accent. Expressed flat: the glow token is
+   * gone, and the accent's job is done by thin rules and washes.
+   * --brand-line/-strong are the selected/hero plate borders that used to be
+   * two dozen raw rgba(150..160, …, 255) literals. */
+  --brand:        #6d2ef5;
+  --brand-soft:   #8d5bff;
+  --brand-pale:   #b49aff;
+  --brand-line:        rgba(141, 91, 255, 0.30);
+  --brand-line-strong: rgba(141, 91, 255, 0.52);
+  --brand-faint:       rgba(109, 46, 245, 0.07);
 
   /* P&L. Tailwind emerald-400 / rose-400, from the shadcn-fintech reference.
    * Measured against every surface they land on here — --bg-page, --surface,
@@ -255,11 +263,11 @@
   --text-muted:    #8B95A2;
   --text-faint:    #828D9B;
   --text-disabled: #788391;   /* AA-lifted — see the note above the ink family */
-  --violet-200: #D5C6FF;
-  --violet-300: #B69CFF;
-  --violet-500: #7C55E8;
-  --violet-tint-18: rgba(124, 85, 232, 0.18);
-  --wash-hover: rgba(124, 85, 232, 0.12);
+  --violet-200: #cdb8ff;
+  --violet-300: #a888ff;
+  --violet-500: #6d2ef5;
+  --violet-tint-18: rgba(109, 46, 245, 0.18);
+  --wash-hover: rgba(109, 46, 245, 0.12);
   --hold-soft: #8A7BC8;
   /* Row-hover / zebra washes: white-alpha here, ink-alpha in light — a raw
    * rgba(255,255,255,…) is invisible on a white card. */
@@ -281,7 +289,7 @@
      0 4px 12px rgba(0, 0, 0, 0.35);
   --shadow-hero:
      0 1px 1px rgba(0, 0, 0, 0.5),
-     0 8px 28px rgba(124, 85, 232, 0.14),
+     0 8px 28px rgba(0, 0, 0, 0.42),
      0 2px 8px rgba(0, 0, 0, 0.4);
   --shadow-float:
      0 12px 32px rgba(0, 0, 0, 0.55),
@@ -295,7 +303,7 @@
   --bg-page:      #f4f6f9;
   --bg-sidebar:   #ffffff;
   --surface:      #ffffff;
-  --surface-2:    #faf9ff;
+  --surface-2:    #f7f9fb;
   --surface-3:    #ffffff;
   --track:        #e8ecf1;
 
@@ -306,10 +314,12 @@
   --text-2:       #5b6673;
   --text-3:       #6c7785;   /* AA 4.55:1 on white */
 
-  --brand:        #6635e0;
-  --brand-soft:   #7c55e8;
-  --brand-pale:   #5a2fd0;
-  --brand-glow:   rgba(102, 53, 224, 0.28);
+  --brand:        #5314d6;
+  --brand-soft:   #6d2ef5;
+  --brand-pale:   #430fc4;
+  --brand-line:        rgba(83, 20, 214, 0.30);
+  --brand-line-strong: rgba(83, 20, 214, 0.50);
+  --brand-faint:       rgba(83, 20, 214, 0.06);
 
   /* Light mode takes emerald/rose one stop darker than the reference's -600.
    * Measured, -600 does not clear AA here: emerald-600 #059669 lands at
@@ -332,11 +342,11 @@
   --text-muted:    #5b6673;
   --text-faint:    #64707e;
   --text-disabled: #6c7785;   /* AA 4.55:1 on white, same bar as --text-3 */
-  --violet-200: #4a22b8;      /* text over the violet tint chip: dark ink */
-  --violet-300: #5a2fd0;
-  --violet-500: #6635e0;
-  --violet-tint-18: rgba(102, 53, 224, 0.12);
-  --wash-hover: rgba(102, 53, 224, 0.08);
+  --violet-200: #3c0ea6;      /* text over the violet tint chip: dark ink */
+  --violet-300: #4a12c9;
+  --violet-500: #5314d6;
+  --violet-tint-18: rgba(83, 20, 214, 0.12);
+  --wash-hover: rgba(83, 20, 214, 0.08);
   --hold-soft: #6b55b8;
   --wash-1: rgba(12, 15, 19, 0.03);
   --wash-2: rgba(12, 15, 19, 0.05);
@@ -364,7 +374,7 @@
      0 4px 12px rgba(16, 20, 26, 0.05);
   --shadow-hero:
      0 1px 2px rgba(16, 20, 26, 0.06),
-     0 8px 28px rgba(102, 53, 224, 0.10),
+     0 8px 28px rgba(16, 20, 26, 0.08),
      0 2px 8px rgba(16, 20, 26, 0.05);
   --shadow-float:
      0 12px 32px rgba(16, 20, 26, 0.14),
@@ -375,17 +385,18 @@
   :root:not([data-theme]) {
     color-scheme: light;
     --bg-page: #f4f6f9; --bg-sidebar: #ffffff;
-    --surface: #ffffff; --surface-2: #faf9ff; --surface-3: #ffffff;
+    --surface: #ffffff; --surface-2: #f7f9fb; --surface-3: #ffffff;
     --track: #e8ecf1;
     --border: rgba(12,15,19,.09); --border-strong: rgba(12,15,19,.16);
     --text: #10141a; --text-2: #5b6673; --text-3: #6c7785;
-    --brand: #6635e0; --brand-soft: #7c55e8; --brand-pale: #5a2fd0;
-    --brand-glow: rgba(102,53,224,.28);
+    --brand: #5314d6; --brand-soft: #6d2ef5; --brand-pale: #430fc4;
+    --brand-line: rgba(83,20,214,.30); --brand-line-strong: rgba(83,20,214,.50);
+    --brand-faint: rgba(83,20,214,.06);
     --pos: #047857; --neg: #be123c; --flat: #5b6673;
     --text-body: #3d4753; --text-muted: #5b6673;
     --text-faint: #64707e; --text-disabled: #6c7785;
-    --violet-200: #4a22b8; --violet-300: #5a2fd0; --violet-500: #6635e0;
-    --violet-tint-18: rgba(102,53,224,.12); --wash-hover: rgba(102,53,224,.08);
+    --violet-200: #3c0ea6; --violet-300: #4a12c9; --violet-500: #5314d6;
+    --violet-tint-18: rgba(83,20,214,.12); --wash-hover: rgba(83,20,214,.08);
     --hold-soft: #6b55b8;
     --wash-1: rgba(12,15,19,.03); --wash-2: rgba(12,15,19,.05); --wash-3: rgba(12,15,19,.07);
     --fin-1: #6a3fd6; --fin-2: #087584; --fin-3: #8a5d0e;
@@ -395,7 +406,7 @@
     --cat-1: #2f6fd0; --cat-2: #b87816; --cat-3: #12855f;
     --cat-4: #7343c9; --cat-5: #1c7f8c; --cat-6: #bc3a5c; --cat-7: #566070;
     --shadow-card: 0 1px 2px rgba(16,20,26,.06), 0 4px 12px rgba(16,20,26,.05);
-    --shadow-hero: 0 1px 2px rgba(16,20,26,.06), 0 8px 28px rgba(102,53,224,.10), 0 2px 8px rgba(16,20,26,.05);
+    --shadow-hero: 0 1px 2px rgba(16,20,26,.06), 0 8px 28px rgba(16,20,26,.08), 0 2px 8px rgba(16,20,26,.05);
     --shadow-float: 0 12px 32px rgba(16,20,26,.14), 0 2px 6px rgba(16,20,26,.08);
   }
 }
