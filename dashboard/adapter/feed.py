@@ -596,6 +596,7 @@ class LiveFeed:
             "kpis": agg["kpis"],
             "positions": positions,
             "regions": agg["regions"],
+            "sectors": agg["sectors"],
             "currencies": agg["currencies"],
             "concentration": agg["concentration"],
             "movers": agg["movers"],

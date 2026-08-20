@@ -23,6 +23,20 @@ from __future__ import annotations
 import logging
 
 import regions as regions_mod
+import universe as universe_mod
+
+# Fixed display and colour order for the currency split, for the same reason
+# REGION_ORDER exists: a currency must keep its hue when another one drops out
+# of the portfolio. Ordered by how much of this account each has historically
+# carried, then the rest alphabetically.
+CURRENCY_ORDER = ("GBP", "USD", "HKD", "JPY", "SGD", "EUR", "KRW", "CHF", "CNY")
+
+
+def _currency_sort_key(code: str) -> int:
+    try:
+        return CURRENCY_ORDER.index(code)
+    except ValueError:
+        return 6
 
 log = logging.getLogger(__name__)
 
@@ -51,6 +65,11 @@ def make_position(*, con_id: int, symbol: str, currency: str, exchange: str,
                   spark: list[float], to_gbp) -> dict:
     """One position row, with everything converted to GBP."""
     name, region = regions_mod.lookup(con_id, symbol)
+    # Carried per position, not only rolled up, so the Allocation view can
+    # group on any of the three axes with the same code and show which slice a
+    # holding sits in. Region answers "where", sector answers "what kind of
+    # business" — see the sector rollup in aggregate().
+    sector = universe_mod.sector_for(con_id, symbol)
 
     value_gbp = to_gbp(market_value, currency)
     cost_gbp = to_gbp(average_cost * quantity, currency)
@@ -69,6 +88,7 @@ def make_position(*, con_id: int, symbol: str, currency: str, exchange: str,
         "symbol": symbol,
         "name": name,
         "region": region,
+        "sector": sector,
         "currency": currency,
         "exchange": exchange,
         "quantity": quantity,
@@ -109,7 +129,7 @@ def daily_pnl(positions: list[dict], account_daily_pnl: float | None) -> tuple[f
 
 def aggregate(positions: list[dict], *, nav: float, cash: float,
               account_daily_pnl: float | None) -> dict:
-    """KPIs, region and currency splits, concentration and movers."""
+    """KPIs, region/sector/currency splits, concentration and movers."""
     invested = sum(p["value_gbp"] for p in positions)
     unrealised = sum(p["unrealised_gbp"] for p in positions)
     cost_basis = invested - unrealised
@@ -133,8 +153,29 @@ def aggregate(positions: list[dict], *, nav: float, cash: float,
     for p in positions:
         by_currency[p["currency"]] = by_currency.get(p["currency"], 0.0) + p["value_gbp"]
     currency_rows = [
-        {"code": code, "value_gbp": value, "weight_pct": pct(value, invested)}
+        {"code": code, "value_gbp": value, "weight_pct": pct(value, invested),
+         "color_index": _currency_sort_key(code)}
         for code, value in sorted(by_currency.items(), key=lambda kv: -kv[1])
+    ]
+
+    # Sector is a separate axis from region: region answers "where is this
+    # exposure", sector answers "what kind of business is this". XDJP is Japan
+    # by region and an ETF by sector and both are correct, which is why this
+    # rolls up independently rather than deriving one from the other.
+    by_sector: dict[str, float] = {}
+    for p in positions:
+        name = universe_mod.sector_for(p.get("con_id"), p["symbol"])
+        by_sector[name] = by_sector.get(name, 0.0) + p["value_gbp"]
+    sector_rows = [
+        {
+            "name": name,
+            "value_gbp": value,
+            "weight_pct": pct(value, invested),
+            "color_index": universe_mod.sector_sort_key(name),
+        }
+        for name, value in sorted(
+            by_sector.items(),
+            key=lambda kv: (-kv[1], universe_mod.sector_sort_key(kv[0])))
     ]
 
     ranked = sorted(positions, key=lambda p: -p["value_gbp"])
@@ -154,6 +195,7 @@ def aggregate(positions: list[dict], *, nav: float, cash: float,
             "cash_available": cash,
         },
         "regions": region_rows,
+        "sectors": sector_rows,
         "currencies": currency_rows,
         "concentration": {
             "largest_symbol": largest["symbol"] if largest else None,

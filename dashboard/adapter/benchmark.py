@@ -43,7 +43,7 @@ log = logging.getLogger("benchmark")
 # the series is one point per recorded day, so a gap in recording shortens the
 # window rather than emptying it.
 RANGE_DAYS: dict[str, float] = {
-    "1D": 2, "7D": 7, "1M": 30, "1Y": 365, "ALL": float("inf"),
+    "1D": 2, "7D": 7, "1M": 30, "3M": 90, "6M": 180, "1Y": 365, "ALL": float("inf"),
 }
 
 DEFAULT_SYMBOL = "^FTSE"
@@ -134,6 +134,20 @@ def rebase(nav_values: list[float], index_values: list[float | None]) -> list[fl
     return out
 
 
+def _since_inception(nav_rows: list[dict]) -> list[dict]:
+    """The series from the account's first real value onward.
+
+    Flex reports back to the start of its reporting year rather than to the
+    first position, so this file opens on 2025-07-30 at 0.0 and does not reach
+    a real figure until 2025-10-13. Leading only: a zero after inception means
+    the account was emptied, which is a real event and stays in the series.
+    """
+    for i, row in enumerate(nav_rows):
+        if row.get("nav_gbp"):
+            return nav_rows[i:]
+    return []
+
+
 def build(nav_rows: list[dict], index_rows: list[tuple[str, float]],
           symbol: str, name: str, currency: str) -> dict:
     """Every range at once, each sliced then rebased, ready to draw.
@@ -142,6 +156,15 @@ def build(nav_rows: list[dict], index_rows: list[tuple[str, float]],
     Returns the same shape whether or not the index had data, so the page has
     one code path and an unwarmed feed is an empty line rather than an error.
     """
+    # Drop the leading zero-NAV rows Flex pads the series with, before anything
+    # is sliced. The page does the same in `sinceInception` (js/main.js) — these
+    # two are deliberate mirrors, and if you change one, change the other. The
+    # per-range `count` below is a contract the page checks against its own
+    # point count before it will draw the line, so a series that starts on a
+    # different row here means the benchmark silently disappears rather than
+    # drawing misaligned.
+    nav_rows = _since_inception(nav_rows)
+
     dates = [r["date"] for r in nav_rows]
     values = [r["nav_gbp"] for r in nav_rows]
     carried = align(dates, index_rows)

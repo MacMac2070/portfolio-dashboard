@@ -344,6 +344,40 @@ def sector_members(sector: str) -> list[Ticker]:
     return [t for t in TICKERS.values() if t.sector == sector]
 
 
+def sector_for(con_id: int | None, symbol: str) -> str:
+    """Which sector a held position belongs to.
+
+    Keyed on conId first, as regions.lookup is, because conId is stable for a
+    contract across venues; symbol is the fallback for a position opened after
+    this registry was last edited. Anything unrecognised is OTHER rather than
+    dropped — an unmapped holding has to stay visible in the allocation totals.
+    """
+    if con_id is not None:
+        for t in TICKERS.values():
+            if t.con_id == con_id:
+                return t.sector
+    for t in TICKERS.values():
+        if t.symbol == symbol:
+            return t.sector
+    return OTHER
+
+
+def sector_sort_key(sector: str) -> int:
+    """Fixed display and colour order, so a sector keeps its hue when another
+    one drops out of the portfolio — the same contract regions.sort_key holds.
+
+    OTHER is pushed to the last categorical slot deliberately: that slot is the
+    neutral grey, and a bucket that means "no identity yet" should not wear a
+    hue that reads as one.
+    """
+    if sector == OTHER:
+        return 6
+    try:
+        return SECTOR_ORDER.index(sector)
+    except ValueError:
+        return 6
+
+
 def watchlist_symbols() -> list[str]:
     """Symbols openbb must quote — everything the IB feed does not already cover."""
     seen: dict[str, None] = {}
