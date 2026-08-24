@@ -434,6 +434,21 @@
           <div class="dcal" id="dayCal"></div>
         </section>
 
+        <section class="card perf-card" aria-labelledby="incRailTitle">
+          <div class="card__head">
+            <h2 class="card-title" id="incRailTitle">Income rail</h2>
+            <span class="perf-card__total num" id="incRailTotal"></span>
+            <span class="perf-card__period" id="incRailNote"></span>
+          </div>
+          <!-- Three tiers, never blurred: paid (solid, Flex fact), declared
+               (broker accrual, the headline), estimated (outline, marked
+               est.). -->
+          <div class="irail">
+            <div class="irail__bars" id="incRailBars"></div>
+            <div class="irail__events" id="incRailEvents"></div>
+          </div>
+        </section>
+
         <div class="perf-row perf-row--stats">
           <section class="card perf-card" aria-labelledby="incomeTitle">
             <div class="card__head">
@@ -706,6 +721,19 @@
             <span class="u-sr" id="stockFinancialsWhy"></span>
           </div>
           <div class="sstats" id="stockStats"></div>
+        </section>
+
+        <!-- distributions -->
+        <section class="card scard" id="stockDivCard">
+          <div class="scard__head">
+            <span class="scard__title">Distributions</span>
+            <span class="scard__rule" aria-hidden="true"></span>
+            <span class="scard__note" id="stockDivNote"></span>
+          </div>
+          <div class="sdivs">
+            <div class="sdivs__bars" id="stockDivBars"></div>
+            <div class="sdivs__stats" id="stockDivStats"></div>
+          </div>
         </section>
 
         <!-- profile + news -->

@@ -155,9 +155,77 @@ async function load(force = false) {
 
 /* ---------------- render ---------------- */
 
+/* ---------------- distributions ----------------
+ * Annual DPS from the desk file (daily yfinance pull), yield-on-cost against
+ * the live position. Fetched once per session — dividend history does not
+ * move intraday. */
+let deskCache = null;
+let deskWanted = false;
+
+function loadDesk() {
+  if (deskWanted) return;
+  deskWanted = true;
+  fetch("api/desk").then((r) => (r.ok ? r.json() : null))
+    .then((d) => { deskCache = d; renderDistributions(); })
+    .catch(() => {});
+}
+
+function renderDistributions() {
+  const card = $("stockDivCard");
+  if (!card || !key) return;
+  const model = deskCache?.income?.holdings?.[key];
+  const note = $("stockDivNote");
+
+  if (!deskCache?.meta?.ready) {
+    card.hidden = true;
+    return;
+  }
+  card.hidden = false;
+
+  const annual = model?.annual || [];
+  if (!annual.length) {
+    note.textContent = "";
+    $("stockDivBars").innerHTML = "";
+    $("stockDivStats").innerHTML = `
+      <p class="sdivs__none">No distributions on record — this line has not
+      paid one in the history Yahoo carries.</p>`;
+    return;
+  }
+
+  const ccy = model.currency || "";
+  const years = annual.slice(-10);
+  const currentYear = new Date().getFullYear();
+  const peak = Math.max(...years.map((y) => y.dps));
+  $("stockDivBars").innerHTML = years.map((y, i) => {
+    const prev = years[i - 1];
+    const cut = prev && y.dps < prev.dps * 0.98 && y.year !== currentYear;
+    return `
+      <div class="sdivs__col" title="${y.year}: ${y.dps.toFixed(3)} ${esc(ccy)}${
+        y.year === currentYear ? " (year to date)" : ""}${cut ? " — cut" : ""}">
+        <span class="sdivs__val num">${y.dps >= 10 ? y.dps.toFixed(0) : y.dps.toFixed(2)}</span>
+        <i class="sdivs__bar${y.year === currentYear ? " is-partial" : ""}"
+           style="height:${Math.max((y.dps / peak) * 100, 3)}%"></i>
+        <span class="sdivs__yr">${cut ? "▾ " : ""}${String(y.year).slice(2)}</span>
+      </div>`;
+  }).join("");
+
+  const stats = [];
+  stats.push(["TTM per share", `${model.ttm_dps.toFixed(model.ttm_dps >= 10 ? 1 : 3)} ${ccy}`]);
+  if (model.cadence) stats.push(["Cadence", model.cadence]);
+  if (model.streak_years > 0) stats.push(["Raised or held", `${model.streak_years}y running`]);
+  if (model.dps_cagr5 != null) stats.push(["5y growth", `${(model.dps_cagr5 * 100).toFixed(1)}%/yr`]);
+  if (model.yield_on_cost != null) stats.push(["Yield on cost", `${(model.yield_on_cost * 100).toFixed(2)}%`]);
+  $("stockDivStats").innerHTML = stats.map(([k, v]) => `
+    <div class="sdivs__stat"><span>${k}</span><b class="num">${esc(String(v))}</b></div>`).join("");
+
+  note.textContent = `per share, ${esc(ccy)} · current year is partial`;
+}
+
 function render() {
   const view = $("view-stock");
   if (!view || view.hidden) return;
+  loadDesk();
+  renderDistributions();
 
   const t = ticker();
   const d = detail || {};

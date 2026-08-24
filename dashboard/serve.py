@@ -290,6 +290,16 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                          "hint": "run adapter/desk.py once, or wait for the daily job"},
             })
         live = self._live_snapshot_or_none()
+        # Gateway down: project against the last build's share counts and FX
+        # rather than standing the £ column down entirely — the payload's meta
+        # still says the feed is disconnected, and share counts change on
+        # trades, not ticks.
+        if not (live and live.get("positions")):
+            try:
+                snapshot_path = Path(__file__).parent / "data" / "portfolio.json"
+                live = json.loads(snapshot_path.read_text())
+            except Exception:
+                live = None
         payload = {
             "meta": {"source": "yfinance", "error": None, "ready": True,
                      "fetched_at": stored["meta"].get("fetched_at"),

@@ -27,6 +27,7 @@ import { sankey, groupedBars, underwater } from "./charts.js";
 const $ = (id) => document.getElementById(id);
 const URL_ATTR = "api/attribution";
 const URL_TRACK = "api/track";
+const URL_DESK = "api/desk";
 // The grid's benchmark row follows the equity curve's picker — one selection,
 // two readouts. Same literal main.js writes.
 const BENCH_KEY = "portfolio-dashboard:benchmark";
@@ -276,6 +277,7 @@ function renderAll() {
 /* ---------------- track record ---------------- */
 
 let track = null;
+let desk = null;
 
 const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -444,18 +446,84 @@ function renderTrack() {
   renderDrawdown();
   renderDayCal();
   renderDays();
+  renderIncomeRail();
+}
+
+/* ---------------- income rail ----------------
+ * Trailing 12 months of paid dividends (solid — broker fact) against the
+ * next 12 of cadence-projected estimates (outline — a model, and it says
+ * so). Composed against live share counts and FX server-side, so the £
+ * figures move with the day. */
+function renderIncomeRail() {
+  const barsHost = $("incRailBars");
+  if (!barsHost) return;
+  const inc = desk?.income;
+  if (!desk?.meta?.ready || !inc) {
+    barsHost.innerHTML = `
+      <div class="collecting"><h3>No desk data yet</h3>
+      <p><span class="setup">run   /opt/anaconda3/bin/python3 adapter/desk.py
+then  reload — the daily job keeps it fresh from there</span></p></div>`;
+    $("incRailEvents").innerHTML = "";
+    $("incRailTotal").textContent = "";
+    $("incRailNote").textContent = "";
+    return;
+  }
+
+  const months = inc.months || [];
+  const peak = Math.max(...months.map((m) => Math.max(m.confirmed, m.estimated)), 1);
+  const now = new Date().toISOString().slice(0, 7);
+  barsHost.innerHTML = months.map((m, idx) => {
+    const conf = (m.confirmed / peak) * 100;
+    const est = (m.estimated / peak) * 100;
+    const label = monthLabel(m.month);
+    const amount = m.confirmed || m.estimated;
+    return `
+      <div class="irail__col${m.month === now ? " is-now" : ""}"
+           title="${label}: ${m.confirmed ? `£${m.confirmed.toFixed(0)} paid` : ""}${
+             m.confirmed && m.estimated ? " · " : ""}${
+             m.estimated ? `~£${m.estimated.toFixed(0)} est.` : ""}">
+        <span class="irail__amt num">${amount >= 5 ? `£${Math.round(amount)}` : ""}</span>
+        <span class="irail__stack">
+          ${m.confirmed ? `<i class="irail__seg irail__seg--paid" style="height:${Math.max(conf, 2)}%"></i>` : ""}
+          ${m.estimated ? `<i class="irail__seg irail__seg--est" style="height:${Math.max(est, 2)}%"></i>` : ""}
+        </span>
+        <span class="irail__m">${idx % 3 === 0 ? label : ""}</span>
+      </div>`;
+  }).join("");
+
+  const fmt = (d) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  $("incRailEvents").innerHTML = `
+    <p class="eyebrow">Next payments</p>
+    ${(inc.next_events || []).slice(0, 7).map((e) => `
+      <div class="irail__ev">
+        <span class="irail__evdate num">${fmt(e.date)}</span>
+        <span class="irail__evkey">${esc(e.key)}</span>
+        <span class="irail__evamt num">${e.gbp != null
+          ? `~${money(e.gbp)}`
+          : `${Number(e.amount.toFixed(4))} ${esc(e.currency)}`}</span>
+        <span class="irail__evtier">${e.tier === "declared_date" ? "declared" : "est."}</span>
+      </div>`).join("")}
+    ${inc.declared_gbp ? `<p class="irail__declared">Declared, unpaid: <b class="num">${money(inc.declared_gbp)}</b> (broker accrual)</p>` : ""}`;
+
+  $("incRailTotal").textContent = inc.forward_12m_gbp != null
+    ? `~${money(inc.forward_12m_gbp)} est. next 12m` : "";
+  $("incRailNote").textContent = inc.ready_gbp
+    ? "solid = paid · outline = estimated"
+    : "feed down — per-share schedule only";
 }
 
 async function load() {
   let bench = "";
   try { bench = localStorage.getItem(BENCH_KEY) || ""; } catch { /* private mode */ }
-  const [attr, trk] = await Promise.all([
+  const [attr, trk, dsk] = await Promise.all([
     fetch(`${URL_ATTR}?t=${Date.now()}`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
     fetch(`${URL_TRACK}?symbol=${encodeURIComponent(bench)}&t=${Date.now()}`)
       .then((r) => (r.ok ? r.json() : null)).catch(() => null),
+    fetch(`${URL_DESK}?t=${Date.now()}`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
   ]);
   data = attr;
   track = trk && trk.ready !== undefined ? trk : null;
+  desk = dsk;
   loaded = true;
   renderAll();
 }
