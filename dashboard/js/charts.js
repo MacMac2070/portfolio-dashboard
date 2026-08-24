@@ -1044,6 +1044,60 @@ export function sankey(svg, data, { formatValue, tooltip } = {}) {
   svg.append(summary);
 }
 
+/* ---------------- treemap layout ---------------- */
+
+/**
+ * Squarified treemap: values -> rects in a unit box, aspect-ratio-greedy.
+ * Pure layout — the caller renders. Returns [{i, x, y, w, h}] in 0..1 space.
+ */
+export function squarify(values, width = 1, height = 1) {
+  const total = values.reduce((s, v) => s + v, 0);
+  if (!(total > 0)) return [];
+  const items = values.map((v, i) => ({ i, area: (v / total) * width * height }))
+    .sort((a, b) => b.area - a.area);
+
+  const out = [];
+  let x = 0, y = 0, w = width, h = height;
+  let row = [];
+
+  const worst = (r, side) => {
+    const sum = r.reduce((s, it) => s + it.area, 0);
+    let max = 0;
+    for (const it of r) {
+      const a = (side * side * it.area) / (sum * sum);
+      max = Math.max(max, a, 1 / a);
+    }
+    return max;
+  };
+  const layoutRow = (r) => {
+    const sum = r.reduce((s, it) => s + it.area, 0);
+    const horiz = w < h;                        // lay along the shorter side
+    const side = horiz ? w : h;
+    const thick = sum / side;
+    let off = 0;
+    for (const it of r) {
+      const len = it.area / thick;
+      out.push(horiz
+        ? { i: it.i, x: x + off, y, w: len, h: thick }
+        : { i: it.i, x, y: y + off, w: thick, h: len });
+      off += len;
+    }
+    if (horiz) { y += thick; h -= thick; } else { x += thick; w -= thick; }
+  };
+
+  for (const it of items) {
+    const side = Math.min(w, h);
+    if (!row.length || worst([...row, it], side) <= worst(row, side)) {
+      row.push(it);
+    } else {
+      layoutRow(row);
+      row = [it];
+    }
+  }
+  if (row.length) layoutRow(row);
+  return out;
+}
+
 /* ---------------- underwater ---------------- */
 
 /**

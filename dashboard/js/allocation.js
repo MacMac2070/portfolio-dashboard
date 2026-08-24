@@ -15,8 +15,9 @@
  * inspiration/shadcn-fintech-abderrahimghazali's notes propose, driven off the
  * same active state the ring already holds rather than a second mechanism.
  */
-import { money, moneySigned, pct, esc, count } from "./format.js";
+import { money, moneySigned, pct, pctSigned, esc, count } from "./format.js";
 import { allocRing, catColor } from "./alloc.js";
+import { squarify } from "./charts.js";
 
 const $ = (id) => document.getElementById(id);
 const setText = (node, text) => {
@@ -50,8 +51,10 @@ const AXES = {
 };
 
 let axis = "region";
+let chartMode = "ring";
 let ring = null;
 let data = null;
+let intent = null;    // /api/intent: operator targets + rule thresholds
 
 /** Positions in a slice of the current axis, or all of them for null. */
 function positionsIn(row) {
@@ -177,7 +180,164 @@ function render() {
     return;
   }
 
-  ring.render(rows, data.kpis?.invested ?? 0);
+  if (chartMode === "map") {
+    $("allocSplit").hidden = true;
+    $("allocMap").hidden = false;
+    renderMap(rows);
+    // The ring still holds the shared active state; keep its data current so
+    // the KPI swap has rows to read even while the svg is hidden.
+    ring.render(rows, data.kpis?.invested ?? 0);
+  } else {
+    $("allocSplit").hidden = false;
+    $("allocMap").hidden = true;
+    ring.render(rows, data.kpis?.invested ?? 0);
+  }
+  renderDrift(rows);
+  renderRules();
+}
+
+/* ---------------- treemap ----------------
+ * Cells are positions sized by value; the border hue names the slice the
+ * position belongs to on the current axis, and the printed figures — ticker,
+ * weight, signed return — carry the reading. The P&L tint is a low-alpha
+ * second cue, never the encoding. Hovering a cell drives the same active
+ * state the arcs and legend do, so the KPI strip and positions list follow. */
+function renderMap(rows) {
+  const host = $("allocMap");
+  const all = [...(data?.positions || [])].sort((a, b) => b.value_gbp - a.value_gbp);
+  if (!all.length) { host.innerHTML = ""; return; }
+
+  const field = AXES[axis].field;
+  const sliceIndex = new Map(rows.map((r, i) => [r.name, i]));
+  const hue = new Map(rows.map((r) => [r.name, catColor(r.color_index)]));
+  const invested = data.kpis?.invested || 1;
+
+  const rects = squarify(all.map((p) => p.value_gbp));
+  host.innerHTML = rects.map(({ i, x, y, w, h }) => {
+    const p = all[i];
+    const slice = p[field] ?? "—";
+    const ret = p.unrealised_pct;
+    const big = w * h > 0.02;
+    return `
+      <div class="allocmap__cell" tabindex="0"
+           data-slice-i="${sliceIndex.get(slice) ?? ""}"
+           style="left:${(x * 100).toFixed(2)}%; top:${(y * 100).toFixed(2)}%;
+                  width:${(w * 100).toFixed(2)}%; height:${(h * 100).toFixed(2)}%;
+                  border-color:${hue.get(slice) || "var(--border-strong)"};
+                  background:${ret > 0 ? "var(--pos-bg)" : ret < 0 ? "var(--neg-bg)" : "var(--wash-1)"}">
+        <span class="allocmap__sym">${esc(p.symbol)}</span>
+        ${big ? `<span class="allocmap__figs num">${pct((p.value_gbp / invested) * 100)}
+                 · ${Number.isFinite(ret) ? pctSigned(ret) : "—"}</span>` : ""}
+      </div>`;
+  }).join("");
+
+  host.onpointerover = (e) => {
+    const cell = e.target.closest(".allocmap__cell");
+    const i = cell?.dataset.sliceI;
+    if (i !== undefined && i !== "") ring.setActive(Number(i));
+  };
+  host.onpointerout = () => ring.setActive(null);
+  host.onfocusin = host.onpointerover;
+  host.onfocusout = host.onpointerout;
+}
+
+/* ---------------- target drift ---------------- */
+function renderDrift(rows) {
+  const host = $("driftBody");
+  if (!host) return;
+  const targets = intent?.targets?.[axis] || {};
+  const keys = Object.keys(targets);
+  if (!keys.length) {
+    host.innerHTML = `
+      <div class="collecting">
+        <h3>No targets set for ${esc(AXES[axis].label.toLowerCase())}</h3>
+        <p><span class="setup">file     config.local.json
+key      "targets" → "${esc(axis)}"
+example  { "Hong Kong / China": 25, "United States": 30 }</span></p>
+      </div>`;
+    $("driftNote").textContent = "";
+    return;
+  }
+
+  const invested = data?.kpis?.invested || 0;
+  const actual = new Map(rows.map((r) => [r.name, r.weight_pct]));
+  const names = [...new Set([...keys, ...rows.map((r) => r.name)])];
+  const entries = names
+    .map((name) => {
+      const want = targets[name];
+      if (want == null) return null;
+      const have = actual.get(name) ?? 0;
+      const drift = have - want;
+      return { name, want, have, drift, gbp: (drift / 100) * invested };
+    })
+    .filter(Boolean)
+    .sort((a, b) => Math.abs(b.drift) - Math.abs(a.drift));
+
+  const span = Math.max(...entries.map((e) => Math.abs(e.drift)), 2);
+  host.innerHTML = entries.map((e) => `
+    <div class="drift__row">
+      <span class="drift__name">${esc(e.name)}</span>
+      <span class="drift__nums num">${pct(e.have, 1)} <i>of ${pct(e.want, 0)}</i></span>
+      <span class="drift__bar">
+        <i class="drift__fill ${e.drift < 0 ? "is-under" : ""}"
+           style="width:${(Math.abs(e.drift) / span) * 50}%"></i>
+      </span>
+      <span class="drift__gbp num">${e.drift > 0 ? "sell" : "buy"} ~${money(Math.abs(e.gbp))}</span>
+    </div>`).join("");
+  $("driftNote").textContent = "actual vs target · rebalance at current NAV";
+}
+
+/* ---------------- rules ---------------- */
+const HHI = (rows, total) =>
+  rows.reduce((s, p) => s + ((p.value_gbp / total) * 100) ** 2, 0);
+
+function renderRules() {
+  const host = $("rulesBody");
+  if (!host || !data) return;
+  const rules = intent?.rules || {};
+  const positions = data.positions || [];
+  const invested = data.kpis?.invested || 0;
+  const nav = data.kpis?.net_liquidation || 0;
+
+  const rows = [];
+  const add = (label, value, limit, ok, fmtV = (v) => pct(v, 1)) =>
+    rows.push({ label, value: fmtV(value), limit, ok });
+
+  if (rules.max_position_pct != null && positions.length && invested) {
+    const top = positions.reduce((a, b) => (a.value_gbp > b.value_gbp ? a : b));
+    const w = (top.value_gbp / invested) * 100;
+    add(`Largest position (${top.symbol})`, w, `≤ ${rules.max_position_pct}%`,
+        w <= rules.max_position_pct);
+  }
+  if (rules.cash_floor_pct != null && nav) {
+    const cash = ((data.kpis?.cash_available || 0) / nav) * 100;
+    add("Cash", cash, `≥ ${rules.cash_floor_pct}%`, cash >= rules.cash_floor_pct);
+  }
+  for (const [ccy, cap] of Object.entries(rules.currency_band || {})) {
+    const row = (data.currencies || []).find((c) => c.code === ccy);
+    const w = row?.weight_pct ?? 0;
+    add(`${ccy} exposure`, w, `≤ ${cap}%`, w <= cap);
+  }
+
+  // The concentration figures: computed, not thresholds.
+  if (positions.length && invested) {
+    const hhi = HHI(positions, invested);
+    rows.push({ label: "Effective positions", value: (10000 / hhi).toFixed(1),
+                limit: `of ${positions.length}`, ok: null });
+    rows.push({ label: "HHI", value: Math.round(hhi).toString(), limit: "", ok: null });
+  }
+
+  host.innerHTML = rows.map((r) => `
+    <div class="rules__row">
+      <span class="rules__state ${r.ok === false ? "is-breach" : r.ok === true ? "is-ok" : ""}"
+            aria-hidden="true">${r.ok === false ? "▲" : r.ok === true ? "●" : "·"}</span>
+      <span class="rules__label">${esc(r.label)}</span>
+      <span class="rules__value num">${esc(r.value)}</span>
+      <span class="rules__limit num">${esc(r.limit)}</span>
+      <span class="rules__word">${r.ok === false ? "breach" : r.ok === true ? "ok" : ""}</span>
+    </div>`).join("");
+  $("rulesNote").textContent = intent?.rules_source === "config"
+    ? "thresholds from config.local.json" : "default thresholds · set yours in config.local.json";
 }
 
 /** Called by main.js whenever fresh figures land, live tick included. */
@@ -211,6 +371,22 @@ export function init() {
   window.addEventListener("hashchange", () => {
     if (!$("view-allocation")?.hidden) route();
   });
+
+  $("allocMode")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-mode]");
+    if (!button || button.dataset.mode === chartMode) return;
+    chartMode = button.dataset.mode;
+    for (const other of $("allocMode").querySelectorAll("[data-mode]")) {
+      other.setAttribute("aria-pressed", String(other === button));
+    }
+    render();
+  });
+
+  // Operator intent: fetched once per session — it changes when the config
+  // file does, which is not while the page is open.
+  fetch("api/intent").then((r) => (r.ok ? r.json() : null))
+    .then((d) => { intent = d; if (!$("view-allocation")?.hidden) render(); })
+    .catch(() => {});
 
   $("allocAxis")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-axis]");

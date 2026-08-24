@@ -320,7 +320,14 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                      if not k.startswith("_")}
         except Exception:
             pass    # unconfigured is a designed state, not an error
-        payload = {"meta": {"error": None}, "targets": targets, "rules": rules}
+        # Built-in thresholds so the rules panel is alive before anything is
+        # configured; the panel labels them "default" until config overrides.
+        defaults = {"max_position_pct": 20, "cash_floor_pct": 5,
+                    "currency_band": {"HKD": 40}}
+        merged = {**defaults, **rules}
+        payload = {"meta": {"error": None}, "targets": targets,
+                   "rules": merged,
+                   "rules_source": "config" if rules else "default"}
         assert "flex_token" not in json.dumps(payload)
         return self._json(payload)
 

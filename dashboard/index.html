@@ -483,9 +483,14 @@
               <button class="range" type="button" data-axis="sector" aria-pressed="false">Sector</button>
               <button class="range" type="button" data-axis="currency" aria-pressed="false">Currency</button>
             </div>
+            <div class="ranges" id="allocMode" role="group" aria-label="Chart style">
+              <button class="range" type="button" data-mode="ring" aria-pressed="true">Ring</button>
+              <button class="range" type="button" data-mode="map" aria-pressed="false">Map</button>
+            </div>
           </div>
 
-          <div class="alloc-split">
+          <div class="allocmap" id="allocMap" hidden></div>
+          <div class="alloc-split" id="allocSplit">
             <div class="alloc-ring">
               <svg id="allocDonut" role="img" aria-label="Allocation breakdown"></svg>
             </div>
@@ -518,6 +523,26 @@
           </div>
           <div class="allocpos" id="allocPositions"></div>
         </section>
+
+        <div class="perf-row">
+          <section class="card" aria-labelledby="driftTitle">
+            <div class="card__head">
+              <h2 class="card-title" id="driftTitle">Target drift</h2>
+              <span class="perf-card__period" id="driftNote"></span>
+            </div>
+            <!-- Drift is intent, not P&L, so the bars are violet — green and
+                 red stay reserved. -->
+            <div class="drift" id="driftBody"></div>
+          </section>
+
+          <section class="card" aria-labelledby="rulesTitle">
+            <div class="card__head">
+              <h2 class="card-title" id="rulesTitle">Rules</h2>
+              <span class="perf-card__period" id="rulesNote"></span>
+            </div>
+            <div class="rules" id="rulesBody"></div>
+          </section>
+        </div>
       </section>
 
       <section class="view" id="view-market" role="tabpanel" aria-label="Market watch" hidden>

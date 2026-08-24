@@ -164,5 +164,9 @@ export function allocRing({ svg, legend, caption = "Invested", onActive } = {}) 
     },
     /** The active row, or null. For a caller that needs to read it back. */
     activeRow: () => (active == null ? null : rows[active]),
+    /** Drive the shared active state from outside — the treemap's cells use
+     *  the same channel the arcs and legend rows do, so every readout that
+     *  follows hover follows it identically. */
+    setActive,
   };
 }
