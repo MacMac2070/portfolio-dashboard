@@ -122,7 +122,18 @@ def fetch_statement(token: str, query_id: str, *,
     base_url = (root.findtext("Url") or GET_URL).strip()
 
     for attempt in range(POLL_ATTEMPTS):
-        body = _get(base_url, {"t": token, "q": reference, "v": VERSION})
+        try:
+            body = _get(base_url, {"t": token, "q": reference, "v": VERSION})
+        except OSError:
+            if base_url == GET_URL:
+                raise
+            # IBKR has started advertising GetStatement on hosts that do not
+            # always resolve (gdcdyn.…); the documented endpoint serves the
+            # same reference codes, so fall back rather than fail the run.
+            log.warning("advertised statement host unreachable (%s); "
+                        "falling back to %s", base_url.split("/")[2], GET_URL.split("/")[2])
+            base_url = GET_URL
+            body = _get(base_url, {"t": token, "q": reference, "v": VERSION})
         statement = ET.fromstring(body)
 
         # While generating, IBKR returns a FlexStatementResponse with a warning

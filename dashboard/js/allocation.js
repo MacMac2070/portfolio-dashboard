@@ -192,7 +192,7 @@ function render() {
     $("allocMap").hidden = true;
     ring.render(rows, data.kpis?.invested ?? 0);
   }
-  renderDrift(rows);
+  renderConcentration(rows);
   renderRules();
 }
 
@@ -241,50 +241,39 @@ function renderMap(rows) {
   host.onfocusout = host.onpointerout;
 }
 
-/* ---------------- target drift ---------------- */
-function renderDrift(rows) {
-  const host = $("driftBody");
-  if (!host) return;
-  const targets = intent?.targets?.[axis] || {};
-  const keys = Object.keys(targets);
-  if (!keys.length) {
-    host.innerHTML = `
-      <div class="collecting">
-        <h3>No targets set for ${esc(AXES[axis].label.toLowerCase())}</h3>
-        <p><span class="setup">file     config.local.json
-key      "targets" → "${esc(axis)}"
-example  { "Hong Kong / China": 25, "United States": 30 }</span></p>
+/* ---------------- concentration ----------------
+ * Slice weights on the current axis against a single cap — the config-free
+ * answer to "am I too heavy anywhere". The rules card handles the position
+ * grain; this one handles the slice grain, and the cap marker on every bar
+ * keeps the threshold visible even when nothing breaches it. */
+function renderConcentration(rows) {
+  const host = $("concBody");
+  if (!host || !rows.length) { if (host) host.innerHTML = ""; return; }
+
+  const cap = intent?.rules?.max_slice_pct ?? 35;
+  const ranked = [...rows].sort((a, b) => b.weight_pct - a.weight_pct);
+  const span = Math.max(ranked[0].weight_pct, cap) * 1.12;
+
+  host.innerHTML = ranked.map((r) => {
+    const heavy = r.weight_pct > cap;
+    return `
+      <div class="conc__row${heavy ? " is-heavy" : ""}">
+        <span class="conc__dot" style="background:${catColor(r.color_index)}"></span>
+        <span class="conc__name">${esc(r.name)}</span>
+        <span class="conc__bar">
+          <i class="conc__fill" style="width:${(r.weight_pct / span) * 100}%"></i>
+          <i class="conc__cap" style="left:${(cap / span) * 100}%"></i>
+        </span>
+        <span class="conc__pct num">${pct(r.weight_pct, 1)}</span>
+        <span class="conc__val num">${money(r.value_gbp)}</span>
+        <span class="conc__flag">${heavy ? "▲ heavy" : ""}</span>
       </div>`;
-    $("driftNote").textContent = "";
-    return;
-  }
+  }).join("");
 
-  const invested = data?.kpis?.invested || 0;
-  const actual = new Map(rows.map((r) => [r.name, r.weight_pct]));
-  const names = [...new Set([...keys, ...rows.map((r) => r.name)])];
-  const entries = names
-    .map((name) => {
-      const want = targets[name];
-      if (want == null) return null;
-      const have = actual.get(name) ?? 0;
-      const drift = have - want;
-      return { name, want, have, drift, gbp: (drift / 100) * invested };
-    })
-    .filter(Boolean)
-    .sort((a, b) => Math.abs(b.drift) - Math.abs(a.drift));
-
-  const span = Math.max(...entries.map((e) => Math.abs(e.drift)), 2);
-  host.innerHTML = entries.map((e) => `
-    <div class="drift__row">
-      <span class="drift__name">${esc(e.name)}</span>
-      <span class="drift__nums num">${pct(e.have, 1)} <i>of ${pct(e.want, 0)}</i></span>
-      <span class="drift__bar">
-        <i class="drift__fill ${e.drift < 0 ? "is-under" : ""}"
-           style="width:${(Math.abs(e.drift) / span) * 50}%"></i>
-      </span>
-      <span class="drift__gbp num">${e.drift > 0 ? "sell" : "buy"} ~${money(Math.abs(e.gbp))}</span>
-    </div>`).join("");
-  $("driftNote").textContent = "actual vs target · rebalance at current NAV";
+  const top2 = ranked.slice(0, 2).reduce((s2, r) => s2 + r.weight_pct, 0);
+  $("concNote").textContent =
+    `cap ${cap}% ${intent?.rules_source === "config" ? "(config)" : "(default)"}`
+    + ` · top ${pct(ranked[0].weight_pct, 0)} · top 2 ${pct(top2, 0)}`;
 }
 
 /* ---------------- rules ---------------- */

@@ -335,7 +335,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         # Built-in thresholds so the rules panel is alive before anything is
         # configured; the panel labels them "default" until config overrides.
         defaults = {"max_position_pct": 20, "cash_floor_pct": 5,
-                    "currency_band": {"HKD": 40}}
+                    "currency_band": {"HKD": 40}, "max_slice_pct": 35}
         merged = {**defaults, **rules}
         payload = {"meta": {"error": None}, "targets": targets,
                    "rules": merged,

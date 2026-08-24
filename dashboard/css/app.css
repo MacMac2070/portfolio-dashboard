@@ -3376,11 +3376,11 @@ a.prow--pos:active { background: var(--violet-tint-18); }
   white-space: nowrap;
 }
 
-/* ---- allocation: target drift ---- */
-.drift { display: grid; gap: 2px; padding: var(--s-2) var(--s-5) var(--s-4); }
-.drift__row {
+/* ---- allocation: concentration ---- */
+.conc { display: grid; gap: 2px; padding: var(--s-2) var(--s-5) var(--s-4); }
+.conc__row {
   display: grid;
-  grid-template-columns: minmax(110px, 1.2fr) auto minmax(120px, 1fr) auto;
+  grid-template-columns: 10px minmax(96px, 1fr) minmax(120px, 1.3fr) auto auto 64px;
   gap: var(--s-3);
   align-items: center;
   padding: 4px 0;
@@ -3388,26 +3388,35 @@ a.prow--pos:active { background: var(--violet-tint-18); }
   font-size: 12px;
   color: var(--text-2);
 }
-.drift__row:first-child { border-top: 0; }
-.drift__name { color: var(--text); }
-.drift__nums { white-space: nowrap; }
-.drift__nums i { font-style: normal; color: var(--text-3); }
-/* A diverging bar off a centre hairline: right = overweight, left = under.
-   Violet — drift is intent, not P&L. */
-.drift__bar {
-  position: relative;
-  height: 10px;
-  background:
-    linear-gradient(var(--border-strong), var(--border-strong)) 50% 0 / 1px 100% no-repeat;
-}
-.drift__fill {
-  position: absolute;
-  left: 50%; top: 2px; bottom: 2px;
+.conc__row:first-child { border-top: 0; }
+.conc__dot { width: 10px; height: 10px; border-radius: 3px; }
+.conc__name { color: var(--text); }
+.conc__bar { position: relative; height: 10px; background: var(--track); }
+.conc__fill {
+  position: absolute; inset: 2px auto 2px 0;
   background: var(--brand-soft);
-  opacity: 0.85;
+  opacity: 0.8;
 }
-.drift__fill.is-under { left: auto; right: 50%; opacity: 0.5; }
-.drift__gbp { color: var(--text-2); white-space: nowrap; }
+/* The cap: a hairline everyone can see whether or not anything crosses it. */
+.conc__cap {
+  position: absolute; top: -2px; bottom: -2px;
+  width: 1px; background: var(--border-strong);
+}
+.conc__pct, .conc__val {
+  font-family: var(--font-figure);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: var(--ff-tabular);
+  text-align: right;
+}
+.conc__val { color: var(--text-3); min-width: 62px; }
+.conc__flag {
+  text-align: right;
+  font: 600 10px/1 var(--font-ui);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--neg);
+}
+.conc__row.is-heavy .conc__fill { opacity: 1; }
 
 /* ---- allocation: rules ---- */
 .rules { display: grid; gap: 2px; padding: var(--s-2) var(--s-5) var(--s-4); }
