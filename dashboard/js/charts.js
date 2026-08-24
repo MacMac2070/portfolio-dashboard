@@ -1165,6 +1165,13 @@ export function underwater(svg, curve, { tooltip, formatDate } = {}) {
   }
   svg.append(xLabels);
 
+  // Crosshair + snapped dot, the same vocabulary the equity curve speaks:
+  // a dashed vertical at the hovered day and a point where it meets the
+  // curve, so the tooltip's figure has a place on the line.
+  const crosshair = el("line", { class: "plot__crosshair", y1: padT, y2: h - padB, opacity: 0 });
+  const dot = el("circle", { class: "plot__dot", r: 4, fill: "var(--neg)", opacity: 0 });
+  svg.append(crosshair, dot);
+
   if (tooltip) {
     svg.addEventListener("pointermove", (event) => {
       const rect = svg.getBoundingClientRect();
@@ -1172,20 +1179,31 @@ export function underwater(svg, curve, { tooltip, formatDate } = {}) {
       const i = Math.max(0, Math.min(curve.length - 1,
         Math.round(((frac * w) - padL) / (w - padL - padR) * (curve.length - 1))));
       const p = curve[i];
+      const px = x(i), py = y(p.dd);
+      crosshair.setAttribute("x1", px);
+      crosshair.setAttribute("x2", px);
+      crosshair.setAttribute("opacity", 1);
+      dot.setAttribute("cx", px);
+      dot.setAttribute("cy", py);
+      dot.setAttribute("opacity", 1);
       tooltip.dataset.open = "true";
       tooltip.innerHTML = `<div class="tip__date">${formatDate ? formatDate(p.date) : p.date}</div>`
-        + `<div class="tip__val">${(p.dd * 100).toFixed(2)}% from peak</div>`;
+        + `<div class="tip__val">${p.dd < -0.0005 ? `${(p.dd * 100).toFixed(2)}% from peak` : "at peak"}</div>`;
       tooltip.style.left = `${Math.min(event.clientX + 14, window.innerWidth - tooltip.offsetWidth - 8)}px`;
       tooltip.style.top = `${event.clientY - 8}px`;
     });
-    svg.addEventListener("pointerleave", () => { tooltip.dataset.open = "false"; });
+    svg.addEventListener("pointerleave", () => {
+      tooltip.dataset.open = "false";
+      crosshair.setAttribute("opacity", 0);
+      dot.setAttribute("opacity", 0);
+    });
   }
 
-  const summary = el("title");
-  summary.textContent =
+  // aria-label, not a <title> child — the browser renders <title> as its own
+  // native bubble on top of the styled tooltip (the Sankey had the same bug).
+  svg.setAttribute("aria-label",
     `Drawdown: worst ${(worst * 100).toFixed(1)}% from peak; currently `
-    + `${(curve[curve.length - 1].dd * 100).toFixed(1)}%.`;
-  svg.append(summary);
+    + `${(curve[curve.length - 1].dd * 100).toFixed(1)}%.`);
 }
 
 /* ---------------- count-up ---------------- */
