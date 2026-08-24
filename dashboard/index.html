@@ -563,6 +563,10 @@
 
       <section class="view view--scroll" id="view-market" role="tabpanel" aria-label="Market watch" hidden>
 
+        <!-- One screenful exactly: hero, desk context, bar and the 4x2 board
+             share the viewport; the news digest lives below the fold, where a
+             long list belongs. -->
+        <div class="board-fit">
         <section class="board-hero" aria-labelledby="boardDate">
           <div class="board-hero__top">
             <div class="board-hero__id">
@@ -618,6 +622,7 @@
         </div>
 
         <div class="board-grid" id="boardGrid"></div>
+        </div>
 
         <p class="board-foot">Index levels quote in each market's own currency and are price return,
           excluding dividends. Exposure converts your positions to GBP at the mid-market rate.</p>
