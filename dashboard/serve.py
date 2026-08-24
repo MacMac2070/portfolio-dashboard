@@ -134,6 +134,12 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             return self._benchmark()
         if route == "/api/attribution":
             return self._attribution()
+        if route == "/api/track":
+            return self._track()
+        if route == "/api/desk":
+            return self._desk()
+        if route == "/api/intent":
+            return self._intent()
         # Prefix rather than equality — this is the one endpoint with the
         # instrument key in the path.
         if route.startswith("/api/instrument/"):
@@ -244,6 +250,86 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             except Exception:
                 log.exception("could not add %r to the watchlist feed", key)
         return self._json(result)
+
+    def _track(self):
+        """The track-record derivations: daily/monthly returns, drawdown, days.
+
+        Everything comes off the two stores the backfill writes plus the index
+        history the market feed already holds; nothing here fetches.
+        """
+        import track  # noqa: PLC0415 — adapter/ is on sys.path
+
+        meta = {"source": "ibkr-flex", "error": None}
+        try:
+            # Same source _benchmark reads: whatever the market feed last
+            # pulled, keyed by index symbol. Absent feed -> no benchmark row,
+            # which track.build treats as an honest gap, not an error.
+            history = (DashboardHandler.markets.history
+                       if DashboardHandler.markets is not None else None)
+            payload = track.build(index_history=history)
+        except Exception as exc:
+            log.exception("track build failed")
+            return self._json({"meta": {"source": "ibkr-flex", "error": str(exc)}})
+        return self._json({"meta": meta, **payload})
+
+    def _desk(self):
+        """Desk context: the daily yfinance pull plus request-time derivations.
+
+        desk.json is static (refresh.py rewrites it daily); income projections
+        are composed here against the live feed's positions and FX so they move
+        with the day. Absent file -> honest not-ready payload, never an error.
+        """
+        import desk  # noqa: PLC0415
+        import income  # noqa: PLC0415
+
+        stored = desk.read()
+        if not stored:
+            return self._json({
+                "meta": {"source": "yfinance", "error": None, "ready": False,
+                         "hint": "run adapter/desk.py once, or wait for the daily job"},
+            })
+        live = self._live_snapshot_or_none()
+        payload = {
+            "meta": {"source": "yfinance", "error": None, "ready": True,
+                     "fetched_at": stored["meta"].get("fetched_at"),
+                     "errors": stored["meta"].get("errors") or {}},
+            "holdings": stored.get("holdings") or {},
+            "income": income.build(stored, live),
+        }
+        return self._json(payload)
+
+    def _intent(self):
+        """Operator intent from config.local.json: targets and rules.
+
+        Reads only the two keys it serves — the Flex token lives in the same
+        file and must never ride along. The assertion is belt-and-braces: the
+        payload is constructed from an allowlist, so the token cannot appear.
+        """
+        targets, rules = {}, {}
+        try:
+            import flex  # noqa: PLC0415
+            config = flex.load_config()
+            raw_t = config.get("targets") or {}
+            targets = {axis: raw_t.get(axis) or {}
+                       for axis in ("region", "sector", "currency")}
+            # Drop the _comment keys the example carries.
+            targets = {a: {k: v for k, v in m.items() if not k.startswith("_")}
+                       for a, m in targets.items()}
+            rules = {k: v for k, v in (config.get("rules") or {}).items()
+                     if not k.startswith("_")}
+        except Exception:
+            pass    # unconfigured is a designed state, not an error
+        payload = {"meta": {"error": None}, "targets": targets, "rules": rules}
+        assert "flex_token" not in json.dumps(payload)
+        return self._json(payload)
+
+    def _live_snapshot_or_none(self):
+        """The live feed's latest composition, or None — never raises."""
+        try:
+            feed = DashboardHandler.feed
+            return feed.snapshot() if feed is not None else None
+        except Exception:
+            return None
 
     def _instrument(self, raw_key):
         # Same contract as the other three: always 200, with meta.error carrying

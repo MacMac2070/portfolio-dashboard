@@ -35,8 +35,23 @@ def _read(path: Path) -> list[dict]:
     return rows
 
 
-def _write(path: Path, rows: list[dict]) -> None:
+def _write(path: Path, rows: list[dict], *, allow_shrink: bool = False) -> None:
+    """Write the store, refusing to shrink it.
+
+    Flex reaches back at most 365 days, so from about Oct 2026 the oldest rows
+    in these files exist nowhere else — the store is the archive, not a cache.
+    Every merge above is union-semantics and can only grow the file; a write
+    carrying fewer rows than are on disk therefore means a bug upstream, and
+    losing rows to it would be silent and permanent. Refuse loudly instead.
+    (Committing data/ to git is the backup — see README.)"""
     path.parent.mkdir(parents=True, exist_ok=True)
+    if not allow_shrink and path.exists():
+        existing = sum(1 for line in path.read_text().splitlines() if line.strip())
+        if len(rows) < existing:
+            raise RuntimeError(
+                f"refusing to shrink {path.name}: {existing} rows on disk, "
+                f"asked to write {len(rows)} — pass allow_shrink=True only if "
+                "this loss is intended")
     path.write_text("".join(json.dumps(row) + "\n" for row in rows))
 
 

@@ -140,6 +140,14 @@ def main() -> int:
     except Exception:
         log.exception("directory rebuild failed; the previous directory still serves")
 
+    # The archive census. Flex's 365-day window means these files are the only
+    # copy of the early history; a shrinking count here is the alarm.
+    log.info("archive: nav=%d rows, cash=%d, nav_change=%d, tx=%d",
+             *(sum(1 for _ in path.read_text().splitlines() if _.strip())
+               if path.exists() else 0
+               for path in (store.NAV_PATH, store.CASH_PATH,
+                            store.NAV_CHANGE_PATH, store.TX_PATH)))
+
     log.info("refresh complete — %d positions, invested %.2f",
              len(payload.get("positions", [])), payload.get("kpis", {}).get("invested", 0))
     return 0

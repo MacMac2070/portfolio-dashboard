@@ -1,10 +1,8 @@
 {
-  "_comment": "Copy to config.local.json and fill in. That file holds a live credential — keep it out of version control.",
-
+  "_comment": "Copy to config.local.json and fill in. That file holds a live credential \u2014 keep it out of version control.",
   "flex_token": "PASTE_YOUR_FLEX_WEB_SERVICE_TOKEN",
   "nav_query_id": "PASTE_ACTIVITY_STATEMENT_QUERY_ID",
   "trades_query_id": "PASTE_TRADE_CONFIRMATION_QUERY_ID",
-
   "_how_to_get_these": [
     "IBKR Account Management -> Settings -> Account Reporting -> Flex Web Service",
     "Generate a token (this is flex_token).",
@@ -24,7 +22,7 @@
     "",
     "trades_query_id is optional: set it only if you keep a separate Trade",
     "Confirmation query. With Trades in the Activity Statement above, leave it",
-    "empty and the backfill reads trades from that one report instead — one",
+    "empty and the backfill reads trades from that one report instead \u2014 one",
     "Flex request rather than two.",
     "",
     "For Cash Transactions, include the types: Dividends, Payment In Lieu Of",
@@ -34,5 +32,19 @@
     "Then: /opt/anaconda3/bin/python3 adapter/backfill.py",
     "It prints which sections the statement actually carried, and names any",
     "that are still missing."
-  ]
+  ],
+  "targets": {
+    "_comment": "Optional. Target weights in percent per axis; keys must match the names the payload uses. Drives the Allocation drift bars.",
+    "region": {},
+    "sector": {},
+    "currency": {}
+  },
+  "rules": {
+    "_comment": "Optional. Thresholds for the Allocation rules panel.",
+    "max_position_pct": 20,
+    "cash_floor_pct": 5,
+    "currency_band": {
+      "HKD": 40
+    }
+  }
 }
