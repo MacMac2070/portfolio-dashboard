@@ -1044,6 +1044,96 @@ export function sankey(svg, data, { formatValue, tooltip } = {}) {
   svg.append(summary);
 }
 
+/* ---------------- underwater ---------------- */
+
+/**
+ * Drawdown from peak: a series that lives at or below zero.
+ *
+ * The zero rule sits at the top of the plot and the red wash hangs beneath
+ * it — the equity curve tells the up story, this one owes the reader the
+ * pain, plainly. Same restraint as every other fill here: flat, faint, no
+ * gradient. Green never appears; a drawdown of zero is the absence of the
+ * mark, not a gain.
+ */
+export function underwater(svg, curve, { tooltip, formatDate } = {}) {
+  svg.replaceChildren();
+  if (!curve || curve.length < 2) return;
+
+  const box = svg.getBoundingClientRect();
+  const w = Math.max(280, Math.round(box.width) || 520);
+  const h = Math.max(120, Math.round(box.height) || 170);
+  svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+  svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+
+  const padL = 40, padR = 8, padT = 6, padB = 22;
+  const worst = Math.min(...curve.map((p) => p.dd));
+  const floor = Math.min(worst * 1.15, -0.02);   // headroom below the trough
+
+  const x = (i) => padL + (i / (curve.length - 1)) * (w - padL - padR);
+  const y = (v) => padT + (v / floor) * (h - padT - padB);
+
+  const grid = el("g");
+  for (const value of niceTicks(floor, 0, 3)) {
+    if (value > 0 || value < floor) continue;
+    const yy = y(value);
+    grid.append(el("line", { class: "plot__grid", x1: padL, x2: w - padR, y1: yy, y2: yy }));
+    const label = el("text", { class: "plot__axis", x: padL - 6, y: yy + 3, "text-anchor": "end" });
+    label.textContent = `${Math.round(value * 100)}%`;
+    grid.append(label);
+  }
+  svg.append(grid);
+
+  const pts = curve.map((p, i) => `${x(i).toFixed(2)},${y(p.dd).toFixed(2)}`);
+  svg.append(el("path", {
+    d: `M${padL},${y(0)} L${pts.join(" L")} L${x(curve.length - 1)},${y(0)} Z`,
+    fill: "var(--neg)", "fill-opacity": 0.12, stroke: "none",
+  }));
+  svg.append(el("path", {
+    d: `M${pts.join(" L")}`,
+    fill: "none", stroke: "var(--neg)", "stroke-width": 1.4,
+    "stroke-linejoin": "round", "vector-effect": "non-scaling-stroke",
+  }));
+  // The zero rule the drawdown hangs from.
+  svg.append(el("line", {
+    x1: padL, x2: w - padR, y1: y(0), y2: y(0),
+    stroke: "var(--border-strong)", "stroke-width": 1,
+  }));
+
+  // Sparse month labels along the base.
+  const stride = Math.max(1, Math.round(curve.length / 5));
+  const xLabels = el("g");
+  for (let i = 0; i < curve.length; i += stride) {
+    const label = el("text", {
+      class: "plot__axis", x: x(i), y: h - 6, "text-anchor": "middle",
+    });
+    label.textContent = formatDate ? formatDate(curve[i].date) : curve[i].date;
+    xLabels.append(label);
+  }
+  svg.append(xLabels);
+
+  if (tooltip) {
+    svg.addEventListener("pointermove", (event) => {
+      const rect = svg.getBoundingClientRect();
+      const frac = (event.clientX - rect.left) / rect.width;
+      const i = Math.max(0, Math.min(curve.length - 1,
+        Math.round(((frac * w) - padL) / (w - padL - padR) * (curve.length - 1))));
+      const p = curve[i];
+      tooltip.dataset.open = "true";
+      tooltip.innerHTML = `<div class="tip__date">${formatDate ? formatDate(p.date) : p.date}</div>`
+        + `<div class="tip__val">${(p.dd * 100).toFixed(2)}% from peak</div>`;
+      tooltip.style.left = `${Math.min(event.clientX + 14, window.innerWidth - tooltip.offsetWidth - 8)}px`;
+      tooltip.style.top = `${event.clientY - 8}px`;
+    });
+    svg.addEventListener("pointerleave", () => { tooltip.dataset.open = "false"; });
+  }
+
+  const summary = el("title");
+  summary.textContent =
+    `Drawdown: worst ${(worst * 100).toFixed(1)}% from peak; currently `
+    + `${(curve[curve.length - 1].dd * 100).toFixed(1)}%.`;
+  svg.append(summary);
+}
+
 /* ---------------- count-up ---------------- */
 
 /**

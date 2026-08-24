@@ -22,10 +22,14 @@
  *   yield) do not apply here, but the P/L half does — see attribution.py.
  */
 import { money, moneySigned, esc } from "./format.js";
-import { sankey, groupedBars } from "./charts.js";
+import { sankey, groupedBars, underwater } from "./charts.js";
 
 const $ = (id) => document.getElementById(id);
 const URL_ATTR = "api/attribution";
+const URL_TRACK = "api/track";
+// The grid's benchmark row follows the equity curve's picker — one selection,
+// two readouts. Same literal main.js writes.
+const BENCH_KEY = "portfolio-dashboard:benchmark";
 
 /* Costs draw three bands; the tooltip itemises five. See COST_BANDS in
  * adapter/attribution.py for why the stack is not five hues. */
@@ -266,16 +270,192 @@ function renderAll() {
   renderFlow();
   renderBars("income");
   renderBars("cost");
+  renderTrack();
+}
+
+/* ---------------- track record ---------------- */
+
+let track = null;
+
+const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+// monthLabel already exists above ("2026-05" -> "May 26") — reuse it.
+const pctCell = (v) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v * 100).toFixed(2)}%`;
+
+/** Wash strength from magnitude — the printed figure is the encoding, the
+ *  wash is the glance layer. Alpha steps, never hue steps. */
+function washStyle(v) {
+  if (v == null || v === 0) return "";
+  const alpha = Math.min(0.05 + Math.abs(v) * 2.2, 0.30).toFixed(2);
+  const base = v > 0 ? "52, 211, 153" : "251, 113, 133";
+  return `background: rgba(${base}, ${alpha})`;
+}
+
+function renderMonthlyGrid() {
+  const host = $("monthlyGrid");
+  if (!host) return;
+  const grid = track?.monthly;
+  const months = grid ? Object.keys(grid.months).sort() : [];
+  if (!months.length) {
+    host.innerHTML = `<div class="collecting"><h3>No monthly record yet</h3>
+      <p>Cells appear as the Flex Change in NAV sub-periods land.</p></div>`;
+    $("gridNote").textContent = "";
+    return;
+  }
+
+  const benchName = document.querySelector(
+    `#benchSelect option[value="${CSS.escape(grid.benchmark_symbol || "")}"]`)
+    ?.textContent || (grid.benchmark_symbol || "").replace(/^\^/, "");
+  const hasBench = Object.keys(grid.benchmark || {}).length > 0;
+
+  const cell = (v) => v == null
+    ? '<td class="mgrid__cell mgrid__cell--none">—</td>'
+    : `<td class="mgrid__cell num" style="${washStyle(v)}">${pctCell(v)}</td>`;
+
+  host.innerHTML = `<table class="mgrid__table">
+    <thead><tr><th></th>${months.map((m) => `<th>${monthLabel(m)}</th>`).join("")}</tr></thead>
+    <tbody>
+      <tr><th>Portfolio</th>${months.map((m) => cell(grid.months[m])).join("")}</tr>
+      ${hasBench ? `<tr class="mgrid__bench"><th>${esc(benchName)}</th>
+        ${months.map((m) => cell(grid.benchmark[m] ?? null)).join("")}</tr>` : ""}
+    </tbody></table>`;
+
+  $("gridNote").textContent = "from IBKR's own monthly figures";
+}
+
+function renderDrawdown() {
+  const dd = track?.drawdown;
+  const plot = $("ddPlot");
+  if (!plot) return;
+  if (!dd) {
+    plot.innerHTML = `<div class="collecting"><h3>Collecting history</h3>
+      <p>The drawdown needs a few daily NAV points.</p></div>`;
+    $("ddEpisodes").innerHTML = "";
+    $("ddCurrent").textContent = "";
+    return;
+  }
+  plot.innerHTML = '<svg id="ddSvg" role="img" aria-label="Drawdown from peak over time"></svg>';
+  underwater($("ddSvg"), dd.curve, {
+    tooltip: $("tip"),
+    formatDate: (d) => new Date(d).toLocaleDateString("en-GB", { month: "short", year: "2-digit" }),
+  });
+  const cur = dd.current;
+  $("ddCurrent").textContent = cur < -0.0005
+    ? `${(cur * 100).toFixed(1)}% from peak` : "at peak";
+  $("ddCurrent").className = `perf-card__total num ${cur < -0.0005 ? "neg" : ""}`;
+
+  const fmt = (d) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit" });
+  $("ddEpisodes").innerHTML = dd.episodes.slice(0, 4).map((ep) => `
+    <div class="ddeps__row">
+      <span class="ddeps__depth num neg">−${Math.abs(ep.depth * 100).toFixed(1)}%</span>
+      <span class="ddeps__span">${fmt(ep.peak_date)} → ${fmt(ep.trough_date)}</span>
+      <span class="ddeps__days num">${ep.days_down}d down</span>
+      <span class="ddeps__state">${ep.recovered
+        ? `recovered ${fmt(ep.recovered)}` : "<b>ongoing</b>"}</span>
+    </div>`).join("");
+}
+
+/** Alpha-stepped day cells; the sign glyph rides strong cells so the grid
+ *  never reads by hue alone, and the tooltip always carries the figure. */
+function renderDayCal() {
+  const host = $("dayCal");
+  if (!host) return;
+  const days = track?.daily || [];
+  if (days.length < 10) {
+    host.innerHTML = "";
+    $("calNote").textContent = "";
+    return;
+  }
+
+  // Lay out Mon-Fri x weeks. Weekend rows would be permanently empty cells.
+  const byDate = new Map(days.map((d) => [d.date, d]));
+  const first = new Date(days[0].date);
+  const last = new Date(days[days.length - 1].date);
+  const monday = new Date(first);
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+
+  const level = (r) => Math.abs(r) >= 0.02 ? 3 : Math.abs(r) >= 0.008 ? 2 : Math.abs(r) > 0.0005 ? 1 : 0;
+  let cells = "";
+  let monthMarks = "";
+  let col = 0;
+  for (let w = new Date(monday); w <= last; w.setDate(w.getDate() + 7), col++) {
+    let colHtml = "";
+    for (let dow = 0; dow < 5; dow++) {
+      const day = new Date(w); day.setDate(day.getDate() + dow);
+      const iso = day.toISOString().slice(0, 10);
+      const row = byDate.get(iso);
+      if (!row) { colHtml += '<i class="dcal__cell dcal__cell--none"></i>'; continue; }
+      const lv = level(row.r);
+      const dir = row.r > 0 ? "pos" : row.r < 0 ? "neg" : "flat";
+      colHtml += `<i class="dcal__cell dcal__cell--${dir} dcal__cell--l${lv}"
+        data-date="${iso}" data-r="${(row.r * 100).toFixed(2)}" data-pnl="${row.pnl}"
+        >${lv >= 2 ? (row.r > 0 ? "+" : "−") : ""}</i>`;
+    }
+    if (w.getDate() <= 7) {
+      monthMarks += `<span style="grid-column:${col + 1}">${MONTH_SHORT[w.getMonth()]}</span>`;
+    }
+    cells += `<div class="dcal__week">${colHtml}</div>`;
+  }
+  host.innerHTML = `<div class="dcal__months">${monthMarks}</div>
+    <div class="dcal__grid">${cells}</div>`;
+  $("calNote").textContent = `${days.length} trading days since ${new Date(track.inception)
+    .toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`;
+
+  // One delegated tooltip for the whole grid.
+  const tip = $("tip");
+  host.onpointerover = (event) => {
+    const cell = event.target.closest(".dcal__cell[data-date]");
+    if (!cell || !tip) return;
+    tip.dataset.open = "true";
+    const when = new Date(cell.dataset.date).toLocaleDateString("en-GB",
+      { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+    tip.innerHTML = `<div class="tip__date">${when}</div>
+      <div class="tip__val">${moneySigned(Number(cell.dataset.pnl))} · ${
+        Number(cell.dataset.r) > 0 ? "+" : ""}${cell.dataset.r}%</div>`;
+    const at = cell.getBoundingClientRect();
+    tip.style.left = `${Math.min(at.left + 10, window.innerWidth - tip.offsetWidth - 8)}px`;
+    tip.style.top = `${at.top - 8}px`;
+  };
+  host.onpointerout = () => { if (tip) tip.dataset.open = "false"; };
+}
+
+function renderDays() {
+  const host = $("bwDays");
+  if (!host) return;
+  const d = track?.days;
+  if (!d) { host.innerHTML = ""; $("daysNote").textContent = ""; return; }
+
+  const fmt = (x) => new Date(x).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit" });
+  const row = (r) => `
+    <div class="bwdays__row">
+      <span class="bwdays__date">${fmt(r.date)}</span>
+      <span class="bwdays__r num ${r.r > 0 ? "pos" : "neg"}">${pctCell(r.r)}</span>
+      <span class="bwdays__pnl num">${moneySigned(r.pnl)}</span>
+    </div>`;
+  host.innerHTML = `
+    <div class="bwdays__col"><p class="eyebrow">Best</p>${d.best.map(row).join("")}</div>
+    <div class="bwdays__col"><p class="eyebrow">Worst</p>${d.worst.map(row).join("")}</div>`;
+  $("daysNote").textContent =
+    `${(d.win_rate * 100).toFixed(0)}% up days of ${d.n} · longest run +${d.best_streak}/−${Math.abs(d.worst_streak)}`;
+}
+
+function renderTrack() {
+  renderMonthlyGrid();
+  renderDrawdown();
+  renderDayCal();
+  renderDays();
 }
 
 async function load() {
-  try {
-    const res = await fetch(`${URL_ATTR}?t=${Date.now()}`);
-    if (!res.ok) throw new Error(`attribution: ${res.status}`);
-    data = await res.json();
-  } catch {
-    data = null;
-  }
+  let bench = "";
+  try { bench = localStorage.getItem(BENCH_KEY) || ""; } catch { /* private mode */ }
+  const [attr, trk] = await Promise.all([
+    fetch(`${URL_ATTR}?t=${Date.now()}`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+    fetch(`${URL_TRACK}?symbol=${encodeURIComponent(bench)}&t=${Date.now()}`)
+      .then((r) => (r.ok ? r.json() : null)).catch(() => null),
+  ]);
+  data = attr;
+  track = trk && trk.ready !== undefined ? trk : null;
   loaded = true;
   renderAll();
 }

@@ -266,7 +266,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             # which track.build treats as an honest gap, not an error.
             history = (DashboardHandler.markets.history
                        if DashboardHandler.markets is not None else None)
-            payload = track.build(index_history=history)
+            payload = track.build(index_history=history,
+                                  benchmark_symbol=self._query("symbol") or None)
         except Exception as exc:
             log.exception("track build failed")
             return self._json({"meta": {"source": "ibkr-flex", "error": str(exc)}})

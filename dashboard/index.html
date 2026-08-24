@@ -402,6 +402,39 @@
         </section>
 
         <div class="perf-row">
+          <section class="card perf-card" aria-labelledby="gridTitle">
+            <div class="card__head">
+              <h2 class="card-title" id="gridTitle">Monthly returns</h2>
+              <span class="perf-card__period" id="gridNote"></span>
+            </div>
+            <!-- Anchored to IBKR's own Change-in-NAV sub-periods, so every
+                 cell reconciles with the broker's statement. Signed figures
+                 printed in every cell — the wash is the second cue, never
+                 the encoding. -->
+            <div class="mgrid" id="monthlyGrid"></div>
+          </section>
+
+          <section class="card perf-card" aria-labelledby="ddTitle">
+            <div class="card__head">
+              <h2 class="card-title" id="ddTitle">Drawdown</h2>
+              <span class="perf-card__total num" id="ddCurrent"></span>
+            </div>
+            <div class="plot plot--dd" id="ddPlot">
+              <svg id="ddSvg" role="img" aria-label="Drawdown from peak over time"></svg>
+            </div>
+            <div class="ddeps" id="ddEpisodes"></div>
+          </section>
+        </div>
+
+        <section class="card perf-card" aria-labelledby="calTitle">
+          <div class="card__head">
+            <h2 class="card-title" id="calTitle">Daily P/L</h2>
+            <span class="perf-card__period" id="calNote"></span>
+          </div>
+          <div class="dcal" id="dayCal"></div>
+        </section>
+
+        <div class="perf-row perf-row--stats">
           <section class="card perf-card" aria-labelledby="incomeTitle">
             <div class="card__head">
               <h2 class="card-title" id="incomeTitle">Dividend income</h2>
@@ -426,6 +459,14 @@
               <svg id="costSvg" role="img" aria-label="Costs by month"></svg>
             </div>
             <div class="perf-legend" id="costLegend"></div>
+          </section>
+
+          <section class="card perf-card" aria-labelledby="daysTitle">
+            <div class="card__head">
+              <h2 class="card-title" id="daysTitle">Best &amp; worst days</h2>
+              <span class="perf-card__period" id="daysNote"></span>
+            </div>
+            <div class="bwdays" id="bwDays"></div>
           </section>
         </div>
       </section>
