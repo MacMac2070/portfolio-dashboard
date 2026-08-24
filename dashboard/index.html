@@ -560,7 +560,7 @@
         </div>
       </section>
 
-      <section class="view" id="view-market" role="tabpanel" aria-label="Market watch" hidden>
+      <section class="view view--scroll" id="view-market" role="tabpanel" aria-label="Market watch" hidden>
 
         <section class="board-hero" aria-labelledby="boardDate">
           <div class="board-hero__top">
@@ -575,6 +575,25 @@
           </div>
           <div class="clockstrip" id="clockStrip" aria-label="Local time by market"></div>
         </section>
+
+        <!-- Desk context: the overnight diff and the earnings rail live where
+             the session clocks already answer "what is trading now". -->
+        <div class="desk-row">
+          <section class="card desk-card" aria-labelledby="onTitle">
+            <div class="card__head">
+              <h2 class="card-title" id="onTitle">Overnight</h2>
+              <span class="perf-card__period" id="onNote"></span>
+            </div>
+            <div class="onight" id="onightBody"></div>
+          </section>
+          <section class="card desk-card" aria-labelledby="erTitle">
+            <div class="card__head">
+              <h2 class="card-title" id="erTitle">Earnings</h2>
+              <span class="perf-card__period" id="erNote"></span>
+            </div>
+            <div class="earn" id="earnBody"></div>
+          </section>
+        </div>
 
         <div class="board-bar">
           <span class="board-bar__title">All markets</span>
@@ -601,6 +620,14 @@
 
         <p class="board-foot">Index levels quote in each market's own currency and are price return,
           excluding dividends. Exposure converts your positions to GBP at the mid-market rate.</p>
+
+        <section class="card desk-card" aria-labelledby="digestTitle">
+          <div class="card__head">
+            <h2 class="card-title" id="digestTitle">News digest</h2>
+            <span class="perf-card__period" id="digestNote"></span>
+          </div>
+          <div class="digest" id="digestBody"></div>
+        </section>
       </section>
 
       <!-- ---------------- Stock detail ---------------- -->
@@ -636,6 +663,7 @@
                   <h1 class="shero__name" id="stockName">—</h1>
                   <span class="shero__tk" id="stockTicker">—</span>
                   <span class="shero__owned" id="stockOwned" hidden>Owned</span>
+                  <span class="shero__earnings" id="stockEarningsSoon" hidden></span>
                 </div>
                 <span class="shero__sub" id="stockSub">—</span>
               </div>

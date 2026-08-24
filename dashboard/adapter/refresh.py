@@ -105,6 +105,12 @@ def main() -> int:
         return 1
 
     build.OUT_PATH.write_text(json.dumps(payload, indent=2))
+    # The overnight-diff baseline rides every successful build.
+    try:
+        import desk
+        desk.write_close_snapshot(payload)
+    except Exception:
+        log.exception("close snapshot failed; overnight diff will be stale")
 
     nav = payload.get("kpis", {}).get("net_liquidation")
     if nav is not None:
@@ -122,6 +128,12 @@ def main() -> int:
         log.info("executions: %d new, %d stored", added, total)
 
     _refresh_attribution()
+
+    try:
+        import desk
+        desk.refresh_if_stale(hours=20)
+    except Exception:
+        log.exception("desk refresh failed; the previous file still serves")
 
     # Last, and deliberately so. The directory does not depend on any of the
     # above and nothing above depends on it — but its three provider calls carry

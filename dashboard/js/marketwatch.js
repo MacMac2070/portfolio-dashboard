@@ -15,7 +15,7 @@
  * is the real series, and sessions come from the IANA database.
  */
 
-import { money, pct, pctSigned, clock, esc } from "./format.js";
+import { money, moneySigned, pct, pctSigned, clock, esc } from "./format.js";
 import { sparkline } from "./charts.js";
 
 const $ = (id) => document.getElementById(id);
@@ -377,8 +377,129 @@ export function update(payload) {
 }
 
 /** Called by main.js when the tab opens, so a deep link renders immediately. */
+/* ---------------- desk context ----------------
+ * Overnight diff, earnings rail and the news digest — fetched once per view
+ * entry (the file behind it changes daily) and rendered beside the session
+ * clocks they belong with. */
+let deskData = null;
+let deskFetched = false;
+
+const REL_DAY = 86400000;
+function relTime(iso) {
+  const at = new Date(iso).getTime();
+  if (!Number.isFinite(at)) return "";
+  const d = Date.now() - at;
+  if (d < 3600000) return `${Math.max(1, Math.round(d / 60000))}m`;
+  if (d < REL_DAY) return `${Math.round(d / 3600000)}h`;
+  return `${Math.round(d / REL_DAY)}d`;
+}
+
+function loadDesk() {
+  if (deskFetched) { renderDesk(); return; }
+  deskFetched = true;
+  fetch("api/desk").then((r) => (r.ok ? r.json() : null))
+    .then((d) => { deskData = d; renderDesk(); })
+    .catch(() => renderDesk());
+}
+
+function renderOvernight() {
+  const host = $("onightBody");
+  if (!host) return;
+  const on = deskData?.overnight;
+  if (!on) {
+    host.innerHTML = `<p class="onight__none">No baseline yet — the diff
+      appears after tonight's refresh run writes one.</p>`;
+    $("onNote").textContent = "";
+    return;
+  }
+  const cls = (v) => (v > 0 ? "pos" : v < 0 ? "neg" : "flat");
+  const arrow = (a, b) => (b > a ? "▲" : b < a ? "▼" : "·");
+  host.innerHTML = `
+    <div class="onight__split">
+      <span>NAV <b class="num ${cls(on.nav_delta)}">${moneySigned(on.nav_delta)}</b></span>
+      <span>market <b class="num ${cls(on.market_delta)}">${moneySigned(on.market_delta)}</b></span>
+      <span>flows <b class="num">${on.flows ? moneySigned(on.flows) : "—"}</b></span>
+    </div>
+    ${on.shifts.slice(0, 5).map((x) => `
+      <div class="onight__row">
+        <span class="onight__sym">${esc(x.symbol)}</span>
+        <span class="onight__w num">${x.w_from}% → ${x.w_to}%
+          <i class="${cls(x.w_to - x.w_from)}">${arrow(x.w_from, x.w_to)}</i></span>
+        <span class="onight__gbp num ${cls(x.delta_gbp)}">${moneySigned(x.delta_gbp)}</span>
+      </div>`).join("")}`;
+  $("onNote").textContent = `since ${new Date(on.since).toLocaleDateString("en-GB",
+    { weekday: "short", day: "numeric", month: "short" })} close`;
+}
+
+function renderEarnings() {
+  const host = $("earnBody");
+  if (!host) return;
+  const holdings = deskData?.holdings || {};
+  const today = new Date().toISOString().slice(0, 10);
+  const events = Object.entries(holdings)
+    .flatMap(([key, h]) => (h.next_earnings || [])
+      .filter((d) => d >= today).slice(0, 1)
+      .map((d) => ({ key, date: d, est: (h.next_earnings || []).length > 1 })))
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(0, 5);
+  if (!events.length) {
+    host.innerHTML = `<p class="onight__none">No dates on the calendar for
+      the fifteen names.</p>`;
+    $("erNote").textContent = "";
+    return;
+  }
+  const days = (d) => Math.ceil((new Date(d) - Date.now()) / REL_DAY);
+  host.innerHTML = events.map((e, i) => `
+    <div class="earn__row${i === 0 ? " is-next" : ""}">
+      <span class="earn__sym">${esc(e.key)}</span>
+      <span class="earn__date">${new Date(e.date).toLocaleDateString("en-GB",
+        { weekday: "short", day: "numeric", month: "short" })}</span>
+      <span class="earn__in num">${days(e.date)}d</span>
+      <span class="earn__flag">${e.est ? "est." : "sched."}</span>
+    </div>`).join("");
+  $("erNote").textContent = "reports across the book";
+}
+
+function renderDigest() {
+  const host = $("digestBody");
+  if (!host) return;
+  const holdings = deskData?.holdings || {};
+  const seen = new Set();
+  const items = [];
+  for (const [key, h] of Object.entries(holdings)) {
+    for (const n of h.news || []) {
+      const sig = n.title.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+      if (seen.has(sig)) continue;
+      seen.add(sig);
+      items.push({ ...n, key });
+    }
+  }
+  items.sort((a, b) => (b.at || "").localeCompare(a.at || ""));
+  if (!items.length) {
+    host.innerHTML = `<p class="onight__none">Nothing in the desk file yet —
+      it fills on the daily run.</p>`;
+    $("digestNote").textContent = "";
+    return;
+  }
+  host.innerHTML = items.slice(0, 12).map((n) => `
+    <a class="digest__row" href="${esc(n.url || "#")}" target="_blank" rel="noopener">
+      <span class="digest__sym">${esc(n.key)}</span>
+      <span class="digest__title">${esc(n.title)}</span>
+      <span class="digest__meta">${esc(n.publisher || "")} · ${relTime(n.at)}</span>
+    </a>`).join("");
+  $("digestNote").textContent =
+    `deduped across holdings · fetched ${relTime(deskData?.meta?.fetched_at)} ago`;
+}
+
+function renderDesk() {
+  renderOvernight();
+  renderEarnings();
+  renderDigest();
+}
+
 export function route() {
   render();
+  loadDesk();
 }
 
 export function init() {

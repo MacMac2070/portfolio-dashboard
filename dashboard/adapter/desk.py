@@ -160,6 +160,75 @@ def refresh_if_stale(hours: float = 20) -> bool:
     return True
 
 
+CLOSE_PATH = DATA_DIR / "close_snapshot.json"
+
+
+def write_close_snapshot(payload: dict) -> None:
+    """The overnight baseline: whatever the daily job just built.
+
+    Written by refresh.py after a successful build, so "overnight" means
+    "since the last 23:30 run" — which is exactly the HK-open-while-London-
+    sleeps window the diff exists for."""
+    slim = {
+        "date": payload.get("meta", {}).get("generated_at"),
+        "kpis": payload.get("kpis") or {},
+        "positions": [
+            {"symbol": p.get("symbol"), "value_gbp": p.get("value_gbp"),
+             "quantity": p.get("quantity")}
+            for p in payload.get("positions") or []
+        ],
+    }
+    CLOSE_PATH.write_text(json.dumps(slim, indent=1))
+
+
+def overnight(live: dict | None, cash_rows: list[dict]) -> dict | None:
+    """What changed since the baseline, split market-vs-flows.
+
+    Returns None when there is no baseline yet or nothing live to diff — the
+    UI renders its designed empty state, not an invented zero."""
+    if not CLOSE_PATH.exists() or not live:
+        return None
+    try:
+        base = json.loads(CLOSE_PATH.read_text())
+    except json.JSONDecodeError:
+        return None
+
+    base_nav = (base.get("kpis") or {}).get("net_liquidation")
+    now_nav = (live.get("kpis") or {}).get("net_liquidation")
+    if not base_nav or not now_nav:
+        return None
+
+    base_date = (base.get("date") or "")[:10]
+    flows = sum((r.get("amount_gbp") or 0.0) for r in cash_rows
+                if r.get("bucket") == "deposits_withdrawals"
+                and (r.get("date") or "") > base_date)
+
+    base_pos = {p["symbol"]: p for p in base.get("positions") or []}
+    now_pos = {p.get("symbol"): p for p in live.get("positions") or []}
+    base_inv = sum(p.get("value_gbp") or 0 for p in base_pos.values()) or 1
+    now_inv = sum(p.get("value_gbp") or 0 for p in now_pos.values()) or 1
+
+    shifts = []
+    for sym in set(base_pos) | set(now_pos):
+        b = (base_pos.get(sym, {}).get("value_gbp") or 0)
+        n = (now_pos.get(sym, {}).get("value_gbp") or 0)
+        shifts.append({
+            "symbol": sym,
+            "w_from": round(b / base_inv * 100, 1),
+            "w_to": round(n / now_inv * 100, 1),
+            "delta_gbp": round(n - b, 2),
+        })
+    shifts.sort(key=lambda x: -abs(x["delta_gbp"]))
+
+    return {
+        "since": base_date,
+        "nav_delta": round(now_nav - base_nav, 2),
+        "flows": round(flows, 2),
+        "market_delta": round(now_nav - base_nav - flows, 2),
+        "shifts": shifts[:6],
+    }
+
+
 def read() -> dict | None:
     """The stored file, or None. serve.py's read path."""
     if not DESK_PATH.exists():

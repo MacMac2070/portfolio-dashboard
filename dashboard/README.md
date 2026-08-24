@@ -467,6 +467,37 @@ rows; day-change falls back from openbb → IBKR price + openbb prior close →
 IBKR `dailyPnL`; a missing Flex config skips the backfill with an explanation.
 The snapshot completes even when the network does not.
 
+## The four flagships (24 Aug 2026)
+
+Chosen from a six-lane research survey (56 proposals, deduped, adversarially
+critiqued), scoped to features the existing data can feed honestly:
+
+- **Track record** (Performance) — monthly returns grid anchored to IBKR's own
+  Change-in-NAV sub-periods with a benchmark row following the equity curve's
+  picker; underwater drawdown with ranked episodes; a daily P/L calendar in
+  the contributions-grid idiom; best/worst days. All share one funding-aware
+  daily return series (`adapter/track.py`) — deposits are excluded by
+  construction, so a deposit day is a flat day, not a good one.
+- **Income rail** (Performance + stock pages) — trailing 12 months of paid
+  dividends (solid; Flex fact) against the next 12 estimated (outline; a
+  cadence model that looks like one), the broker's declared-but-unpaid accrual
+  as its own tier, and per-stock DPS history with cut markers and
+  yield-on-cost. `adapter/desk.py` + `adapter/income.py`; the daily job keeps
+  the desk file fresh.
+- **Desk context** (Market watch) — an Overnight panel splitting the NAV move
+  market-vs-flows against the last 23:30 close snapshot; an earnings countdown
+  rail in the session-clock idiom; a deduped news digest across the book.
+- **Allocation intent** (Allocation) — operator targets in
+  `config.local.json` drawn as diverging violet drift bars with computed
+  rebalance £; a squarified treemap as a second display mode sharing the
+  ring's hover state; a rules panel (largest position, cash floor, currency
+  band, effective-N/HHI) with defaults until config overrides.
+
+The stores are now guarded archives: Flex reaches back 365 days, so from
+~Oct 2026 the oldest rows exist nowhere else — `store._write` refuses to
+shrink a file, the daily job logs a row census, and committing `data/` is
+the backup.
+
 ## The de-AI pass (20 Aug 2026)
 
 A six-critic design audit hunted everything that read as "made by AI" —

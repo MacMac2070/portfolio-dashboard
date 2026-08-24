@@ -300,12 +300,14 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 live = json.loads(snapshot_path.read_text())
             except Exception:
                 live = None
+        from store import CASH_PATH, _read as store_rows  # noqa: PLC0415
         payload = {
             "meta": {"source": "yfinance", "error": None, "ready": True,
                      "fetched_at": stored["meta"].get("fetched_at"),
                      "errors": stored["meta"].get("errors") or {}},
             "holdings": stored.get("holdings") or {},
             "income": income.build(stored, live),
+            "overnight": desk.overnight(live, store_rows(CASH_PATH)),
         }
         return self._json(payload)
 

@@ -1860,9 +1860,13 @@
 /* ---- the grid ---- */
 
 .board-grid {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
+  /* The view scrolls now that desk context lives above the grid; the grid
+   * takes its natural two-row height instead of flexing into whatever the
+   * shell had left — which, once the Overnight and Earnings cards landed,
+   * was 2px. */
+  flex: none;
+  min-height: 340px;
+  overflow: visible;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 252px), 1fr));
   /* Equal rows, but capped: on a tall window an uncapped 1fr stretches two rows
@@ -3527,3 +3531,89 @@ a.prow--pos:active { background: var(--violet-tint-18); }
 .sdivs__stat b { color: var(--text); font-family: var(--font-figure); font-weight: 600; }
 .sdivs__none { font-size: 12.5px; color: var(--text-2); padding: var(--s-2) 0; }
 @media (max-width: 1100px) { .sdivs { grid-template-columns: 1fr; } }
+
+/* ---- desk context ---- */
+.desk-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(260px, 1fr);
+  gap: var(--grid-gap);
+  margin-bottom: var(--grid-gap);
+}
+.onight, .earn { display: grid; gap: 2px; padding: var(--s-2) var(--s-5) var(--s-4); }
+.onight__none { font-size: 12px; color: var(--text-3); padding: var(--s-2) 0; }
+.onight__split {
+  display: flex;
+  gap: var(--s-5);
+  font-size: 12px;
+  color: var(--text-3);
+  padding-bottom: var(--s-2);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: var(--s-1);
+}
+.onight__split b { font-family: var(--font-figure); color: var(--text); }
+.onight__row {
+  display: grid;
+  grid-template-columns: 56px 1fr auto;
+  gap: var(--s-3);
+  align-items: baseline;
+  font-size: 11.5px;
+  color: var(--text-2);
+  padding: 3px 0;
+}
+.onight__sym { font-family: var(--font-figure); font-weight: 600; color: var(--text); }
+.onight__w i { font-style: normal; font-size: 9px; }
+.onight__gbp { text-align: right; }
+
+.earn__row {
+  display: grid;
+  grid-template-columns: 56px 1fr auto 44px;
+  gap: var(--s-3);
+  align-items: baseline;
+  font-size: 11.5px;
+  color: var(--text-2);
+  padding: 4px 0;
+  border-top: 1px solid var(--border);
+}
+.earn__row:first-child { border-top: 0; }
+/* The next report carries the signature rule, mirroring the session clocks. */
+.earn__row.is-next { box-shadow: inset 2px 0 0 var(--brand); padding-left: 10px; }
+.earn__sym { font-family: var(--font-figure); font-weight: 600; color: var(--text); }
+.earn__in { text-align: right; color: var(--text); }
+.earn__flag {
+  text-align: right;
+  font: 600 9.5px/1 var(--font-ui);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.digest { display: grid; gap: 0; padding: var(--s-2) var(--s-5) var(--s-4); }
+.digest__row {
+  display: grid;
+  grid-template-columns: 56px 1fr auto;
+  gap: var(--s-4);
+  align-items: baseline;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-2);
+  transition: color var(--dur-fast) var(--ease-spring);
+}
+.digest__row:first-child { border-top: 0; }
+.digest__row:hover { color: var(--text); }
+.digest__row:focus-visible { outline: 2px solid var(--brand-soft); outline-offset: -2px; }
+.digest__sym { font-family: var(--font-figure); font-weight: 600; color: var(--text); }
+.digest__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.digest__meta { color: var(--text-3); font-size: 10.5px; white-space: nowrap; }
+@media (max-width: 1100px) { .desk-row { grid-template-columns: 1fr; } }
+
+/* Report inside the week: the session-countdown idiom, worn as a pill. */
+.shero__earnings {
+  padding: 3px 9px;
+  border: 1px solid var(--brand-line);
+  border-radius: var(--r-pill);
+  font: 600 10px/1 var(--font-ui);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--brand-pale);
+}

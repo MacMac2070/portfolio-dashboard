@@ -166,7 +166,7 @@ function loadDesk() {
   if (deskWanted) return;
   deskWanted = true;
   fetch("api/desk").then((r) => (r.ok ? r.json() : null))
-    .then((d) => { deskCache = d; renderDistributions(); })
+    .then((d) => { deskCache = d; renderDistributions(); renderEarningsSoon(); })
     .catch(() => {});
 }
 
@@ -221,11 +221,28 @@ function renderDistributions() {
   note.textContent = `per share, ${esc(ccy)} · current year is partial`;
 }
 
+/** A quiet pill when a report is inside the week — the desk file's date. */
+function renderEarningsSoon() {
+  const pill = $("stockEarningsSoon");
+  if (!pill || !key) return;
+  const dates = deskCache?.holdings?.[key]?.next_earnings || [];
+  const today = new Date().toISOString().slice(0, 10);
+  const next = dates.find((d) => d >= today);
+  const days = next ? Math.ceil((new Date(next) - Date.now()) / 86400000) : null;
+  if (days != null && days <= 7) {
+    pill.hidden = false;
+    pill.textContent = days <= 0 ? "Earnings today" : `Earnings in ${days}d`;
+  } else {
+    pill.hidden = true;
+  }
+}
+
 function render() {
   const view = $("view-stock");
   if (!view || view.hidden) return;
   loadDesk();
   renderDistributions();
+  renderEarningsSoon();
 
   const t = ticker();
   const d = detail || {};
