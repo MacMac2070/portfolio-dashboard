@@ -3644,3 +3644,166 @@ a.prow--pos:active { background: var(--violet-tint-18); }
   text-transform: uppercase;
   color: var(--brand-pale);
 }
+
+/* ================= Performance: the Double Spread =================
+ * Screen one is a fixed hairline-tiled spread: the 1px grid gaps over a
+ * border-colour ground ARE the rules — no cards, no shadows. Screen two is
+ * the appendix in normal flow. Below 1500x900 the lock releases to banded
+ * scroll, the board-fit precedent. */
+.perf-spread {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr) 350px;
+  grid-template-rows: minmax(0, 1.55fr) minmax(0, 1fr) auto;
+  grid-template-areas:
+    "verdict ledger tables"
+    "verdict dd     tables"
+    "days    days   days";
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  height: 100%;
+  flex: none;
+  min-height: 0;
+  overflow: hidden;
+}
+.pspread {
+  background: var(--bg-page);
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: var(--s-4) var(--s-5);
+  overflow: hidden;
+}
+.pspread--verdict { grid-area: verdict; background: var(--brand-faint); }
+.pspread--ledger  { grid-area: ledger; }
+.pspread--dd      { grid-area: dd; }
+.pspread--tables  { grid-area: tables; }
+.pspread--days    { grid-area: days; padding-top: var(--s-3); padding-bottom: var(--s-3); }
+
+.pane__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-4);
+  margin-bottom: var(--s-2);
+}
+.pane__head--mid { margin-top: var(--s-4); }
+.pane__kicker {
+  font: 600 11px/1 var(--font-ui);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.pane__note { font-size: 10.5px; color: var(--text-3); }
+.pane__total { margin-left: auto; font-family: var(--font-figure); font-size: 12.5px; color: var(--text); }
+
+/* ---- verdict rail ---- */
+.pverdict__kicker {
+  font: 600 10px/1.5 var(--font-figure);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--text-2); /* text-3 is 3.8:1 on the wash */
+  margin-bottom: var(--s-5);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pverdict__hero {
+  font: 700 clamp(34px, 4.6vh, 52px)/1 var(--font-figure);
+  letter-spacing: var(--tracking-tight);
+  color: var(--text);
+}
+.pverdict__hero.pos { color: var(--pos); }
+.pverdict__hero.neg { color: var(--neg); }
+.pverdict__herocap {
+  font: 600 10px/1 var(--font-ui);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--text-2); /* text-3 is 3.8:1 on the wash */
+  margin: 6px 0 var(--s-5);
+}
+.pverdict__rows, .pverdict__ratios { display: grid; gap: 2px; }
+.pverdict__ratios { margin-top: var(--s-4); padding-top: var(--s-3); border-top: 1px solid var(--border-strong); }
+.pverdict__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--s-3);
+  padding: 4px 0;
+  font-size: 12px;
+  color: var(--text-2);
+  border-top: 1px solid var(--border);
+}
+.pverdict__rows .pverdict__row:first-child { border-top: 0; }
+.pverdict__ratios .pverdict__row:first-child { border-top: 0; }
+.pverdict__row b { font-family: var(--font-figure); font-weight: 600; color: var(--text); }
+.pverdict__income {
+  margin-top: auto;
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-2);
+}
+.pverdict__income b { color: var(--text); font-family: var(--font-figure); }
+
+/* ---- panes reflow their innards ---- */
+.pspread--ledger .mgrid { padding: 0 0 var(--s-2); overflow-x: auto; flex: none;
+  scrollbar-width: thin; }
+.pspread--ledger .mgrid::-webkit-scrollbar { height: 5px; }
+.pspread--ledger .mgrid::-webkit-scrollbar-track { background: transparent; }
+.pspread--ledger .mgrid::-webkit-scrollbar-thumb {
+  background: var(--border); border-radius: 3px;
+}
+.pspread--ledger .mgrid__cell { padding: 4px 5px; font-size: 11px; }
+.pspread--ledger .plot--bars { flex: 1; min-height: 96px; }
+.pspread--ledger .perf-legend { flex: none; }
+.pspread--dd .plot--dd { flex: 1; min-height: 120px; margin-bottom: 2px; }
+.pspread--tables .ddeps,
+.pspread--tables .bwdays { padding: 0; }
+.pspread--tables .ddeps__span,
+.pspread--tables .bwdays__date { white-space: nowrap; font-size: 11px; }
+.pspread--tables .bwdays__pnl { white-space: nowrap; }
+/* The band budgets 4+4 day rows; the fifth returns on release. */
+.pspread--tables .bwdays__row:nth-of-type(n+5) { display: none; }
+.pspread--tables .ddeps__row { grid-template-columns: 48px 1fr auto; }
+.pspread--tables .ddeps__state { grid-column: 2 / -1; padding-left: 0; }
+.pspread--tables .bwdays { grid-template-columns: 1fr 1fr; gap: var(--s-3); }
+.pspread--tables .bwdays__row { gap: var(--s-2); font-size: 11px; }
+.pspread--days .dcal { padding: 0; overflow-x: auto; }
+
+/* ---- appendix ---- */
+.perf-appendix { display: grid; gap: var(--grid-gap); margin-top: var(--grid-gap); }
+.pband {
+  border: 1px solid var(--border);
+  overflow: visible;
+}
+.pband-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: var(--grid-gap);
+}
+.pband .irail { padding: var(--s-2) 0 0; }
+.pband .plot--bars { min-height: 170px; }
+.pflow__line {
+  font-size: 11.5px;
+  color: var(--text-2);
+  margin-bottom: var(--s-2);
+}
+.pflow__line b { color: var(--text); }
+
+/* ---- release: banded scroll below the lock threshold ---- */
+@media (max-width: 1449px), (max-height: 789px) {
+  .perf-spread {
+    height: auto;
+    overflow: visible;
+    grid-template-columns: 1fr;
+    grid-template-rows: none;
+    grid-template-areas: "verdict" "ledger" "dd" "tables" "days";
+  }
+  .pspread { overflow: visible; }
+  .pspread--ledger .plot--bars { min-height: 170px; }
+  .pspread--tables .bwdays__row:nth-of-type(n+5) { display: grid; }
+  .pspread--dd .plot--dd { min-height: 170px; }
+  .pverdict__income { margin-top: var(--s-3); }
+  .pband-split { grid-template-columns: 1fr; }
+}

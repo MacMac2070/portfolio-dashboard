@@ -272,6 +272,38 @@ function renderAll() {
   renderBars("income");
   renderBars("cost");
   renderTrack();
+  settleCharts();
+}
+
+/**
+ * The spread's charts size themselves from their box, but the box is not
+ * final until every pane has content — the heatmap's auto row claims its
+ * height last and shrinks the rows above it. One frame later, any SVG whose
+ * viewBox no longer matches its box is drawn again at the settled size.
+ * Redraw is conditional, so the load animation only replays when the first
+ * pass genuinely drew at the wrong geometry.
+ */
+function settleCharts() {
+  // setTimeout, not requestAnimationFrame: Chrome parks rAF entirely while
+  // the window is occluded, which would leave a wrongly-sized chart frozen
+  // until the next repaint for no reason a timer doesn't have.
+  setTimeout(() => {
+    for (const [id, redraw] of [
+      ["incomeSvg", () => renderBars("income")],
+      ["ddSvg", () => renderDrawdown()],
+      ["costSvg", () => renderBars("cost")],
+      ["flowSvg", () => renderFlow()],
+    ]) {
+      const svg = $(id);
+      if (!svg) continue;
+      const vb = (svg.getAttribute("viewBox") || "").split(" ").map(Number);
+      const box = svg.getBoundingClientRect();
+      if (vb.length === 4 && box.width
+          && (Math.abs(vb[2] - box.width) > 8 || Math.abs(vb[3] - box.height) > 8)) {
+        redraw();
+      }
+    }
+  }, 50);
 }
 
 /* ---------------- track record ---------------- */
@@ -323,6 +355,8 @@ function renderMonthlyGrid() {
     </tbody></table>`;
 
   $("gridNote").textContent = "from IBKR's own monthly figures";
+  // When the spread squeezes the grid into a scroll, recent months win.
+  host.scrollLeft = host.scrollWidth;
 }
 
 function renderDrawdown() {
@@ -425,7 +459,7 @@ function renderDays() {
   const host = $("bwDays");
   if (!host) return;
   const d = track?.days;
-  if (!d) { host.innerHTML = ""; $("daysNote").textContent = ""; return; }
+  if (!d) { host.innerHTML = ""; return; }
 
   const fmt = (x) => new Date(x).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit" });
   const row = (r) => `
@@ -437,16 +471,92 @@ function renderDays() {
   host.innerHTML = `
     <div class="bwdays__col"><p class="eyebrow">Best</p>${d.best.map(row).join("")}</div>
     <div class="bwdays__col"><p class="eyebrow">Worst</p>${d.worst.map(row).join("")}</div>`;
-  $("daysNote").textContent =
-    `${(d.win_rate * 100).toFixed(0)}% up days of ${d.n} · longest run +${d.best_streak}/−${Math.abs(d.worst_streak)}`;
+  // The win-rate line rides the heatmap caption now — one home for day stats.
+  const cal = $("calNote");
+  if (cal && !cal.textContent.includes("up days")) {
+    cal.textContent = `${cal.textContent}${cal.textContent ? " · " : ""}`
+      + `${(d.win_rate * 100).toFixed(0)}% up days · runs +${d.best_streak}/−${Math.abs(d.worst_streak)}`;
+  }
+}
+
+/* ---------------- verdict masthead ----------------
+ * The spread opens with the answer. Every figure is signed; ratios print
+ * em-dashes until 60 aligned observations exist — the server guards that. */
+function renderMasthead() {
+  const st = track?.stats;
+  const put = (id, text, signed = null) => {
+    const node = $(id);
+    if (!node) return;
+    node.textContent = text;
+    if (signed !== null) {
+      node.classList.toggle("pos", signed > 0);
+      node.classList.toggle("neg", signed < 0);
+    }
+  };
+  const fmtPct = (v, dp = 2) => (v == null ? "—"
+    : `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v * 100).toFixed(dp)}%`);
+
+  if (!st) {
+    for (const id of ["vSi", "vMtd", "vYtd", "vBench", "vAlpha", "vBeta", "vVol", "vSharpe"]) put(id, "—");
+    return;
+  }
+  const benchName = document.querySelector(
+    `#benchSelect option[value="${CSS.escape(st.benchmark_symbol || "")}"]`)
+    ?.textContent || (st.benchmark_symbol || "").replace(/^\^/, "") || "benchmark";
+
+  const from = track.inception ? new Date(track.inception) : null;
+  const to = st.asof ? new Date(st.asof) : null;
+  const d = (x) => x.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit" }).toUpperCase();
+  // The benchmark is named two rows down; repeating it here just ellipsizes.
+  put("vRange", `PERFORMANCE${from && to ? ` · ${d(from)} → ${d(to)}` : ""}`);
+
+  put("vSi", fmtPct(st.si, 1), st.si);
+  put("vMtd", fmtPct(st.mtd), st.mtd);
+  put("vYtd", fmtPct(st.ytd), st.ytd);
+  const delta = (st.bench?.si != null && st.si != null) ? st.si - st.bench.si : null;
+  $("vBenchLabel").textContent = `vs ${benchName} (SI)`;
+  put("vBench", delta == null ? "—"
+    : `${delta > 0 ? "+" : delta < 0 ? "−" : ""}${Math.abs(delta * 100).toFixed(1)}pp`, delta);
+
+  const ra = st.ratios;
+  put("vAlpha", ra?.alpha_ann == null ? "—" : fmtPct(ra.alpha_ann));
+  put("vBeta", ra?.beta == null ? "—" : ra.beta.toFixed(2));
+  put("vVol", ra?.vol_ann == null ? "—" : `${(ra.vol_ann * 100).toFixed(1)}%`);
+  put("vSharpe", ra?.sharpe == null ? "—" : ra.sharpe.toFixed(2));
+
+  // The one income echo, so the appendix never hides a due date.
+  const ev = desk?.income?.next_events?.[0];
+  $("vIncome").innerHTML = ev
+    ? `Next payment · ${esc(ev.key)} ${new Date(ev.date).toLocaleDateString("en-GB",
+        { day: "numeric", month: "short" })}${ev.gbp != null ? ` · <b>~${money(ev.gbp)}</b>` : ""}`
+    : "";
+}
+
+/* The flow headline: the Sankey's answer in one readable line. */
+function renderFlowLine() {
+  const node = $("flowLine");
+  if (!node) return;
+  const flow = data?.flow;
+  if (!flow) { node.textContent = ""; return; }
+  const find = (name) => flow.links.find((l) => l.source === name || l.target === name)?.value;
+  const deposits = find("Deposits");
+  const costs = flow.links.filter((l) => l.kind === "cost" && l.target !== "Ending NAV")
+    .reduce((s2, l) => s2 + l.value, 0);
+  node.innerHTML = [
+    deposits != null ? `<b>${money(deposits)}</b> in` : null,
+    `<b>${money(flow.ending)}</b> ending NAV`,
+    costs ? `<b>${money(costs)}</b> costs` : null,
+  ].filter(Boolean).join(" · ");
 }
 
 function renderTrack() {
+  renderMasthead();
   renderMonthlyGrid();
   renderDrawdown();
   renderDayCal();
   renderDays();
   renderIncomeRail();
+  renderFlowLine();
 }
 
 /* ---------------- income rail ----------------
@@ -555,6 +665,13 @@ export function init() {
       renderBars(which);
     });
   }
+
+  let resizeTimer = null;
+  window.addEventListener("resize", () => {
+    if (!loaded) return;
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(settleCharts, 150);
+  });
 
   $("incomeMode")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-mode]");

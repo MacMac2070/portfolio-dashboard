@@ -390,99 +390,116 @@
       <section class="view view--scroll" id="view-performance" role="tabpanel"
                aria-label="Performance" hidden>
 
-        <section class="card card--anchor perf-card" aria-labelledby="flowTitle">
-          <div class="card__head">
-            <h2 class="card-title" id="flowTitle">NAV flow</h2>
-            <span class="perf-card__period" id="flowPeriod"></span>
-          </div>
-          <div class="plot plot--flow" id="flowPlot">
-            <svg id="flowSvg" role="img" aria-label="Where the account's value came from and went"></svg>
-          </div>
-          <p class="perf-card__foot" id="flowFoot"></p>
-        </section>
+        <!-- ============ Screen 1: the Double Spread ============
+             One locked screen answering "how am I doing": verdict rail left,
+             monthly ledger and drawdown centre, episode/day tables right,
+             the daily heatmap closing the spread. Hairline-tiled — the 1px
+             gaps over a border-colour ground ARE the rules; no cards. Below
+             1500x900 the lock releases to banded scroll (the board-fit
+             precedent). -->
+        <div class="perf-spread">
 
-        <div class="perf-row">
-          <section class="card perf-card" aria-labelledby="gridTitle">
-            <div class="card__head">
-              <h2 class="card-title" id="gridTitle">Monthly returns</h2>
-              <span class="perf-card__period" id="gridNote"></span>
+          <aside class="pspread pspread--verdict" aria-label="Performance summary">
+            <p class="pverdict__kicker num" id="vRange">PERFORMANCE</p>
+            <p class="pverdict__hero num" id="vSi">—</p>
+            <p class="pverdict__herocap">since inception</p>
+            <div class="pverdict__rows">
+              <div class="pverdict__row"><span>MTD</span><b class="num" id="vMtd">—</b></div>
+              <div class="pverdict__row"><span>YTD</span><b class="num" id="vYtd">—</b></div>
+              <div class="pverdict__row"><span id="vBenchLabel">vs benchmark</span><b class="num" id="vBench">—</b></div>
             </div>
-            <!-- Anchored to IBKR's own Change-in-NAV sub-periods, so every
-                 cell reconciles with the broker's statement. Signed figures
-                 printed in every cell — the wash is the second cue, never
-                 the encoding. -->
-            <div class="mgrid" id="monthlyGrid"></div>
-          </section>
-
-          <section class="card perf-card" aria-labelledby="ddTitle">
-            <div class="card__head">
-              <h2 class="card-title" id="ddTitle">Drawdown</h2>
-              <span class="perf-card__total num" id="ddCurrent"></span>
+            <div class="pverdict__ratios" id="vRatios">
+              <div class="pverdict__row"><span>alpha (ann.)</span><b class="num" id="vAlpha">—</b></div>
+              <div class="pverdict__row"><span>beta</span><b class="num" id="vBeta">—</b></div>
+              <div class="pverdict__row"><span>volatility</span><b class="num" id="vVol">—</b></div>
+              <div class="pverdict__row"><span>sharpe · rf 0</span><b class="num" id="vSharpe">—</b></div>
             </div>
-            <div class="plot plot--dd" id="ddPlot">
-              <svg id="ddSvg" role="img" aria-label="Drawdown from peak over time"></svg>
-            </div>
-            <div class="ddeps" id="ddEpisodes"></div>
-          </section>
-        </div>
+            <p class="pverdict__income" id="vIncome"></p>
+          </aside>
 
-        <section class="card perf-card" aria-labelledby="calTitle">
-          <div class="card__head">
-            <h2 class="card-title" id="calTitle">Daily P/L</h2>
-            <span class="perf-card__period" id="calNote"></span>
-          </div>
-          <div class="dcal" id="dayCal"></div>
-        </section>
-
-        <section class="card perf-card" aria-labelledby="incRailTitle">
-          <div class="card__head">
-            <h2 class="card-title" id="incRailTitle">Income rail</h2>
-            <span class="perf-card__total num" id="incRailTotal"></span>
-            <span class="perf-card__period" id="incRailNote"></span>
-          </div>
-          <!-- Three tiers, never blurred: paid (solid, Flex fact), declared
-               (broker accrual, the headline), estimated (outline, marked
-               est.). -->
-          <div class="irail">
-            <div class="irail__bars" id="incRailBars"></div>
-            <div class="irail__events" id="incRailEvents"></div>
-          </div>
-        </section>
-
-        <div class="perf-row perf-row--stats">
-          <section class="card perf-card" aria-labelledby="incomeTitle">
-            <div class="card__head">
-              <h2 class="card-title" id="incomeTitle">Dividend income</h2>
+          <div class="pspread pspread--ledger">
+            <div class="pane__head">
+              <span class="pane__kicker" id="incomeTitle">Monthly</span>
               <div class="ranges" id="incomeMode" role="group" aria-label="Show income or P&amp;L">
                 <button class="range" type="button" data-mode="income" aria-pressed="true">Income</button>
                 <button class="range" type="button" data-mode="pnl" aria-pressed="false">P&amp;L</button>
               </div>
-              <span class="perf-card__total" id="incomeTotal"></span>
+              <span class="pane__note num" id="gridNote"></span>
+              <span class="pane__total num" id="incomeTotal"></span>
             </div>
+            <div class="mgrid mgrid--flush" id="monthlyGrid"></div>
             <div class="plot plot--bars" id="incomePlot">
-              <svg id="incomeSvg" role="img" aria-label="Dividend income by month"></svg>
+              <svg id="incomeSvg" role="img" aria-label="Monthly income or P&amp;L"></svg>
             </div>
             <div class="perf-legend" id="incomeLegend"></div>
-          </section>
+          </div>
 
-          <section class="card perf-card" aria-labelledby="costTitle">
-            <div class="card__head">
-              <h2 class="card-title" id="costTitle">Costs</h2>
-              <span class="perf-card__total" id="costTotal"></span>
+          <div class="pspread pspread--dd">
+            <div class="pane__head">
+              <span class="pane__kicker">Drawdown</span>
+              <span class="pane__total num" id="ddCurrent"></span>
             </div>
-            <div class="plot plot--bars" id="costPlot">
-              <svg id="costSvg" role="img" aria-label="Costs by month"></svg>
+            <div class="plot plot--dd" id="ddPlot">
+              <svg id="ddSvg" role="img" aria-label="Drawdown from peak over time"></svg>
             </div>
-            <div class="perf-legend" id="costLegend"></div>
-          </section>
+          </div>
 
-          <section class="card perf-card" aria-labelledby="daysTitle">
-            <div class="card__head">
-              <h2 class="card-title" id="daysTitle">Best &amp; worst days</h2>
-              <span class="perf-card__period" id="daysNote"></span>
-            </div>
+          <aside class="pspread pspread--tables">
+            <div class="pane__head"><span class="pane__kicker">Worst episodes</span></div>
+            <div class="ddeps" id="ddEpisodes"></div>
+            <div class="pane__head pane__head--mid"><span class="pane__kicker">Best &amp; worst days</span></div>
             <div class="bwdays" id="bwDays"></div>
-          </section>
+          </aside>
+
+          <div class="pspread pspread--days">
+            <div class="pane__head">
+              <span class="pane__kicker">Daily P/L</span>
+              <span class="pane__note num" id="calNote"></span>
+            </div>
+            <div class="dcal" id="dayCal"></div>
+          </div>
+        </div>
+
+        <!-- ============ Screen 2: the appendix ============
+             Where the money moved: the income rail, then the Sankey beside
+             the costs series it explains. -->
+        <div class="perf-appendix">
+
+          <div class="pspread pband">
+            <div class="pane__head">
+              <span class="pane__kicker">Income</span>
+              <span class="pane__total num" id="incRailTotal"></span>
+              <span class="pane__note num" id="incRailNote"></span>
+            </div>
+            <div class="irail">
+              <div class="irail__bars" id="incRailBars"></div>
+              <div class="irail__events" id="incRailEvents"></div>
+            </div>
+          </div>
+
+          <div class="pband-split">
+            <div class="pspread pband">
+              <div class="pane__head">
+                <span class="pane__kicker" id="flowTitle">NAV flow</span>
+                <span class="pane__note num" id="flowPeriod"></span>
+              </div>
+              <p class="pflow__line num" id="flowLine"></p>
+              <div class="plot plot--flow" id="flowPlot">
+                <svg id="flowSvg" role="img" aria-label="Where the account's value came from and went"></svg>
+              </div>
+              <p class="perf-card__foot" id="flowFoot"></p>
+            </div>
+            <div class="pspread pband">
+              <div class="pane__head">
+                <span class="pane__kicker" id="costTitle">Costs</span>
+                <span class="pane__total num" id="costTotal"></span>
+              </div>
+              <div class="plot plot--bars" id="costPlot">
+                <svg id="costSvg" role="img" aria-label="Costs by month"></svg>
+              </div>
+              <div class="perf-legend" id="costLegend"></div>
+            </div>
+          </div>
         </div>
       </section>
 

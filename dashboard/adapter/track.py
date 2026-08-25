@@ -189,6 +189,91 @@ def monthly_grid(index_history=None, benchmark_symbol: str | None = None) -> dic
     return {"months": months, "benchmark": bench, "benchmark_symbol": symbol}
 
 
+# ---------------------------------------------------------------------- stats
+
+def _compound(rows) -> float:
+    p = 1.0
+    for r in rows:
+        p *= (1.0 + r["r"])
+    return p - 1.0
+
+
+def stats(series: list[dict], index_history=None,
+          benchmark_symbol: str | None = None) -> dict | None:
+    """The verdict block: period returns and benchmark-relative ratios.
+
+    Period returns compound the funding-aware daily series, so a deposit can
+    never masquerade as performance. Ratios are computed only when at least 60
+    aligned portfolio/benchmark observations exist — below that a beta is a
+    coin toss wearing two decimals, and the masthead prints em-dashes instead.
+    Sharpe uses rf = 0 and says so in the UI label.
+    """
+    if len(series) < 5:
+        return None
+    today = series[-1]["date"]
+    mtd_rows = [r for r in series if r["date"] >= f"{today[:7]}-01"]
+    ytd_rows = [r for r in series if r["date"] >= f"{today[:4]}-01-01"]
+
+    out: dict = {
+        "asof": today,
+        "si": round(_compound(series), 5),
+        "mtd": round(_compound(mtd_rows), 5),
+        "ytd": round(_compound(ytd_rows), 5),
+        "benchmark_symbol": benchmark_symbol,
+        "bench": None,
+        "ratios": None,
+    }
+
+    if index_history is None or not benchmark_symbol:
+        return out
+    try:
+        closes = sorted(index_history(benchmark_symbol) or [])
+    except Exception:
+        return out
+    if len(closes) < 2:
+        return out
+
+    bret: dict[str, float] = {}
+    for (d0, c0), (d1, c1) in zip(closes, closes[1:]):
+        if c0:
+            bret[str(d1)[:10]] = float(c1) / float(c0) - 1.0
+
+    def bench_compound(rows) -> float | None:
+        vals = [bret[r["date"]] for r in rows if r["date"] in bret]
+        if len(vals) < max(2, len(rows) // 2):
+            return None                 # too sparse to call it the same period
+        p = 1.0
+        for v in vals:
+            p *= (1.0 + v)
+        return p - 1.0
+
+    b_si, b_mtd, b_ytd = (bench_compound(x) for x in (series, mtd_rows, ytd_rows))
+    out["bench"] = {
+        "si": round(b_si, 5) if b_si is not None else None,
+        "mtd": round(b_mtd, 5) if b_mtd is not None else None,
+        "ytd": round(b_ytd, 5) if b_ytd is not None else None,
+    }
+
+    aligned = [(r["r"], bret[r["date"]]) for r in series if r["date"] in bret]
+    if len(aligned) >= 60:
+        n = len(aligned)
+        mp = sum(a for a, _ in aligned) / n
+        mb = sum(b for _, b in aligned) / n
+        var_b = sum((b - mb) ** 2 for _, b in aligned) / n
+        cov = sum((a - mp) * (b - mb) for a, b in aligned) / n
+        var_p = sum((a - mp) ** 2 for a, _ in aligned) / n
+        sd_p = var_p ** 0.5
+        beta = cov / var_b if var_b > 0 else None
+        out["ratios"] = {
+            "beta": round(beta, 2) if beta is not None else None,
+            "alpha_ann": round((mp - (beta or 0) * mb) * 252, 4) if beta is not None else None,
+            "vol_ann": round(sd_p * (252 ** 0.5), 4),
+            "sharpe": round((mp / sd_p) * (252 ** 0.5), 2) if sd_p > 0 else None,
+            "n": n,
+        }
+    return out
+
+
 # ---------------------------------------------------------------------- build
 
 def build(index_history=None, benchmark_symbol: str | None = None) -> dict:
@@ -202,6 +287,7 @@ def build(index_history=None, benchmark_symbol: str | None = None) -> dict:
         "drawdown": drawdown(series) if ready else None,
         "days": day_stats(series) if ready else None,
         "monthly": monthly_grid(index_history, benchmark_symbol),
+        "stats": stats(series, index_history, benchmark_symbol or DEFAULT_BENCHMARK),
         "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
     }
 

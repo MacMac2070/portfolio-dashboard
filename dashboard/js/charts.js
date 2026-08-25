@@ -634,7 +634,7 @@ export function groupedBars(svg, {
 
   const box = svg.getBoundingClientRect();
   const w = Math.max(320, Math.round(box.width) || 780);
-  const h = Math.max(120, Math.round(box.height) || 260);
+  const h = Math.max(72, Math.round(box.height) || 260);
   const padL = 62, padR = 14, padT = 14, padB = 32;
 
   svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
@@ -679,6 +679,10 @@ export function groupedBars(svg, {
   }));
 
   const gw = plotW / periods.length;
+  // Thin the period labels when the bands are too narrow to carry them all,
+  // counting back from the last period so the most recent month is always
+  // the one that stays named.
+  const labelStep = Math.max(1, Math.ceil(40 / gw));
   const band = gw * 0.68;
   // Stacked: one column per period. Grouped: one column per series.
   const bw = stacked ? band : band / live.length;
@@ -686,12 +690,14 @@ export function groupedBars(svg, {
 
   periods.forEach((label, p) => {
     const gx = padL + gw * p + (gw - band) / 2;
-    const text = el("text", {
-      class: "plot__axis", x: padL + gw * p + gw / 2, y: h - 10,
-      "text-anchor": "middle",
-    });
-    text.textContent = formatPeriod ? formatPeriod(label, p) : label;
-    svg.append(text);
+    if ((periods.length - 1 - p) % labelStep === 0) {
+      const text = el("text", {
+        class: "plot__axis", x: padL + gw * p + gw / 2, y: h - 10,
+        "text-anchor": "middle",
+      });
+      text.textContent = formatPeriod ? formatPeriod(label, p) : label;
+      svg.append(text);
+    }
 
     // Stacked segments accumulate from the zero line outward, so each one is
     // drawn from where the previous ended rather than from the baseline.
