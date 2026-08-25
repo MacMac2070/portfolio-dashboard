@@ -403,37 +403,40 @@ function renderDayCal() {
     return;
   }
 
-  // Lay out Mon-Fri x weeks. Weekend rows would be permanently empty cells.
+  // Month blocks that read like a wall calendar: Mon-Fri across, weeks
+  // stacking down. Weekend columns would be permanently empty cells. Days the
+  // account hasn't lived through are invisible pads; days it sat out
+  // (holidays) keep the outlined blank so the gap is honest.
   const byDate = new Map(days.map((d) => [d.date, d]));
   const first = new Date(days[0].date);
   const last = new Date(days[days.length - 1].date);
-  const monday = new Date(first);
-  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
 
   const level = (r) => Math.abs(r) >= 0.02 ? 3 : Math.abs(r) >= 0.008 ? 2 : Math.abs(r) > 0.0005 ? 1 : 0;
-  let cells = "";
-  let monthMarks = "";
-  let col = 0;
-  for (let w = new Date(monday); w <= last; w.setDate(w.getDate() + 7), col++) {
-    let colHtml = "";
-    for (let dow = 0; dow < 5; dow++) {
-      const day = new Date(w); day.setDate(day.getDate() + dow);
+  const PAD = '<i class="dcal__cell dcal__cell--pad"></i>';
+  let months = "";
+  for (let m = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth(), 1));
+       m <= last; m.setUTCMonth(m.getUTCMonth() + 1)) {
+    const dow1 = (m.getUTCDay() + 6) % 7;
+    let cells = PAD.repeat(dow1 >= 5 ? 0 : dow1);
+    for (const day = new Date(m); day.getUTCMonth() === m.getUTCMonth();
+         day.setUTCDate(day.getUTCDate() + 1)) {
+      if ((day.getUTCDay() + 6) % 7 >= 5) continue;
       const iso = day.toISOString().slice(0, 10);
       const row = byDate.get(iso);
-      if (!row) { colHtml += '<i class="dcal__cell dcal__cell--none"></i>'; continue; }
+      if (!row) {
+        cells += day < first || day > last ? PAD : '<i class="dcal__cell dcal__cell--none"></i>';
+        continue;
+      }
       const lv = level(row.r);
       const dir = row.r > 0 ? "pos" : row.r < 0 ? "neg" : "flat";
-      colHtml += `<i class="dcal__cell dcal__cell--${dir} dcal__cell--l${lv}"
+      cells += `<i class="dcal__cell dcal__cell--${dir} dcal__cell--l${lv}"
         data-date="${iso}" data-r="${(row.r * 100).toFixed(2)}" data-pnl="${row.pnl}"
         >${lv >= 2 ? (row.r > 0 ? "+" : "−") : ""}</i>`;
     }
-    if (w.getDate() <= 7) {
-      monthMarks += `<span style="grid-column:${col + 1}">${MONTH_SHORT[w.getMonth()]}</span>`;
-    }
-    cells += `<div class="dcal__week">${colHtml}</div>`;
+    months += `<div class="dcal__month"><span class="dcal__mlabel">${
+      MONTH_SHORT[m.getUTCMonth()]}</span><div class="dcal__days">${cells}</div></div>`;
   }
-  host.innerHTML = `<div class="dcal__months">${monthMarks}</div>
-    <div class="dcal__grid">${cells}</div>`;
+  host.innerHTML = `<div class="dcal__grid">${months}</div>`;
   $("calNote").textContent = `${days.length} trading days since ${new Date(track.inception)
     .toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`;
 
