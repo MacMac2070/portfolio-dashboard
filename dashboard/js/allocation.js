@@ -257,16 +257,16 @@ function renderConcentration(rows) {
   host.innerHTML = ranked.map((r) => {
     const heavy = r.weight_pct > cap;
     return `
-      <div class="conc__row${heavy ? " is-heavy" : ""}">
-        <span class="conc__dot" style="background:${catColor(r.color_index)}"></span>
-        <span class="conc__name">${esc(r.name)}</span>
-        <span class="conc__bar">
-          <i class="conc__fill" style="width:${(r.weight_pct / span) * 100}%"></i>
-          <i class="conc__cap" style="left:${(cap / span) * 100}%"></i>
+      <div class="cslice__row${heavy ? " is-heavy" : ""}">
+        <span class="cslice__dot" style="background:${catColor(r.color_index)}"></span>
+        <span class="cslice__name">${esc(r.name)}</span>
+        <span class="cslice__bar">
+          <i class="cslice__fill" style="width:${(r.weight_pct / span) * 100}%"></i>
+          <i class="cslice__cap" style="left:${(cap / span) * 100}%"></i>
         </span>
-        <span class="conc__pct num">${pct(r.weight_pct, 1)}</span>
-        <span class="conc__val num">${money(r.value_gbp)}</span>
-        <span class="conc__flag">${heavy ? "▲ heavy" : ""}</span>
+        <span class="cslice__pct num">${pct(r.weight_pct, 1)}</span>
+        <span class="cslice__val num">${money(r.value_gbp)}</span>
+        <span class="cslice__flag">${heavy ? "▲ heavy" : ""}</span>
       </div>`;
   }).join("");
 

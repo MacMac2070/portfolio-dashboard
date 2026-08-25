@@ -1018,20 +1018,9 @@
   font-variant-numeric: tabular-nums;
   font-feature-settings: var(--ff-tabular);
   text-align: right;
+  white-space: nowrap;
 }
 .conc__value--brand { color: var(--brand-pale); }
-.conc__badge {
-  display: inline-grid; place-items: center;
-  min-width: 26px; height: 22px;
-  padding: 0 6px;
-  margin-right: var(--s-2);
-  border-radius: var(--r-sm);
-  background: var(--wash-3);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-2);
-  font-variant-numeric: tabular-nums;
-}
 
 /* The original single-table holdings renderer lived here. It was replaced by
  * js/holdings.js (the grouped sector browser) and, below the Overview fold,
@@ -3396,9 +3385,11 @@ a.prow--pos:active { background: var(--violet-tint-18); }
   white-space: nowrap;
 }
 
-/* ---- allocation: concentration ---- */
-.conc { display: grid; gap: 2px; padding: var(--s-2) var(--s-5) var(--s-4); }
-.conc__row {
+/* ---- allocation: slice concentration ----
+ * Namespaced cslice, not conc — the overview's concentration stats card
+ * owns .conc, and these row grids must never bleed into it. */
+.cslice { display: grid; gap: 2px; padding: var(--s-2) var(--s-5) var(--s-4); }
+.cslice__row {
   display: grid;
   grid-template-columns: 10px minmax(96px, 1fr) minmax(120px, 1.3fr) auto auto 64px;
   gap: var(--s-3);
@@ -3408,35 +3399,35 @@ a.prow--pos:active { background: var(--violet-tint-18); }
   font-size: 12px;
   color: var(--text-2);
 }
-.conc__row:first-child { border-top: 0; }
-.conc__dot { width: 10px; height: 10px; border-radius: 3px; }
-.conc__name { color: var(--text); }
-.conc__bar { position: relative; height: 10px; background: var(--track); }
-.conc__fill {
+.cslice__row:first-child { border-top: 0; }
+.cslice__dot { width: 10px; height: 10px; border-radius: 3px; }
+.cslice__name { color: var(--text); }
+.cslice__bar { position: relative; height: 10px; background: var(--track); }
+.cslice__fill {
   position: absolute; inset: 2px auto 2px 0;
   background: var(--brand-soft);
   opacity: 0.8;
 }
 /* The cap: a hairline everyone can see whether or not anything crosses it. */
-.conc__cap {
+.cslice__cap {
   position: absolute; top: -2px; bottom: -2px;
   width: 1px; background: var(--border-strong);
 }
-.conc__pct, .conc__val {
+.cslice__pct, .cslice__val {
   font-family: var(--font-figure);
   font-variant-numeric: tabular-nums;
   font-feature-settings: var(--ff-tabular);
   text-align: right;
 }
-.conc__val { color: var(--text-3); min-width: 62px; }
-.conc__flag {
+.cslice__val { color: var(--text-3); min-width: 62px; }
+.cslice__flag {
   text-align: right;
   font: 600 10px/1 var(--font-ui);
   letter-spacing: var(--tracking-caps);
   text-transform: uppercase;
   color: var(--neg);
 }
-.conc__row.is-heavy .conc__fill { opacity: 1; }
+.cslice__row.is-heavy .cslice__fill { opacity: 1; }
 
 /* ---- allocation: rules ---- */
 .rules { display: grid; gap: 2px; padding: var(--s-2) var(--s-5) var(--s-4); }

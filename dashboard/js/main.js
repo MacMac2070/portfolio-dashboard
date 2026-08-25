@@ -480,8 +480,7 @@ function renderConcentration(data) {
   const rows = [
     {
       label: "Largest position",
-      html: `<span class="conc__badge num">${c.positions ?? "—"}</span>` +
-            `<span class="conc__value conc__value--brand num">${c.largest_symbol ?? "—"} · ${pct(c.largest_weight_pct)}</span>`,
+      html: `<span class="conc__value conc__value--brand num">${c.largest_symbol ?? "—"} · ${pct(c.largest_weight_pct)}</span>`,
     },
     { label: "Top 3 weight", html: `<span class="conc__value num">${pct(c.top3_weight_pct)}</span>` },
     { label: "Positions",    html: `<span class="conc__value num">${c.positions ?? "—"}</span>` },
@@ -491,7 +490,7 @@ function renderConcentration(data) {
   $("concList").innerHTML = rows.map((r) => `
     <div class="conc__row" data-conc="${r.label}">
       <span class="conc__label">${r.label}</span>
-      <span style="display:flex;align-items:center;justify-content:flex-end">${r.html}</span>
+      ${r.html}
     </div>`).join("");
 }
 
