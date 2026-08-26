@@ -580,16 +580,34 @@ def main():
 
     feed = None
     if live:
+        # Two sources, one slot: the Gateway feed when it is connected, the
+        # Flex-EOD feed (yesterday's positions × delayed yfinance quotes)
+        # whenever it is not — so the Gateway is an upgrade, not a requirement.
+        live_feed = None
         try:
             from feed import LiveFeed
-            feed = LiveFeed()
-            feed.start()
+            live_feed = LiveFeed()
             log.info("live feed starting — IB Gateway %s:%s, client %d",
-                     feed.host, feed.port, feed.client_id)
+                     live_feed.host, live_feed.port, live_feed.client_id)
         except Exception as exc:
             log.error("could not start live feed: %s", exc)
-            log.error("serving static only; the page falls back to data/portfolio.json")
-            feed = None
+        flex_feed = None
+        try:
+            from flexfeed import FlexFeed
+            ready = (lambda: bool(live_feed and live_feed.snapshot()["meta"]["last_refresh"]))
+            flex_feed = FlexFeed(gate=ready if live_feed else None)
+            log.info("flex feed starting — EOD positions via Flex, quotes via yfinance")
+        except Exception as exc:
+            log.error("could not start flex feed: %s", exc)
+        if live_feed and flex_feed:
+            from flexfeed import FailoverFeed
+            feed = FailoverFeed(live_feed, flex_feed)
+        else:
+            feed = live_feed or flex_feed
+        if feed:
+            feed.start()
+        else:
+            log.error("no feed at all; the page falls back to data/portfolio.json")
     else:
         log.info("--no-live: static files only")
 

@@ -18,6 +18,9 @@ TX_PATH = DATA_DIR / "transactions.jsonl"
 NAV_CHANGE_PATH = DATA_DIR / "nav_change.jsonl"
 # Dated cash movements: dividends, withholding tax, interest, fees.
 CASH_PATH = DATA_DIR / "cash_transactions.jsonl"
+# The EOD open-positions snapshot from Flex. A snapshot, not a ledger: each
+# write replaces the file, so the no-shrink guard does not apply here.
+POSITIONS_PATH = DATA_DIR / "positions_eod.json"
 
 
 def _read(path: Path) -> list[dict]:
@@ -195,6 +198,52 @@ def nav_change_stale(hours: float = 20) -> bool:
     if not NAV_CHANGE_PATH.exists():
         return True
     return (time.time() - NAV_CHANGE_PATH.stat().st_mtime) >= hours * 3600
+
+
+def write_positions_eod(rows: list[dict]) -> dict:
+    """Replace the EOD positions snapshot. Returns the written payload."""
+    from datetime import datetime, timezone
+    asof = max((r.get("report_date") or "" for r in rows), default="") or None
+    payload = {
+        "asof": asof,
+        "fetched_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "positions": rows,
+    }
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    POSITIONS_PATH.write_text(json.dumps(payload, indent=2))
+    return payload
+
+
+def read_positions_eod() -> dict | None:
+    """The EOD positions snapshot, or None when it has never been fetched."""
+    if not POSITIONS_PATH.exists():
+        return None
+    try:
+        payload = json.loads(POSITIONS_PATH.read_text())
+    except json.JSONDecodeError:
+        return None
+    return payload if payload.get("positions") else None
+
+
+def positions_eod_stale(hours: float = 20) -> bool:
+    """Same once-a-day economics as nav_change_stale — Flex data moves at
+    close of business, so a second pull the same day buys nothing."""
+    if not POSITIONS_PATH.exists():
+        return True
+    return (time.time() - POSITIONS_PATH.stat().st_mtime) >= hours * 3600
+
+
+def nav_on_or_before(day: str | None) -> float | None:
+    """The NAV figure for `day`, or the nearest earlier reported day."""
+    best = None
+    for row in _read(NAV_PATH):
+        d = row.get("date")
+        if not d or not row.get("nav_gbp"):
+            continue
+        if day is None or d <= day:
+            if best is None or d > best[0]:
+                best = (d, row["nav_gbp"])
+    return best[1] if best else None
 
 
 def nav_inception() -> str | None:

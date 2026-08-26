@@ -213,6 +213,70 @@ def parse_trades(root: ET.Element) -> list[dict]:
     return out
 
 
+def _num_or_none(node, name: str) -> float | None:
+    """Like _num, but honest about absence — a missing mark price must not
+    read as a price of zero."""
+    raw = (node.get(name) or "").strip()
+    if not raw:
+        return None
+    try:
+        return float(raw)
+    except ValueError:
+        return None
+
+
+def parse_open_positions(root: ET.Element) -> list[dict]:
+    """Held positions as of the statement's close, one row per contract.
+
+    Reads the Open Positions section. Only SUMMARY rows are kept — Flex also
+    emits one row per tax lot, and a position bought in tranches must stay one
+    row here. Money fields are in the position's own currency; fxRateToBase
+    rides along so a caller can convert to base without a live FX source.
+    """
+    out: dict[int, dict] = {}
+    for node in _iter(root, "OpenPosition"):
+        if (node.get("levelOfDetail") or "SUMMARY") != "SUMMARY":
+            continue
+        try:
+            con_id = int(node.get("conid") or 0)
+            quantity = float(node.get("position") or 0)
+        except ValueError:
+            continue
+        if not con_id or not quantity:
+            continue
+        out[con_id] = {
+            "report_date": _iso(node.get("reportDate") or ""),
+            "con_id": con_id,
+            "symbol": node.get("symbol") or "",
+            "exchange": node.get("listingExchange") or node.get("exchange") or "",
+            "currency": node.get("currency") or "",
+            "asset": node.get("assetCategory") or "",
+            "quantity": quantity,
+            "mark_price": _num_or_none(node, "markPrice"),
+            "value": _num_or_none(node, "positionValue"),
+            "average_cost": _num_or_none(node, "costBasisPrice"),
+            "unrealized_pnl": _num_or_none(node, "fifoPnlUnrealized"),
+            "fx_to_base": _num_or_none(node, "fxRateToBase"),
+            "account_id": node.get("accountId") or "",
+            "source": "flex",
+        }
+    return sorted(out.values(), key=lambda row: -abs(row.get("value") or 0.0))
+
+
+def fetch_positions(config: dict | None = None) -> list[dict]:
+    """Open positions off their own query when configured, else the Activity
+    query — the Open Positions section just has to be enabled on whichever
+    one is used. Reports as of the query period's last business day."""
+    config = config or load_config()
+    query = str(config.get("positions_query_id", "")).strip()
+    if not query or query.startswith("PASTE"):
+        query = str(config.get("nav_query_id", "")).strip()
+    if not query or query.startswith("PASTE"):
+        raise FlexNotConfigured("neither positions_query_id nor nav_query_id is set")
+    root = fetch_statement(config["flex_token"], query)
+    return parse_open_positions(root)
+
+
 def _iso(value: str) -> str:
     """Flex emits yyyymmdd; the dashboard wants yyyy-mm-dd."""
     value = value.strip()

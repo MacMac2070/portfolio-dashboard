@@ -21,8 +21,14 @@ Gateway is down and you just want to look at the page.
 machine with `ib_async` (2.1.0) and `openbb` (4.7.2); the default `python3`
 (3.14.2) has neither. Every script hardcodes it.
 
-IB Gateway must be running and logged in, with API clients enabled, on
-`127.0.0.1:4001`.
+IB Gateway on `127.0.0.1:4001` (running, logged in, API clients enabled) is
+the *best* source, not a requirement: when it is unreachable, the page serves
+from the Flex-EOD feed instead — yesterday's Open Positions off the Flex Web
+Service, repriced every 60s by the same delayed yfinance quotes everything
+else uses (`adapter/flexfeed.py`). The feed chip shows amber
+`EOD · positions <date> · quotes delayed` in that state; the Gateway coming
+back upgrades it to LIVE without a restart. The Open Positions section must
+be enabled on the Activity Flex query — see `config.local.json.example`.
 
 ## How data gets in
 

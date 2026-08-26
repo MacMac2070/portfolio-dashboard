@@ -174,6 +174,9 @@
 }
 .feed[data-state="stale"] .feed__dot { background: var(--neg); box-shadow: 0 0 0 3px var(--neg-bg); }
 .feed[data-state="stale"] { color: var(--neg); }
+/* Gateway-free: EOD positions repriced by delayed quotes. Working as
+   designed, so amber information, not red alarm. */
+.feed[data-state="eod"] .feed__dot { background: var(--fin-3); box-shadow: 0 0 0 3px rgba(190, 131, 23, 0.18); }
 
 .venue-chip {
   padding: 5px var(--s-3);

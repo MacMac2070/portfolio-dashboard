@@ -659,17 +659,28 @@ function renderFreshness(data) {
 
   let stale;
   let label;
+  let eod = false;
   if (livePolling) {
     // Live: the feed reports whether it holds a connection, and last_refresh
-    // proves the loop is still running. Either failing means stale.
+    // proves the loop is still running. Either failing means stale. The
+    // window follows the feed's own cadence — the Flex-EOD feed composes
+    // every 60s, and holding it to the gateway's 15s would call a healthy
+    // feed dead.
     const at = meta.last_refresh ? new Date(meta.last_refresh) : null;
     const age = at ? Date.now() - at.getTime() : Infinity;
-    stale = !meta.connected || age > LIVE_STALE_MS;
+    const window = Math.max(LIVE_STALE_MS, (meta.poll_seconds || 0) * 2500);
+    stale = !meta.connected || age > window;
+    eod = !stale && meta.source === "flex-eod";
     // Branch on the timestamp rather than printing a dash into the sentence:
     // "last live — —" and "received at — —" both shipped as broken copy.
+    const asof = meta.positions_asof
+      ? new Date(meta.positions_asof).toLocaleDateString("en-GB", { day: "numeric", month: "short" })
+      : null;
     label = stale
       ? (at ? `Disconnected · last live ${clock(meta.last_refresh)}` : "Disconnected")
-      : `Live · ${clock(meta.last_refresh)} · delayed 15 min`;
+      : eod
+        ? `EOD${asof ? ` · positions ${asof}` : ""} · quotes delayed`
+        : `Live · ${clock(meta.last_refresh)} · delayed 15 min`;
     setText($("staleCopy"), at
       ? `Feed disconnected. These are the last values received at ${clock(meta.last_refresh)} — don't trade on them.`
       : "Feed disconnected — don't trade on these values.");
@@ -687,11 +698,11 @@ function renderFreshness(data) {
   }
 
   root.dataset.state = stale ? "stale" : "ready";
-  $("feed").dataset.state = stale ? "stale" : "live";
+  $("feed").dataset.state = stale ? "stale" : eod ? "eod" : "live";
   setText($("feedLabel"), label);
   // The sidebar footer carries the same truth in fewer words.
   setText($("footMeta"), livePolling
-    ? (stale ? "Feed down" : "Feed live")
+    ? (stale ? "Feed down" : eod ? "Feed EOD" : "Feed live")
     : (meta.generated_at ? `Snapshot ${stamp(meta.generated_at)}` : "No snapshot"));
 
 }

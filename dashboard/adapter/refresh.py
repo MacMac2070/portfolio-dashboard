@@ -87,6 +87,34 @@ def _refresh_attribution() -> None:
                      label, len(cash), added, total)
 
 
+def _refresh_positions() -> None:
+    """Keep the EOD open-positions snapshot current. Never fatal.
+
+    Flex is independent of IB Gateway, so this runs whether or not the Gateway
+    was reachable — it is what lets a Gateway-less day still produce a full
+    portfolio.json via flexfeed.
+    """
+    if not store.positions_eod_stale(hours=20):
+        log.info("positions: refreshed within the day, skipping")
+        return
+    try:
+        config = flex.load_config()
+    except flex.FlexNotConfigured as exc:
+        log.info("positions: skipped (%s)", exc)
+        return
+    try:
+        rows = flex.fetch_positions(config)
+    except Exception:
+        log.exception("positions: fetch failed; the stored snapshot still serves")
+        return
+    if rows:
+        written = store.write_positions_eod(rows)
+        log.info("positions: %d rows as of %s", len(rows), written["asof"])
+    else:
+        log.warning("positions: statement carried no Open Positions section — "
+                    "enable it on the Flex query")
+
+
 def main() -> int:
     logging.basicConfig(
         level=logging.INFO,
@@ -94,39 +122,61 @@ def main() -> int:
     )
     build.DATA_DIR.mkdir(parents=True, exist_ok=True)
 
+    payload = None
+    gateway_error = None
     try:
         payload = build.build()
     except ibkr.GatewayUnavailable as exc:
+        # Not fatal any more: Flex still serves. Fetch the EOD positions first
+        # so the fallback compose below has something to stand on.
+        gateway_error = str(exc)
         log.error("gateway unavailable: %s", exc)
-        build.write_stale_marker(str(exc))
-        return 1
     except Exception as exc:
         log.exception("refresh failed: %s", exc)
         return 1
 
-    build.OUT_PATH.write_text(json.dumps(payload, indent=2))
-    # The overnight-diff baseline rides every successful build.
-    try:
-        import desk
-        desk.write_close_snapshot(payload)
-    except Exception:
-        log.exception("close snapshot failed; overnight diff will be stale")
+    if payload is None:
+        _refresh_positions()
+        try:
+            import flexfeed
+            payload = flexfeed.compose_payload()
+        except Exception:
+            log.exception("flex fallback failed; the stale marker stands instead")
+        if payload is not None:
+            payload["meta"]["gateway"] = "unavailable"
+            payload["meta"]["error"] = gateway_error
+            log.info("portfolio composed from Flex EOD positions + delayed quotes")
+        else:
+            build.write_stale_marker(gateway_error or "gateway unavailable")
 
-    nav = payload.get("kpis", {}).get("net_liquidation")
-    if nav is not None:
-        added, total = store.merge_nav([{
-            "date": date.today().isoformat(),
-            "nav_gbp": nav,
-            "source": "snapshot",
-            "recorded_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        }])
-        log.info("NAV %.2f recorded (%d new, %d points stored)", nav, added, total)
+    if payload is not None:
+        build.OUT_PATH.write_text(json.dumps(payload, indent=2))
+        # The overnight-diff baseline rides every successful build.
+        try:
+            import desk
+            desk.write_close_snapshot(payload)
+        except Exception:
+            log.exception("close snapshot failed; overnight diff will be stale")
 
-    fills = payload.get("fills") or []
-    if fills:
-        added, total = store.merge_transactions(fills)
-        log.info("executions: %d new, %d stored", added, total)
+        # Record today's NAV only off the gateway's own account figure. The
+        # Flex-composed NAV is EOD cash + repriced positions — close, but the
+        # real figure for that day arrives via the Flex NAV series anyway.
+        nav = payload.get("kpis", {}).get("net_liquidation")
+        if nav is not None and payload["meta"].get("source") != "flex-eod":
+            added, total = store.merge_nav([{
+                "date": date.today().isoformat(),
+                "nav_gbp": nav,
+                "source": "snapshot",
+                "recorded_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            }])
+            log.info("NAV %.2f recorded (%d new, %d points stored)", nav, added, total)
 
+        fills = payload.get("fills") or []
+        if fills:
+            added, total = store.merge_transactions(fills)
+            log.info("executions: %d new, %d stored", added, total)
+
+    _refresh_positions()
     _refresh_attribution()
 
     try:
@@ -160,8 +210,13 @@ def main() -> int:
                for path in (store.NAV_PATH, store.CASH_PATH,
                             store.NAV_CHANGE_PATH, store.TX_PATH)))
 
-    log.info("refresh complete — %d positions, invested %.2f",
-             len(payload.get("positions", [])), payload.get("kpis", {}).get("invested", 0))
+    if payload is None:
+        log.error("refresh finished with no portfolio payload — stores were "
+                  "still brought up to date")
+        return 1
+    log.info("refresh complete — %d positions, invested %.2f%s",
+             len(payload.get("positions", [])), payload.get("kpis", {}).get("invested", 0),
+             " (flex fallback)" if payload["meta"].get("source") == "flex-eod" else "")
     return 0
 
 
