@@ -403,6 +403,9 @@
             <p class="pverdict__kicker num" id="vRange">PERFORMANCE</p>
             <p class="pverdict__hero num" id="vSi">—</p>
             <p class="pverdict__herocap">since inception</p>
+            <div class="pverdict__spark">
+              <svg id="vSpark" role="img" aria-label="Cumulative return since inception"></svg>
+            </div>
             <div class="pverdict__rows">
               <div class="pverdict__row"><span>MTD</span><b class="num" id="vMtd">—</b></div>
               <div class="pverdict__row"><span>YTD</span><b class="num" id="vYtd">—</b></div>
@@ -413,6 +416,19 @@
               <div class="pverdict__row"><span>beta</span><b class="num" id="vBeta">—</b></div>
               <div class="pverdict__row"><span>volatility</span><b class="num" id="vVol">—</b></div>
               <div class="pverdict__row"><span>sharpe · rf 0</span><b class="num" id="vSharpe">—</b></div>
+            </div>
+            <!-- The race: both runners on one scale, the edge made visible. -->
+            <div class="pverdict__race" id="vRace" hidden>
+              <div class="pverdict__racerow">
+                <span class="pverdict__racelabel">Portfolio</span>
+                <b class="num" id="vRacePortVal">—</b>
+                <span class="pverdict__racetrack"><i class="pverdict__racefill pverdict__racefill--port" id="vRacePort"></i></span>
+              </div>
+              <div class="pverdict__racerow">
+                <span class="pverdict__racelabel" id="vRaceBenchLabel">Benchmark</span>
+                <b class="num" id="vRaceBenchVal">—</b>
+                <span class="pverdict__racetrack"><i class="pverdict__racefill pverdict__racefill--bench" id="vRaceBench"></i></span>
+              </div>
             </div>
             <p class="pverdict__income" id="vIncome"></p>
           </aside>
@@ -427,7 +443,7 @@
               <span class="pane__note num" id="gridNote"></span>
               <span class="pane__total num" id="incomeTotal"></span>
             </div>
-            <div class="mgrid mgrid--flush" id="monthlyGrid"></div>
+            <div class="mgrid" id="monthlyGrid"></div>
             <div class="plot plot--bars" id="incomePlot">
               <svg id="incomeSvg" role="img" aria-label="Monthly income or P&amp;L"></svg>
             </div>
@@ -465,7 +481,7 @@
              the costs series it explains. -->
         <div class="perf-appendix">
 
-          <div class="pspread pband">
+          <div class="pspread pband pband--income">
             <div class="pane__head">
               <span class="pane__kicker">Income</span>
               <span class="pane__total num" id="incRailTotal"></span>
@@ -478,7 +494,7 @@
           </div>
 
           <div class="pband-split">
-            <div class="pspread pband">
+            <div class="pspread pband pband--flow">
               <div class="pane__head">
                 <span class="pane__kicker" id="flowTitle">NAV flow</span>
                 <span class="pane__note num" id="flowPeriod"></span>
@@ -489,7 +505,7 @@
               </div>
               <p class="perf-card__foot" id="flowFoot"></p>
             </div>
-            <div class="pspread pband">
+            <div class="pspread pband pband--costs">
               <div class="pane__head">
                 <span class="pane__kicker" id="costTitle">Costs</span>
                 <span class="pane__total num" id="costTotal"></span>

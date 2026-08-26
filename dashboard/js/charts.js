@@ -11,6 +11,9 @@
 
 const NS = "http://www.w3.org/2000/svg";
 
+// Gradient ids must be document-unique — several charts share the page.
+let gradientSeq = 0;
+
 function el(name, attrs = {}) {
   const node = document.createElementNS(NS, name);
   for (const [key, value] of Object.entries(attrs)) {
@@ -627,10 +630,35 @@ export function priceChart(svg, {
 export function groupedBars(svg, {
   periods, series, formatValue, formatPeriod, tooltip, chartLabel = "Trend",
   stacked = false, detail = null, totalLabel = "Total",
+  rx = 0, gradient = false,
 } = {}) {
   svg.replaceChildren();
   const live = (series || []).filter((s) => s.values?.some(Number.isFinite));
   if (!periods?.length || !live.length) return;
+
+  // With gradient on, each unique colour gets a vertical fade — full ink at
+  // the data end, thinner at the baseline — built once and shared by every
+  // bar of that colour. Stops are styled, not attributed, so var() resolves
+  // and the fade follows the theme.
+  let defs = null;
+  const fades = new Map();
+  const fadeFor = (color, down) => {
+    const key = `${color}|${down}`;
+    if (fades.has(key)) return fades.get(key);
+    if (!defs) { defs = el("defs"); svg.append(defs); }
+    const id = `barfade-${++gradientSeq}`;
+    const g = el("linearGradient", { id, x1: 0, x2: 0, y1: down ? 1 : 0, y2: down ? 0 : 1 });
+    for (const [offset, alpha] of [["0%", 1], ["100%", 0.45]]) {
+      const stop = el("stop", { offset });
+      stop.style.setProperty("stop-color", color);
+      stop.style.setProperty("stop-opacity", alpha);
+      g.append(stop);
+    }
+    defs.append(g);
+    const url = `url(#${id})`;
+    fades.set(key, url);
+    return url;
+  };
 
   const box = svg.getBoundingClientRect();
   const w = Math.max(320, Math.round(box.width) || 780);
@@ -725,10 +753,11 @@ export function groupedBars(svg, {
       // whole run. That is for a signed series like monthly P&L, where the
       // sign is the identity and one hue across the zero line would say the
       // opposite of what the bar means.
-      const fill = typeof s.color === "function" ? s.color(v) : s.color;
+      const colour = typeof s.color === "function" ? s.color(v) : s.color;
+      const fill = gradient ? fadeFor(colour, v < 0) : colour;
       const rect = el("rect", {
         x, y: top, width: Math.max(1, bw - (stacked ? 0 : 2)), height,
-        rx: 0, fill,
+        rx, fill,
       });
       const title = el("title");
       title.textContent =
@@ -1111,9 +1140,10 @@ export function squarify(values, width = 1, height = 1) {
  *
  * The zero rule sits at the top of the plot and the red wash hangs beneath
  * it — the equity curve tells the up story, this one owes the reader the
- * pain, plainly. Same restraint as every other fill here: flat, faint, no
- * gradient. Green never appears; a drawdown of zero is the absence of the
- * mark, not a gain.
+ * pain, plainly. The one fill here that earns a gradient: faint at the
+ * waterline, deepest at the trough, so the wash itself says how far under
+ * the account went. Green never appears; a drawdown of zero is the absence
+ * of the mark, not a gain.
  */
 export function underwater(svg, curve, { tooltip, formatDate } = {}) {
   svg.replaceChildren();
@@ -1143,14 +1173,26 @@ export function underwater(svg, curve, { tooltip, formatDate } = {}) {
   }
   svg.append(grid);
 
+  const defs = el("defs");
+  const fadeId = `ddfade-${++gradientSeq}`;
+  const fade = el("linearGradient", { id: fadeId, x1: 0, x2: 0, y1: 0, y2: 1 });
+  for (const [offset, alpha] of [["0%", 0.03], ["100%", 0.32]]) {
+    const stop = el("stop", { offset });
+    stop.style.setProperty("stop-color", "var(--neg)");
+    stop.style.setProperty("stop-opacity", alpha);
+    fade.append(stop);
+  }
+  defs.append(fade);
+  svg.append(defs);
+
   const pts = curve.map((p, i) => `${x(i).toFixed(2)},${y(p.dd).toFixed(2)}`);
   svg.append(el("path", {
     d: `M${padL},${y(0)} L${pts.join(" L")} L${x(curve.length - 1)},${y(0)} Z`,
-    fill: "var(--neg)", "fill-opacity": 0.12, stroke: "none",
+    fill: `url(#${fadeId})`, stroke: "none",
   }));
   svg.append(el("path", {
     d: `M${pts.join(" L")}`,
-    fill: "none", stroke: "var(--neg)", "stroke-width": 1.4,
+    fill: "none", stroke: "var(--neg)", "stroke-width": 1.6,
     "stroke-linejoin": "round", "vector-effect": "non-scaling-stroke",
   }));
   // The zero rule the drawdown hangs from.

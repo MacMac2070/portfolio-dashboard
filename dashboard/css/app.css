@@ -3276,13 +3276,28 @@ a.prow--pos:active { background: var(--violet-tint-18); }
   align-items: baseline;
   font-size: 11.5px;
   color: var(--text-2);
-  padding: 3px 0;
+  padding: 3px var(--s-2);
   border-top: 1px solid var(--border);
+  /* The row is its own bar: a rose wash as wide as the episode is deep,
+     scaled against the worst on the list (--depth set inline per row). */
+  background-image: linear-gradient(90deg,
+    var(--neg-bg) var(--depth, 0%), transparent var(--depth, 0%));
+  transition: background-color var(--dur-fast) var(--ease-spring);
 }
+.ddeps__row:hover { background-color: var(--wash-1); }
 .ddeps__row:first-child { border-top: 0; }
 .ddeps__depth { font-family: var(--font-figure); font-weight: 600; }
 .ddeps__days, .ddeps__state { color: var(--text-3); white-space: nowrap; }
-.ddeps__state b { color: var(--neg); font-weight: 600; }
+.ddeps__state b {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: var(--r-pill);
+  background: var(--neg-bg);
+  color: var(--neg);
+  font: 600 10px/1.5 var(--font-ui);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+}
 
 /* ---- track record: daily calendar ----
  * Alpha steps carry magnitude, the printed sign glyph carries direction on
@@ -3311,14 +3326,22 @@ a.prow--pos:active { background: var(--violet-tint-18); }
   font-style: normal;
   text-align: center;
   color: var(--text);
+  transition: transform 120ms var(--ease-spring);
+}
+/* Data cells answer the pointer that queries them — the tooltip's handshake. */
+@media (hover: hover) {
+  .dcal__cell[data-date]:hover {
+    transform: scale(1.25);
+    outline: 1px solid var(--border-strong);
+  }
 }
 .dcal__cell--none { background: none; border: 1px solid var(--border); opacity: 0.4; }
-.dcal__cell--pos.dcal__cell--l1 { background: rgba(52, 211, 153, 0.16); }
-.dcal__cell--pos.dcal__cell--l2 { background: rgba(52, 211, 153, 0.34); }
-.dcal__cell--pos.dcal__cell--l3 { background: rgba(52, 211, 153, 0.55); }
-.dcal__cell--neg.dcal__cell--l1 { background: rgba(251, 113, 133, 0.16); }
-.dcal__cell--neg.dcal__cell--l2 { background: rgba(251, 113, 133, 0.34); }
-.dcal__cell--neg.dcal__cell--l3 { background: rgba(251, 113, 133, 0.55); }
+.dcal__cell--pos.dcal__cell--l1 { background: rgba(52, 211, 153, 0.20); }
+.dcal__cell--pos.dcal__cell--l2 { background: rgba(52, 211, 153, 0.42); }
+.dcal__cell--pos.dcal__cell--l3 { background: rgba(52, 211, 153, 0.66); }
+.dcal__cell--neg.dcal__cell--l1 { background: rgba(251, 113, 133, 0.20); }
+.dcal__cell--neg.dcal__cell--l2 { background: rgba(251, 113, 133, 0.42); }
+.dcal__cell--neg.dcal__cell--l3 { background: rgba(251, 113, 133, 0.66); }
 :root[data-theme="light"] .dcal__cell--pos.dcal__cell--l1,
 :root[data-theme="light"] .dcal__cell--pos.dcal__cell--l2,
 :root[data-theme="light"] .dcal__cell--pos.dcal__cell--l3 { color: #ffffff; }
@@ -3341,14 +3364,24 @@ a.prow--pos:active { background: var(--violet-tint-18); }
   display: grid;
   grid-template-columns: 1fr auto auto;
   gap: var(--s-3);
-  align-items: baseline;
+  align-items: center;
   padding: 3px 0;
   font-size: 11.5px;
   color: var(--text-2);
   border-top: 1px solid var(--border);
+  transition: background-color var(--dur-fast) var(--ease-spring);
 }
+.bwdays__row:hover { background-color: var(--wash-1); }
 .bwdays__row:first-of-type { border-top: 0; }
-.bwdays__r { font-family: var(--font-figure); font-weight: 600; }
+/* The signed return rides a chip, same tints the holdings chips wear. */
+.bwdays__r {
+  font-family: var(--font-figure);
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: var(--r-sm);
+}
+.bwdays__r.pos { background: var(--pos-bg); }
+.bwdays__r.neg { background: var(--neg-bg); }
 .bwdays__pnl { color: var(--text-3); }
 
 /* ---- allocation: treemap ---- */
@@ -3645,7 +3678,7 @@ a.prow--pos:active { background: var(--violet-tint-18); }
  * scroll, the board-fit precedent. */
 .perf-spread {
   display: grid;
-  grid-template-columns: 340px minmax(0, 1fr) 350px;
+  grid-template-columns: 340px minmax(0, 1fr) 366px;
   grid-template-rows: minmax(0, 1.55fr) minmax(0, 1fr) auto;
   grid-template-areas:
     "verdict ledger tables"
@@ -3660,19 +3693,51 @@ a.prow--pos:active { background: var(--violet-tint-18); }
   overflow: hidden;
 }
 .pspread {
-  background: var(--bg-page);
+  /* Surface, not page ground: the spread sits at card elevation like every
+     other view, and the 1px hairlines gain contrast for free. */
+  background: var(--surface);
   min-height: 0;
   min-width: 0;
   display: flex;
   flex-direction: column;
   padding: var(--s-4) var(--s-5);
   overflow: hidden;
+  animation: riseIn 300ms var(--ease-spring) both;
 }
-.pspread--verdict { grid-area: verdict; background: var(--brand-faint); }
-.pspread--ledger  { grid-area: ledger; }
-.pspread--dd      { grid-area: dd; }
-.pspread--tables  { grid-area: tables; }
-.pspread--days    { grid-area: days; padding-top: var(--s-3); padding-bottom: var(--s-3); }
+/* The panes land in reading order, 40ms apart. */
+.perf-spread .pspread:nth-child(2) { animation-delay: 40ms; }
+.perf-spread .pspread:nth-child(3) { animation-delay: 80ms; }
+.perf-spread .pspread:nth-child(4) { animation-delay: 120ms; }
+.perf-spread .pspread:nth-child(5) { animation-delay: 160ms; }
+
+/* The rail is the spread's cover page: the same violet plate the stock and
+   market heroes wear (inset top rule + ring), grounded a level up with the
+   view's only atmosphere — two radial washes and film grain. */
+.pspread--verdict {
+  grid-area: verdict;
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(120% 70% at 15% -5%, var(--rail-ambient-1) 0%, transparent 58%),
+    radial-gradient(90% 55% at 90% 105%, var(--rail-ambient-2) 0%, transparent 60%),
+    var(--surface-2);
+  box-shadow: inset 0 2px 0 var(--violet-500), 0 0 0 1px var(--brand-line);
+}
+.pspread--verdict::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  opacity: var(--rail-grain-opacity);
+  mix-blend-mode: soft-light;
+}
+.pspread--ledger  { grid-area: ledger; --pane-accent: var(--fin-1); }
+.pspread--dd      { grid-area: dd; --pane-accent: var(--neg); }
+.pspread--tables  { grid-area: tables; --pane-accent: var(--neg); }
+.pspread--days    { grid-area: days; padding-top: var(--s-3); padding-bottom: var(--s-3);
+                    --pane-accent: var(--pos); }
 
 .pane__head {
   display: flex;
@@ -3687,6 +3752,18 @@ a.prow--pos:active { background: var(--violet-tint-18); }
   text-transform: uppercase;
   color: var(--text-2);
 }
+/* Each pane signs its kicker with its own data ink — the tick is the same
+   colour the pane's marks wear, an index rather than an ornament. */
+.pane__kicker::before {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  height: 2px;
+  border-radius: 1px;
+  margin-right: 6px;
+  vertical-align: 2px;
+  background: var(--pane-accent, var(--brand-soft));
+}
 .pane__note { font-size: 10.5px; color: var(--text-3); }
 .pane__total { margin-left: auto; font-family: var(--font-figure); font-size: 12.5px; color: var(--text); }
 
@@ -3695,7 +3772,7 @@ a.prow--pos:active { background: var(--violet-tint-18); }
   font: 600 10px/1.5 var(--font-figure);
   letter-spacing: var(--tracking-label);
   text-transform: uppercase;
-  color: var(--text-2); /* text-3 is 3.8:1 on the wash */
+  color: var(--brand-pale); /* 8.0:1 dark / 9.6:1 light on the plate */
   margin-bottom: var(--s-5);
   white-space: nowrap;
   overflow: hidden;
@@ -3706,8 +3783,9 @@ a.prow--pos:active { background: var(--violet-tint-18); }
   letter-spacing: var(--tracking-tight);
   color: var(--text);
 }
-.pverdict__hero.pos { color: var(--pos); }
-.pverdict__hero.neg { color: var(--neg); }
+/* The glow is a dark-room device — both tokens go transparent in light. */
+.pverdict__hero.pos { color: var(--pos); text-shadow: 0 0 26px var(--hero-glow-pos); }
+.pverdict__hero.neg { color: var(--neg); text-shadow: 0 0 26px var(--hero-glow-neg); }
 .pverdict__herocap {
   font: 600 10px/1 var(--font-ui);
   letter-spacing: var(--tracking-label);
@@ -3715,6 +3793,15 @@ a.prow--pos:active { background: var(--violet-tint-18); }
   color: var(--text-2); /* text-3 is 3.8:1 on the wash */
   margin: 6px 0 var(--s-5);
 }
+/* The spark: the whole record in one stroke, sized like the market cards'
+   .mspark. Entrance is opacity+lift only — the hard rule stands here too. */
+.pverdict__spark {
+  height: 40px;
+  margin: 4px 0 var(--s-4);
+  animation: riseIn 300ms var(--ease-spring) 120ms both;
+}
+.pverdict__spark svg { display: block; width: 100%; height: 100%; }
+
 .pverdict__rows, .pverdict__ratios { display: grid; gap: 2px; }
 .pverdict__ratios { margin-top: var(--s-4); padding-top: var(--s-3); border-top: 1px solid var(--border-strong); }
 .pverdict__row {
@@ -3730,13 +3817,66 @@ a.prow--pos:active { background: var(--violet-tint-18); }
 .pverdict__rows .pverdict__row:first-child { border-top: 0; }
 .pverdict__ratios .pverdict__row:first-child { border-top: 0; }
 .pverdict__row b { font-family: var(--font-figure); font-weight: 600; color: var(--text); }
-.pverdict__income {
+/* Signed figures wear their sign's ink — the printed +/− stays the primary
+   cue, the colour is the echo. */
+.pverdict__row b.pos { color: var(--pos); }
+.pverdict__row b.neg { color: var(--neg); }
+
+/* The race: portfolio against its benchmark on the same scale, the +pp edge
+   made visible. The .mexpo track/fill idiom, two rows tall. */
+.pverdict__race {
   margin-top: auto;
+  display: grid;
+  gap: var(--s-3);
+  padding-top: var(--s-4);
+}
+.pverdict__racerow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  row-gap: 3px;
+  align-items: baseline;
+}
+.pverdict__racelabel {
+  font: 600 9.5px/1 var(--font-ui);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pverdict__racerow b {
+  font-family: var(--font-figure);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+.pverdict__racetrack {
+  grid-column: 1 / -1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--wash-3);
+  overflow: hidden;
+}
+.pverdict__racefill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  transform-origin: left;
+  animation: bar-grow var(--dur-slow) var(--ease-spring) both;
+}
+.pverdict__racefill--port  { background: var(--brand-soft); }
+.pverdict__racefill--bench { background: var(--bench-line); }
+
+.pverdict__income {
+  margin-top: var(--s-3);
   padding-top: var(--s-3);
   border-top: 1px solid var(--border);
   font-size: 11px;
   color: var(--text-2);
 }
+/* With no benchmark the race hides and the income line takes the floor. */
+.pverdict__race[hidden] ~ .pverdict__income { margin-top: auto; }
 .pverdict__income b { color: var(--text); font-family: var(--font-figure); }
 
 /* ---- panes reflow their innards ---- */
@@ -3761,7 +3901,11 @@ a.prow--pos:active { background: var(--violet-tint-18); }
 .pspread--tables .ddeps__row { grid-template-columns: 48px 1fr auto; }
 .pspread--tables .ddeps__state { grid-column: 2 / -1; padding-left: 0; }
 .pspread--tables .bwdays { grid-template-columns: 1fr 1fr; gap: var(--s-3); }
-.pspread--tables .bwdays__row { gap: var(--s-2); font-size: 11px; }
+.pspread--tables .bwdays__row { gap: 6px; font-size: 11px; }
+.pspread--tables .bwdays__r { padding: 1px 5px; }
+/* The locked band shows date + return chip; the £ figure returns on release,
+   where the column has the width to carry it. */
+.pspread--tables .bwdays__pnl { display: none; }
 .pspread--days .dcal { padding: 0; overflow-x: auto; }
 
 /* ---- appendix ---- */
@@ -3770,6 +3914,10 @@ a.prow--pos:active { background: var(--violet-tint-18); }
   border: 1px solid var(--border);
   overflow: visible;
 }
+/* The appendix signs its kickers the same way the spread does. */
+.pband--income { --pane-accent: var(--fin-1); }
+.pband--flow   { --pane-accent: var(--brand-soft); }
+.pband--costs  { --pane-accent: var(--fin-3); }
 .pband-split {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 360px;
@@ -3796,6 +3944,7 @@ a.prow--pos:active { background: var(--violet-tint-18); }
   .pspread { overflow: visible; }
   .pspread--ledger .plot--bars { min-height: 170px; }
   .pspread--tables .bwdays__row:nth-of-type(n+5) { display: grid; }
+  .pspread--tables .bwdays__pnl { display: initial; }
   .pspread--dd .plot--dd { min-height: 170px; }
   .pverdict__income { margin-top: var(--s-3); }
   .pband-split { grid-template-columns: 1fr; }

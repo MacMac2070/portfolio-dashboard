@@ -22,7 +22,7 @@
  *   yield) do not apply here, but the P/L half does — see attribution.py.
  */
 import { money, moneySigned, esc } from "./format.js";
-import { sankey, groupedBars, underwater } from "./charts.js";
+import { sankey, groupedBars, underwater, sparkline } from "./charts.js";
 
 const $ = (id) => document.getElementById(id);
 const URL_ATTR = "api/attribution";
@@ -245,6 +245,10 @@ function renderBars(which) {
     formatPeriod: monthLabel,
     tooltip: $("tip"),
     chartLabel: label,
+    // Rounded data-ends and a baseline fade — the ink is strongest where the
+    // figure is, thinner where the bar is merely reaching from zero.
+    rx: 2,
+    gradient: true,
   });
 
   // Totalled over the bands actually drawn, so switching one off moves the
@@ -320,7 +324,7 @@ const pctCell = (v) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v * 100).t
  *  wash is the glance layer. Alpha steps, never hue steps. */
 function washStyle(v) {
   if (v == null || v === 0) return "";
-  const alpha = Math.min(0.05 + Math.abs(v) * 2.2, 0.30).toFixed(2);
+  const alpha = Math.min(0.06 + Math.abs(v) * 2.6, 0.42).toFixed(2);
   const base = v > 0 ? "52, 211, 153" : "251, 113, 133";
   return `background: rgba(${base}, ${alpha})`;
 }
@@ -381,8 +385,11 @@ function renderDrawdown() {
   $("ddCurrent").className = `perf-card__total num ${cur < -0.0005 ? "neg" : ""}`;
 
   const fmt = (d) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit" });
+  // Each row's wash is as wide as the episode is deep, scaled to the worst
+  // on the list — the table doubles as its own bar chart.
+  const worstDepth = Math.max(...dd.episodes.slice(0, 4).map((ep) => Math.abs(ep.depth)), 1e-9);
   $("ddEpisodes").innerHTML = dd.episodes.slice(0, 4).map((ep) => `
-    <div class="ddeps__row">
+    <div class="ddeps__row" style="--depth:${((Math.abs(ep.depth) / worstDepth) * 100).toFixed(0)}%">
       <span class="ddeps__depth num neg">−${Math.abs(ep.depth * 100).toFixed(1)}%</span>
       <span class="ddeps__span">${fmt(ep.peak_date)} → ${fmt(ep.trough_date)}</span>
       <span class="ddeps__days num">${ep.days_down}d down</span>
@@ -501,7 +508,23 @@ function renderMasthead() {
 
   if (!st) {
     for (const id of ["vSi", "vMtd", "vYtd", "vBench", "vAlpha", "vBeta", "vVol", "vSharpe"]) put(id, "—");
+    $("vSpark")?.replaceChildren();
+    const race0 = $("vRace");
+    if (race0) race0.hidden = true;
     return;
+  }
+
+  // The spark: the compounded daily series — the same arithmetic stats()
+  // ran server-side, replayed only to draw the line.
+  const spark = $("vSpark");
+  if (spark) {
+    let acc = 1;
+    const curve = (track?.daily || []).map((day) => (acc *= 1 + day.r));
+    if (curve.length >= 2) {
+      sparkline(spark, curve, {
+        direction: st.si > 0 ? "up" : st.si < 0 ? "down" : "flat",
+      });
+    } else spark.replaceChildren();
   }
   const benchName = document.querySelector(
     `#benchSelect option[value="${CSS.escape(st.benchmark_symbol || "")}"]`)
@@ -521,8 +544,25 @@ function renderMasthead() {
   put("vBench", delta == null ? "—"
     : `${delta > 0 ? "+" : delta < 0 ? "−" : ""}${Math.abs(delta * 100).toFixed(1)}pp`, delta);
 
+  // The race: both runners on one scale, the +pp edge made visible. A
+  // negative return is a zero-length bar — the printed figure still says so.
+  const race = $("vRace");
+  if (race) {
+    if (st.bench?.si != null && st.si != null) {
+      race.hidden = false;
+      const span = Math.max(Math.abs(st.si), Math.abs(st.bench.si), 1e-9);
+      $("vRacePort").style.width = `${(Math.max(st.si, 0) / span) * 100}%`;
+      $("vRaceBench").style.width = `${(Math.max(st.bench.si, 0) / span) * 100}%`;
+      $("vRacePortVal").textContent = fmtPct(st.si, 1);
+      $("vRaceBenchVal").textContent = fmtPct(st.bench.si, 1);
+      $("vRaceBenchLabel").textContent = benchName;
+    } else race.hidden = true;
+  }
+
   const ra = st.ratios;
-  put("vAlpha", ra?.alpha_ann == null ? "—" : fmtPct(ra.alpha_ann));
+  // Alpha is the one ratio with a sign worth colouring; beta, vol and sharpe
+  // are magnitudes, not verdicts.
+  put("vAlpha", ra?.alpha_ann == null ? "—" : fmtPct(ra.alpha_ann), ra?.alpha_ann ?? null);
   put("vBeta", ra?.beta == null ? "—" : ra.beta.toFixed(2));
   put("vVol", ra?.vol_ann == null ? "—" : `${(ra.vol_ann * 100).toFixed(1)}%`);
   put("vSharpe", ra?.sharpe == null ? "—" : ra.sharpe.toFixed(2));

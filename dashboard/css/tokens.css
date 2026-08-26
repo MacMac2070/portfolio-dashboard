@@ -310,6 +310,16 @@
   --pos-bg:       rgba(52, 211, 153, 0.13);
   --neg-bg:       rgba(251, 113, 133, 0.14);
 
+  /* The verdict rail's atmosphere: violet breath top-left, a teal answer
+   * bottom-right, grain to keep the plate from banding. The hero glows only
+   * in the dark — light mode reads by ink alone, so both glows go
+   * transparent there. */
+  --rail-ambient-1: rgba(109, 46, 245, 0.16);
+  --rail-ambient-2: rgba(0, 162, 178, 0.05);
+  --rail-grain-opacity: 0.05;
+  --hero-glow-pos: rgba(52, 211, 153, 0.32);
+  --hero-glow-neg: rgba(251, 113, 133, 0.30);
+
   /* layered, colour-tinted elevation — never a flat drop shadow */
   --shadow-card:
      0 1px 1px rgba(0, 0, 0, 0.5),
@@ -393,6 +403,12 @@
   --pos-bg:       rgba(4, 120, 87, 0.10);
   --neg-bg:       rgba(190, 18, 60, 0.10);
 
+  --rail-ambient-1: rgba(83, 20, 214, 0.07);
+  --rail-ambient-2: rgba(8, 117, 132, 0.05);
+  --rail-grain-opacity: 0.025;
+  --hero-glow-pos: transparent;
+  --hero-glow-neg: transparent;
+
   --cat-1: #2f6fd0; --cat-2: #8f5a07; --cat-3: #0b6390;
   --cat-4: #7343c9; --cat-5: #0a879e; --cat-6: #8f2d7e; --cat-7: var(--flat);
 
@@ -430,6 +446,9 @@
     --flow-in: #087584; --flow-kept: #6a3fd6; --flow-cost: #8a5d0e;
     --pos-bg: rgba(4,120,87,.10); --neg-bg: rgba(190,18,60,.10);
     --bench-line: rgba(16,20,26,.50);
+    --rail-ambient-1: rgba(83,20,214,.07); --rail-ambient-2: rgba(8,117,132,.05);
+    --rail-grain-opacity: 0.025;
+    --hero-glow-pos: transparent; --hero-glow-neg: transparent;
     --cat-1: #2f6fd0; --cat-2: #8f5a07; --cat-3: #0b6390;
     --cat-4: #7343c9; --cat-5: #0a879e; --cat-6: #8f2d7e; --cat-7: var(--flat);
     --shadow-card: 0 1px 2px rgba(16,20,26,.06), 0 4px 12px rgba(16,20,26,.05);
