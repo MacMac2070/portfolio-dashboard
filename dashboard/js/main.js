@@ -94,6 +94,38 @@ let portfolio = null;
 let navHistory = [];
 let activeRange = "1M";
 
+/* The chart's two readings of the same account. "nav" plots what it is
+ * worth; "twr" compounds the funding-aware daily returns the Performance
+ * view already lives on, so a deposit can never read as a gain. */
+const CHART_MODE_KEY = "portfolio-dashboard:chart-mode";
+let chartMode = "nav";
+let dailyReturns = null;   // Map(iso date -> daily r), from api/track
+
+async function loadDailyReturns() {
+  try {
+    const res = await fetch(`api/track?t=${Date.now()}`);
+    if (!res.ok) throw new Error(`track: ${res.status}`);
+    const trk = await res.json();
+    dailyReturns = new Map((trk.daily || []).map((d) => [d.date, d.r]));
+  } catch {
+    dailyReturns = null;
+  }
+  // Whichever mode is pressed, the chart can only get more honest now.
+  renderChart();
+}
+
+/** The sliced NAV dates re-read as cumulative return, in percent. Dates the
+ *  track record does not cover (pre-inception, holidays) compound as flat —
+ *  the x-axis stays identical to NAV mode, so the benchmark still aligns. */
+function twrSeries(points) {
+  if (!dailyReturns || points.length < 2) return null;
+  let acc = 1;
+  return points.map((p, i) => {
+    if (i > 0) acc *= 1 + (dailyReturns.get(p.date) ?? 0);
+    return { date: p.date, value: (acc - 1) * 100 };
+  });
+}
+
 /* ---------------- loading ---------------- */
 
 async function loadJSON(url) {
@@ -238,7 +270,7 @@ function benchmarkFor(range, expected) {
  * the comparison is of growth, so an index in its own currency shows the return
  * a local investor earned rather than a sterling one.
  */
-function renderBenchBar(bench) {
+function renderBenchBar(bench, dirOverride = null) {
   const bar = $("benchBar");
   const key = $("benchKey");
   const note = $("benchNote");
@@ -246,9 +278,11 @@ function renderBenchBar(bench) {
 
   const drawing = Boolean(bench.points);
   key.hidden = !drawing;
-  // The portfolio swatch inherits the curve's direction colour via CSS.
+  // The portfolio swatch inherits the curve's direction colour via CSS. In
+  // return mode the caller knows the direction deposits can no longer fake.
   const pts = sliceRange(navHistory, activeRange);
-  const dir = pts.length >= 2 ? (pts.at(-1).value >= pts[0].value ? "up" : "down") : "";
+  const dir = dirOverride
+    ?? (pts.length >= 2 ? (pts.at(-1).value >= pts[0].value ? "up" : "down") : "");
   if (bar.dataset.direction !== dir) bar.dataset.direction = dir;
 
   setText(note, bench.reason || (drawing && benchmark?.currency && benchmark.currency !== "GBP"
@@ -356,16 +390,50 @@ function renderChart() {
   }
 
   const bench = benchmarkFor(activeRange, points.length);
-  renderBenchBar(bench);
 
-  plot.innerHTML = '<svg id="chartSvg" role="img" aria-label="Portfolio value over time"></svg>';
-  equityCurve($("chartSvg"), points, {
+  // Return mode: same dates, but the y-axis is performance rather than worth.
+  // Falls back to NAV silently while the track record is still loading.
+  const twr = chartMode === "twr" ? twrSeries(points) : null;
+  if (twr) {
+    $("chartNote").textContent = `${RANGE_NOTE[activeRange]} · deposits excluded`;
+    // The server withholds the benchmark where deposits dominate the NAV
+    // change — a verdict about the £ chart. Here deposits are already out,
+    // but the withheld points are gone with it, so only the wording changes.
+    if (bench.funding) bench.reason = "index line unavailable over this range";
+  }
+  renderBenchBar(bench, twr ? (twr.at(-1).value >= 0 ? "up" : "down") : null);
+
+  plot.innerHTML = `<svg id="chartSvg" role="img" aria-label="${
+    twr ? "Portfolio return over time, deposits excluded" : "Portfolio value over time"}"></svg>`;
+  // In return mode the benchmark sheds its £ rebase and speaks percent too —
+  // the rebase preserved the index's growth, so dividing by its first point
+  // recovers it exactly.
+  const benchPoints = !twr ? bench.points
+    : bench.points?.length && bench.points[0]
+      ? bench.points.map((v) => (v / bench.points[0] - 1) * 100)
+      : null;
+  equityCurve($("chartSvg"), twr ?? points, {
     tooltip: $("tip"),
-    formatValue: (v, full) => (full ? money(v) : moneyCompact(v)),
+    formatValue: twr ? (v, full) => pctSigned(v, full ? 2 : 1)
+                     : (v, full) => (full ? money(v) : moneyCompact(v)),
     formatDate: (d) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
-    benchmark: bench.points,
+    benchmark: benchPoints,
     benchmarkName: benchmark?.name ?? "Benchmark",
   });
+
+  const changeNode = $("chartChange");
+  if (twr) {
+    // Every figure below is a return, so the deposit gate has nothing to gate.
+    const vals = twr.map((p) => p.value);
+    const total = vals[vals.length - 1];
+    paintChip($("chartChip"), total);
+    $("chartChip").className = $("chartChip").className.replace("kpi__chip ", "");
+    changeNode.textContent = pctSigned(total, 2);
+    changeNode.className = `num ${total > 0 ? "pos" : total < 0 ? "neg" : "flat"}`;
+    $("chartHigh").textContent = pctSigned(Math.max(...vals));
+    $("chartLow").textContent = pctSigned(Math.min(...vals));
+    return;
+  }
 
   const first = points[0].value;
   const last = points[points.length - 1].value;
@@ -375,13 +443,13 @@ function renderChart() {
   // to £51k almost entirely on deposits, which reads as "+513,314%" — true,
   // and worthless. The server already makes that call for the benchmark line;
   // the chip stands down on the same verdict rather than inventing a second
-  // rule, so the chip and the note under the chart never disagree.
+  // rule, so the chip and the note under the chart never disagree. (The
+  // Return toggle is the escape hatch: there the figure is real.)
   const changePct = bench.funding || !first ? null : ((last - first) / first) * 100;
 
   paintChip($("chartChip"), changePct);
   $("chartChip").className = $("chartChip").className.replace("kpi__chip ", "");
 
-  const changeNode = $("chartChange");
   changeNode.textContent = moneySigned(last - first);
   changeNode.className = `num ${direction(last - first) === "up" ? "pos" : direction(last - first) === "down" ? "neg" : "flat"}`;
   $("chartHigh").textContent = money(Math.max(...values));
@@ -728,6 +796,25 @@ function wireShell() {
     });
   }
 
+  // NAV / Return toggle, remembered — someone who reads the account in
+  // performance terms reads it that way tomorrow too.
+  try {
+    const stored = localStorage.getItem(CHART_MODE_KEY);
+    if (stored === "twr" || stored === "nav") chartMode = stored;
+  } catch { /* private mode */ }
+  for (const button of document.querySelectorAll("#chartMode [data-chart-mode]")) {
+    button.setAttribute("aria-pressed", String(button.dataset.chartMode === chartMode));
+    button.addEventListener("click", () => {
+      if (button.dataset.chartMode === chartMode) return;
+      chartMode = button.dataset.chartMode;
+      for (const other of document.querySelectorAll("#chartMode [data-chart-mode]")) {
+        other.setAttribute("aria-pressed", String(other === button));
+      }
+      try { localStorage.setItem(CHART_MODE_KEY, chartMode); } catch { /* private mode */ }
+      renderChart();
+    });
+  }
+
   // The curve sizes its viewBox from the element's real pixel box, so a resize
   // has to redraw it — otherwise the geometry keeps the old window's shape.
   let resizeTimer;
@@ -796,6 +883,9 @@ async function boot() {
   // paints immediately from nav_history and gains its comparison line a moment
   // later rather than waiting on a second request before showing anything.
   initBenchmark();
+  // Same pattern for the Return mode's daily-return series: fetched behind
+  // the first paint, re-rendering the curve when it lands.
+  loadDailyReturns();
   initAllocation();
   initTheme();
   performance.init();

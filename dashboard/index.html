@@ -170,6 +170,13 @@
           <section class="card chart-card reveal" style="animation-delay:200ms" aria-labelledby="chartTitle">
             <div class="card__head">
               <h2 class="eyebrow" id="chartTitle">Portfolio value</h2>
+              <!-- NAV is what the account is worth; Return is how it performed —
+                   deposits and withdrawals can never read as gains there. -->
+              <div class="ranges" role="group" aria-label="Show account value or return" id="chartMode">
+                <button class="range" type="button" data-chart-mode="nav" aria-pressed="true">NAV</button>
+                <button class="range" type="button" data-chart-mode="twr" aria-pressed="false"
+                        title="Performance only — deposits and withdrawals excluded">Return</button>
+              </div>
               <div class="ranges" role="group" aria-label="Time range">
                 <button class="range" type="button" data-range="1D">1D</button>
                 <button class="range" type="button" data-range="7D">7D</button>
