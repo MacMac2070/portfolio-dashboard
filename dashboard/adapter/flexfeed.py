@@ -225,10 +225,20 @@ class FlexFeed:
                 return
 
     def _ensure_eod(self) -> bool:
-        if store.read_positions_eod() is not None:
+        """Have a positions file, self-healing a stale one.
+
+        The nightly job is the usual writer; this covers the machine that
+        slept through it. 26h means a healthy nightly cadence never triggers
+        a fetch here — only a missed run does — so the feed still spends at
+        most ~one Flex call a day. A stale file keeps serving while a
+        re-fetch fails: old positions beat none, and meta.positions_asof
+        already tells the page how old they are.
+        """
+        have = store.read_positions_eod() is not None
+        if have and not store.positions_eod_stale(hours=26):
             return True
         if time.monotonic() - self._fetch_attempt_at < 3600:
-            return False
+            return have
         self._fetch_attempt_at = time.monotonic()
         try:
             import flex
@@ -239,7 +249,7 @@ class FlexFeed:
                 return True
         except Exception as exc:
             log.warning("flex feed: EOD fetch failed (%s); will retry in an hour", exc)
-        return False
+        return have
 
     def _cycle(self) -> None:
         if not self._ensure_eod():
