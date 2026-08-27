@@ -34,6 +34,10 @@ let loading = false;
 let failed = null;        // fetch-level failure message
 let range = "1M";
 let rangeTouched = false; // has the user picked a range for this instrument?
+// What the chart currently shows. The live polls call render() every 3s, but
+// the chart's data arrives once per instrument fetch — rebuilding it per tick
+// replayed the 900ms draw-on continuously. Redraw only when this changes.
+let chartFp = "";
 let retryTimer = null;
 
 // live sources, fed by main.js from the pollers it already runs
@@ -451,6 +455,7 @@ function renderChart(d, currency) {
 
   if (!info || !info.available) {
     svg.replaceChildren();
+    chartFp = "";
     $("stockRangePct").textContent = DASH;
     $("stockRangePct").style.color = "var(--text-muted)";
     $("stockRangeAbs").textContent = loading ? "Loading…" : DASH;
@@ -458,6 +463,15 @@ function renderChart(d, currency) {
     $("stockLegendName").textContent = key || DASH;
     return;
   }
+
+  // Same instrument, range, series and benchmark as the drawing on screen —
+  // this is a price/KPI tick, not new chart data. Everything below would
+  // write identical values and replay the draw-on animation; skip it.
+  const fp = `${key}|${range}|${currency}|${info.series?.length ?? 0}`
+    + `|${info.series?.[info.series.length - 1] ?? ""}`
+    + `|${Array.isArray(info.benchmark) ? info.benchmark.length : 0}`;
+  if (fp === chartFp) return;
+  chartFp = fp;
 
   const dir = direction(info.change_pct);
   paintFigure($("stockRangePct"), info.change_pct, pctSigned(info.change_pct, 2));

@@ -177,6 +177,7 @@ function render() {
       </div>`;
     $("allocPosNote").textContent = "";
     posKey = null;
+    mapKey = null;
     return;
   }
 
@@ -202,34 +203,65 @@ function render() {
  * weight, signed return — carry the reading. The P&L tint is a low-alpha
  * second cue, never the encoding. Hovering a cell drives the same active
  * state the arcs and legend do, so the KPI strip and positions list follow. */
+/** The cell set (and axis) the treemap DOM was built for — see posKey. */
+let mapKey = null;
+
 function renderMap(rows) {
   const host = $("allocMap");
   const all = [...(data?.positions || [])].sort((a, b) => b.value_gbp - a.value_gbp);
-  if (!all.length) { host.innerHTML = ""; return; }
+  if (!all.length) { host.innerHTML = ""; mapKey = null; return; }
 
   const field = AXES[axis].field;
   const sliceIndex = new Map(rows.map((r, i) => [r.name, i]));
   const hue = new Map(rows.map((r) => [r.name, catColor(r.color_index)]));
   const invested = data.kpis?.invested || 1;
-
   const rects = squarify(all.map((p) => p.value_gbp));
-  host.innerHTML = rects.map(({ i, x, y, w, h }) => {
+
+  // Rebuild only when the cell set or the axis changes; a live tick patches
+  // geometry and figures into the existing cells, so hover, focus and the
+  // CSS transitions on them survive the poll (paintPositions' discipline).
+  const key = `${axis}|${all.map((p) => p.con_id).join(",")}`;
+  if (key !== mapKey) {
+    mapKey = key;
+    host.innerHTML = rects.map(({ i }) => {
+      const p = all[i];
+      const slice = p[field] ?? "—";
+      return `
+        <div class="allocmap__cell" tabindex="0"
+             data-slice-i="${sliceIndex.get(slice) ?? ""}"
+             style="border-color:${hue.get(slice) || "var(--border-strong)"}">
+          <span class="allocmap__sym">${esc(p.symbol)}</span>
+          <span class="allocmap__figs num"></span>
+        </div>`;
+    }).join("");
+  }
+
+  rects.forEach(({ i, x, y, w, h }, j) => {
     const p = all[i];
-    const slice = p[field] ?? "—";
+    const cell = host.children[j];
+    if (!cell) return;
     const ret = p.unrealised_pct;
-    const big = w * h > 0.02;
-    return `
-      <div class="allocmap__cell" tabindex="0"
-           data-slice-i="${sliceIndex.get(slice) ?? ""}"
-           style="left:${(x * 100).toFixed(2)}%; top:${(y * 100).toFixed(2)}%;
-                  width:${(w * 100).toFixed(2)}%; height:${(h * 100).toFixed(2)}%;
-                  border-color:${hue.get(slice) || "var(--border-strong)"};
-                  background:${ret > 0 ? "var(--pos-bg)" : ret < 0 ? "var(--neg-bg)" : "var(--wash-1)"}">
-        <span class="allocmap__sym">${esc(p.symbol)}</span>
-        ${big ? `<span class="allocmap__figs num">${pct((p.value_gbp / invested) * 100)}
-                 · ${Number.isFinite(ret) ? pctSigned(ret) : "—"}</span>` : ""}
-      </div>`;
-  }).join("");
+    const style = cell.style;
+    const geo = {
+      left: `${(x * 100).toFixed(2)}%`, top: `${(y * 100).toFixed(2)}%`,
+      width: `${(w * 100).toFixed(2)}%`, height: `${(h * 100).toFixed(2)}%`,
+      background: ret > 0 ? "var(--pos-bg)" : ret < 0 ? "var(--neg-bg)" : "var(--wash-1)",
+    };
+    for (const [prop, value] of Object.entries(geo)) {
+      if (style[prop] !== value) style[prop] = value;
+    }
+    const figs = cell.querySelector(".allocmap__figs");
+    if (figs) {
+      const big = w * h > 0.02;
+      const display = big ? "" : "none";
+      if (figs.style.display !== display) figs.style.display = display;
+      if (big) {
+        const text = `${pct((p.value_gbp / invested) * 100)} · ${
+          Number.isFinite(ret) ? pctSigned(ret) : "—"}`;
+        if (figs.textContent !== text) figs.textContent = text;
+      }
+    }
+  });
 
   host.onpointerover = (e) => {
     const cell = e.target.closest(".allocmap__cell");
@@ -248,13 +280,16 @@ function renderMap(rows) {
  * keeps the threshold visible even when nothing breaches it. */
 function renderConcentration(rows) {
   const host = $("concBody");
-  if (!host || !rows.length) { if (host) host.innerHTML = ""; return; }
+  if (!host || !rows.length) {
+    if (host) { host.innerHTML = ""; host.dataset.html = ""; }
+    return;
+  }
 
   const cap = intent?.rules?.max_slice_pct ?? 35;
   const ranked = [...rows].sort((a, b) => b.weight_pct - a.weight_pct);
   const span = Math.max(ranked[0].weight_pct, cap) * 1.12;
 
-  host.innerHTML = ranked.map((r) => {
+  const html = ranked.map((r) => {
     const heavy = r.weight_pct > cap;
     return `
       <div class="cslice__row${heavy ? " is-heavy" : ""}">
@@ -269,6 +304,12 @@ function renderConcentration(rows) {
         <span class="cslice__flag">${heavy ? "▲ heavy" : ""}</span>
       </div>`;
   }).join("");
+  // No interactive state to protect here — identical markup just skips the
+  // pointless rebuild the 3s tick would otherwise do.
+  if (host.dataset.html !== html) {
+    host.dataset.html = html;
+    host.innerHTML = html;
+  }
 
   const top2 = ranked.slice(0, 2).reduce((s2, r) => s2 + r.weight_pct, 0);
   $("concNote").textContent =
@@ -316,7 +357,7 @@ function renderRules() {
     rows.push({ label: "HHI", value: Math.round(hhi).toString(), limit: "", ok: null });
   }
 
-  host.innerHTML = rows.map((r) => `
+  const html = rows.map((r) => `
     <div class="rules__row">
       <span class="rules__state ${r.ok === false ? "is-breach" : r.ok === true ? "is-ok" : ""}"
             aria-hidden="true">${r.ok === false ? "▲" : r.ok === true ? "●" : "·"}</span>
@@ -325,6 +366,10 @@ function renderRules() {
       <span class="rules__limit num">${esc(r.limit)}</span>
       <span class="rules__word">${r.ok === false ? "breach" : r.ok === true ? "ok" : ""}</span>
     </div>`).join("");
+  if (host.dataset.html !== html) {
+    host.dataset.html = html;
+    host.innerHTML = html;
+  }
   $("rulesNote").textContent = intent?.rules_source === "config"
     ? "thresholds from config.local.json" : "default thresholds · set yours in config.local.json";
 }

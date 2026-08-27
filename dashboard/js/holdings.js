@@ -30,6 +30,11 @@ let navTotal = 0;         // live net liquidation, for portfolio weight
 let sector = null;        // selected sector key
 let sortKey = "day";      // watch table sort
 let sortDir = "asc";
+// The set (and order) of rows currently in the DOM. While it is unchanged the
+// 3s/20s polls patch figures in place instead of rewriting innerHTML — the
+// same discipline ovholdings.js documents: a rebuild on every tick drops text
+// selection mid-read, kills hover and restarts every logo request.
+let structureKey = "";
 
 const GAIN = "var(--gain-soft)";
 const LOSS = "var(--loss-soft)";
@@ -86,36 +91,49 @@ const membersOf = (key) =>
 
 function renderSectors() {
   const nav = $("sectorNav");
-  if (!universe?.sectors?.length) { nav.innerHTML = ""; return; }
+  if (!universe?.sectors?.length) { nav.innerHTML = ""; nav.dataset.key = ""; return; }
 
-  nav.innerHTML = universe.sectors.map((s) => {
+  // Structure (the pills, their order, which one is current) rebuilds only
+  // when it changes; the live day % is patched into place every tick, so pill
+  // hover and focus survive the poll.
+  const skey = `${universe.sectors.map((s) => s.key).join(",")}|${sector}`;
+  if (nav.dataset.key !== skey) {
+    nav.dataset.key = skey;
+    nav.innerHTML = universe.sectors.map((s) => `
+      <button type="button" class="sector-pill" data-sector="${s.key}"
+              ${s.key === sector ? 'aria-current="page"' : ""}>
+        <span>${s.label}</span>
+        <span class="sector-pill__count">${s.total_count}</span>
+        <span class="sector-pill__rule" aria-hidden="true"></span>
+        <!-- direction as a data attribute, not an inline style: an inline
+             colour would outrank the selected-pill rule that turns it white -->
+        <span class="sector-pill__day" data-dir="flat">${DASH}</span>
+      </button>`).join("");
+
+    for (const b of nav.querySelectorAll(".sector-pill")) {
+      b.addEventListener("click", () => {
+        if (b.dataset.sector === sector) return;
+        sector = b.dataset.sector;
+        location.hash = `#holdings/${encodeURIComponent(sector)}`;
+        render();
+      });
+    }
+  }
+
+  for (const s of universe.sectors) {
     const rows = membersOf(s.key);
     const held = rows.filter((r) => r.owned && !r.pending);
     const value = held.reduce((a, r) => a + (r.value || 0), 0);
     const day = held.reduce((a, r) => a + (r.dayGbp || 0), 0);
     const open = value - day;
     const dayPct = open ? (day / open) * 100 : 0;
-    const on = s.key === sector;
-    return `
-      <button type="button" class="sector-pill" data-sector="${s.key}"
-              ${on ? 'aria-current="page"' : ""}>
-        <span>${s.label}</span>
-        <span class="sector-pill__count">${s.total_count}</span>
-        <span class="sector-pill__rule" aria-hidden="true"></span>
-        <!-- direction as a data attribute, not an inline style: an inline
-             colour would outrank the selected-pill rule that turns it white -->
-        <span class="sector-pill__day" data-dir="${dirClass(dayPct)}">${
-          held.length ? pctSigned(dayPct, 1) : DASH}</span>
-      </button>`;
-  }).join("");
-
-  for (const b of nav.querySelectorAll(".sector-pill")) {
-    b.addEventListener("click", () => {
-      if (b.dataset.sector === sector) return;
-      sector = b.dataset.sector;
-      location.hash = `#holdings/${encodeURIComponent(sector)}`;
-      render();
-    });
+    const pill = nav.querySelector(`.sector-pill[data-sector="${CSS.escape(s.key)}"]`);
+    const node = pill?.querySelector(".sector-pill__day");
+    if (!node) continue;
+    setLive(pill.querySelector(".sector-pill__count"), String(s.total_count));
+    setLive(node, held.length ? pctSigned(dayPct, 1) : DASH);
+    const dir = dirClass(dayPct);
+    if (node.dataset.dir !== dir) node.dataset.dir = dir;
   }
 }
 
@@ -300,7 +318,8 @@ export const HEADS = [
 ];
 
 function renderHead() {
-  $("tableHead").innerHTML = HEADS.map((h) => {
+  const head = $("tableHead");
+  const html = HEADS.map((h) => {
     const on = h.key === sortKey;
     return `<button type="button" data-sort="${h.key}" data-on="${on}"
               aria-sort="${on ? (sortDir === "asc" ? "ascending" : "descending") : "none"}"
@@ -309,6 +328,11 @@ function renderHead() {
         ${on ? `<span class="caret" style="transform:rotate(${sortDir === "asc" ? 180 : 0}deg)"></span>` : ""}
       </button>`;
   }).join("");
+  // Only the sort state changes this markup; skip the rebuild otherwise so a
+  // focused header button keeps its focus across the poll.
+  if (head.dataset.html === html) return;
+  head.dataset.html = html;
+  head.innerHTML = html;
 
   for (const b of $("tableHead").querySelectorAll("button")) {
     b.addEventListener("click", () => {
@@ -370,6 +394,17 @@ function render() {
     `${held.length} held, listed first · ${watching.length} watched`;
 
   renderHead();
+
+  // Rebuild only when the STRUCTURE changes — sector, sort, the row set or a
+  // row's shape (pending/owned). A tick that only moves figures patches them.
+  const key = `${sector}|${sortKey}|${sortDir}|`
+    + all.map((r) => `${r.key}${r.pending ? "!" : ""}${r.owned ? "+" : ""}`).join(",");
+  if (key === structureKey && all.length) {
+    patchRows(all);
+    return;
+  }
+  structureKey = key;
+
   $("tableRows").innerHTML = all.length
     ? all.map((r, i) => positionRow(r, r.owned && !all[i + 1]?.owned && i < all.length - 1)).join("")
     : `<div class="hempty"><span class="hempty__title">Nothing in this sector yet</span>
@@ -383,6 +418,84 @@ function render() {
     const r = byKey.get(svg.dataset.spark);
     if (r?.spark?.length) sparkline(svg, r.spark, { direction: direction(r.dayPct) });
   }
+}
+
+/** Writes only on change — an unchanged value never touches the DOM, which is
+ *  what keeps a text selection alive across a poll. */
+function setLive(node, value) {
+  if (node && node.textContent !== value) node.textContent = value;
+}
+
+/**
+ * Update figures without touching structure. Rows are addressed by index —
+ * safe because the structure key pins the exact order this DOM was built in.
+ * Mirrors ovholdings.js's patch(); sparklines and colours included.
+ */
+function patchRows(all) {
+  const host = $("tableRows");
+  all.forEach((r, i) => {
+    const row = host.children[i];
+    if (!row || r.pending) return;
+
+    setLive(row.querySelector(".pstack__main"), price(r.price));
+
+    const dchip = row.querySelector(".dchip");
+    if (dchip) {
+      const cls = `dchip dchip--${dirClass(r.dayPct)}`;
+      if (dchip.className !== cls) dchip.className = cls;
+      setLive(dchip, Number.isFinite(r.dayPct) ? pctSigned(r.dayPct) : DASH);
+    }
+
+    if (r.owned) {
+      const dayPl = row.querySelector(".pdaypl");
+      if (dayPl) {
+        setLive(dayPl, Number.isFinite(r.dayGbp) ? moneySigned(r.dayGbp) : DASH);
+        const c = dirColor(r.dayGbp);
+        if (dayPl.style.color !== c) dayPl.style.color = c;
+      }
+      const stacks = row.querySelectorAll(".pstack--wide");
+      // 0: qty @ avg, 1: value · cost, 2: P/L · return — see positionRow.
+      setLive(stacks[0]?.querySelector(".pstack__main"), qty(r.quantity));
+      setLive(stacks[0]?.querySelector(".pstack__sub"),
+        `@ ${r.avgCost != null ? price(r.avgCost) : DASH}`);
+      setLive(stacks[1]?.querySelector(".pstack__main"), money(r.value));
+      setLive(stacks[1]?.querySelector(".pstack__sub"), `${money(r.cost)} cost`);
+      const plMain = stacks[2]?.querySelector(".pstack__main");
+      const plRet = stacks[2]?.querySelector(".pstack__ret");
+      const colour = dirColor(r.pl);
+      if (plMain) {
+        setLive(plMain, moneySigned(r.pl));
+        if (plMain.style.color !== colour) plMain.style.color = colour;
+      }
+      if (plRet) {
+        setLive(plRet, pctSigned(r.retPct));
+        if (plRet.style.color !== colour) plRet.style.color = colour;
+      }
+      setLive(row.querySelector(".pweight"), r.weight != null ? pct(r.weight, 1) : DASH);
+    } else {
+      const dot = row.querySelector(".prange__dot");
+      if (dot) {
+        const left = `${r.rangePos}%`;
+        if (dot.style.left !== left) dot.style.left = left;
+        const bg = dirColor(r.dayPct);
+        if (dot.style.background !== bg) dot.style.background = bg;
+      }
+      const edges = row.querySelectorAll(".prange__edge");
+      setLive(edges[0], r.lo != null ? price(r.lo) : DASH);
+      setLive(edges[1], r.hi != null ? price(r.hi) : DASH);
+    }
+
+    const svg = row.querySelector("[data-spark]");
+    if (svg && r.spark?.length) {
+      // Sparklines redraw only when their series actually changed — the 30d
+      // history moves once a day, not per tick.
+      const sig = r.spark.join(",");
+      if (svg.dataset.sig !== sig) {
+        svg.dataset.sig = sig;
+        sparkline(svg, r.spark, { direction: direction(r.dayPct) });
+      }
+    }
+  });
 }
 
 /**
