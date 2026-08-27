@@ -250,18 +250,11 @@
             </div>
           </section>
 
-          <section class="card reveal" style="animation-delay:320ms" aria-labelledby="ccyTitle">
-            <div class="card__head">
-              <h2 class="card-title" id="ccyTitle">Currency exposure</h2>
-              <a class="link-all" href="#allocation/currency">By currency <span aria-hidden="true">→</span></a>
-            </div>
-            <div class="ccy" id="ccyList"></div>
-          </section>
-
           <!-- The outlet: headlines ranked by the book's own weights — a
                market or sector's pull is the £ share sitting behind it — with
-               earnings as figures on top. Concentration lives on Allocation. -->
-          <section class="card reveal" style="animation-delay:360ms" aria-labelledby="outletTitle">
+               earnings as figures on top. Concentration lives on Allocation;
+               currency exposure moved to the Performance appendix. -->
+          <section class="card reveal" style="animation-delay:320ms" aria-labelledby="outletTitle">
             <div class="card__head">
               <h2 class="card-title" id="outletTitle">Outlet</h2>
               <a class="link-all" href="#market">Digest <span aria-hidden="true">→</span></a>
@@ -529,6 +522,13 @@
                 <svg id="costSvg" role="img" aria-label="Costs by month"></svg>
               </div>
               <div class="perf-legend" id="costLegend"></div>
+            </div>
+            <div class="pspread pband pband--ccy">
+              <div class="pane__head">
+                <span class="pane__kicker" id="ccyTitle">Currency exposure</span>
+                <a class="link-all" href="#allocation/currency">By currency <span aria-hidden="true">→</span></a>
+              </div>
+              <div class="ccy" id="ccyList"></div>
             </div>
           </div>
         </div>

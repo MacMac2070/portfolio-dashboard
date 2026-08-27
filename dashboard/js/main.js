@@ -564,7 +564,7 @@ const fmtEps = (v) => (v == null ? "—"
 function renderOutlet(data) {
   const host = $("outletBody");
   if (!host) return;
-  const items = (data?.items || []).slice(0, 8);
+  const items = (data?.items || []).slice(0, 12);
   const earn = data?.earnings || {};
   const reported = (earn.reported || []).slice(0, 2);
   const upcoming = (earn.upcoming || []).slice(0, 2);
@@ -596,7 +596,7 @@ function renderOutlet(data) {
       <a class="outlet__row" href="${esc(n.url || "#")}" target="_blank" rel="noopener">
         <span class="outlet__tag outlet__tag--${esc(n.kind)}">${esc(n.tag)}</span>
         <span class="outlet__title" title="${esc(n.title)}">${esc(n.title)}</span>
-        <span class="outlet__meta num">${shortAge(n.at)}</span>
+        <span class="outlet__meta">${esc(n.publisher || "")}${n.publisher && n.at ? " · " : ""}${shortAge(n.at)}</span>
       </a>`).join("")}</div>`;
 }
 
