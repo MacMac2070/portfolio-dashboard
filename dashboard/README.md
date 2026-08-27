@@ -49,6 +49,10 @@ HISTORY       IBKR Flex Web Service ── adapter/backfill.py ── nav_histor
 
 WORLD BOARD   openbb ─── adapter/markets.py ─── GET /api/markets ──► page polls 30s
 (60s)         11 index series; exposure folded in from the live feed above
+
+OUTLET        yfinance ── adapter/news.py ─── GET /api/news ──► page polls 5m
+(20 min)      headlines for held markets/sectors, ranked by the book's own
+              weights; earnings est-vs-actual rides along; cached to news.json
 ```
 
 The three never block each other: the feed holds **clientId 11**, `build.py`

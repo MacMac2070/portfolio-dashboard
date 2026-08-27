@@ -40,6 +40,8 @@ const WATCH_POLL_MS = 20000;
  * see. The clock strip ticks locally, so the board still feels live between
  * polls without asking the server anything. */
 const MARKETS_POLL_MS = 30000;
+// The outlet's cadence. Headlines age in hours; five minutes is plenty.
+const NEWS_POLL_MS = 5 * 60 * 1000;
 const MIN_CURVE_POINTS = 5;
 
 /* Live cadence. The feed recomposes every 3s, so five missed polls is a
@@ -543,23 +545,59 @@ function renderCurrencies(data) {
     </div>`).join("");
 }
 
-function renderConcentration(data) {
-  const c = data.concentration || {};
-  const rows = [
-    {
-      label: "Largest position",
-      html: `<span class="conc__value conc__value--brand num">${c.largest_symbol ?? "—"} · ${pct(c.largest_weight_pct)}</span>`,
-    },
-    { label: "Top 3 weight", html: `<span class="conc__value num">${pct(c.top3_weight_pct)}</span>` },
-    { label: "Positions",    html: `<span class="conc__value num">${c.positions ?? "—"}</span>` },
-    { label: "Markets",      html: `<span class="conc__value num">${c.markets ?? "—"}</span>` },
-    { label: "Cash weight",  html: `<span class="conc__value num">${pct(c.cash_weight_pct)}</span>` },
-  ];
-  $("concList").innerHTML = rows.map((r) => `
-    <div class="conc__row" data-conc="${r.label}">
-      <span class="conc__label">${r.label}</span>
-      ${r.html}
-    </div>`).join("");
+/* ---------------- the outlet ----------------
+ * Ranked headlines for the markets and sectors the book holds, with earnings
+ * as figures on top. The server ranks; this only draws. Concentration moved
+ * wholesale to the Allocation view — the payload field lives on there. */
+
+const shortAge = (iso) => {
+  if (!iso) return "";
+  const mins = Math.max(0, (Date.now() - new Date(iso).getTime()) / 60000);
+  if (mins < 60) return `${Math.round(mins)}m`;
+  if (mins < 60 * 36) return `${Math.round(mins / 60)}h`;
+  return `${Math.round(mins / 1440)}d`;
+};
+
+const fmtEps = (v) => (v == null ? "—"
+  : Math.abs(v) >= 100 ? Math.round(v).toLocaleString("en-GB") : v.toFixed(2));
+
+function renderOutlet(data) {
+  const host = $("outletBody");
+  if (!host) return;
+  const items = (data?.items || []).slice(0, 8);
+  const earn = data?.earnings || {};
+  const reported = (earn.reported || []).slice(0, 2);
+  const upcoming = (earn.upcoming || []).slice(0, 2);
+  if (!items.length && !reported.length && !upcoming.length) return;
+
+  const fmtD = (d) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  // The surprise chip is signed as well as tinted — never hue alone.
+  const chip = (r) => (r.surprise_pct == null ? "" : `
+    <span class="outlet__chip ${r.surprise_pct >= 0 ? "pos" : "neg"} num">${
+      r.surprise_pct >= 0 ? "+" : "−"}${Math.abs(r.surprise_pct).toFixed(1)}%</span>`);
+
+  const erows = [
+    ...reported.map((r) => `
+      <div class="outlet__earn">
+        <span class="outlet__esym num">${esc(r.key)}</span>
+        <span class="outlet__etext">EPS ${fmtEps(r.eps_reported)}${
+          r.eps_estimate != null ? ` vs ${fmtEps(r.eps_estimate)} est` : ""} · ${fmtD(r.date)}</span>
+        ${chip(r)}
+      </div>`),
+    ...upcoming.map((r) => `
+      <div class="outlet__earn">
+        <span class="outlet__esym num">${esc(r.key)}</span>
+        <span class="outlet__etext">reports ${fmtD(r.date)}</span>
+      </div>`),
+  ].join("");
+
+  host.innerHTML = `${erows ? `<div class="outlet__earnings">${erows}</div>` : ""}
+    <div class="outlet__list">${items.map((n) => `
+      <a class="outlet__row" href="${esc(n.url || "#")}" target="_blank" rel="noopener">
+        <span class="outlet__tag outlet__tag--${esc(n.kind)}">${esc(n.tag)}</span>
+        <span class="outlet__title" title="${esc(n.title)}">${esc(n.title)}</span>
+        <span class="outlet__meta num">${shortAge(n.at)}</span>
+      </a>`).join("")}</div>`;
 }
 
 /* ---------------- holdings ---------------- */
@@ -626,20 +664,6 @@ function applyLive(data) {
     setText(row.querySelector('[data-f="pct"]'), pct(c.weight_pct));
     setText(row.querySelector('[data-f="val"]'), money(c.value_gbp));
     setStyle(row.querySelector(".bar__fill"), "width", `${(c.weight_pct / maxWeight) * 100}%`);
-  }
-
-  // --- concentration ---
-  const conc = data.concentration || {};
-  const concValues = {
-    "Largest position": `${conc.largest_symbol ?? "—"} · ${pct(conc.largest_weight_pct)}`,
-    "Top 3 weight": pct(conc.top3_weight_pct),
-    "Positions": String(conc.positions ?? "—"),
-    "Markets": String(conc.markets ?? "—"),
-    "Cash weight": pct(conc.cash_weight_pct),
-  };
-  for (const [label, value] of Object.entries(concValues)) {
-    const row = document.querySelector(`.conc__row[data-conc="${CSS.escape(label)}"]`);
-    setText(row?.querySelector(".conc__value"), value);
   }
 
   // Holdings, the stock page and search all read the same payload, so every
@@ -877,7 +901,6 @@ async function boot() {
   allocationView.update(portfolio);
   renderMovers(portfolio);
   renderCurrencies(portfolio);
-  renderConcentration(portfolio);
   renderHoldings(portfolio);
   tape.update(portfolio);
   renderFreshness(portfolio);
@@ -910,6 +933,7 @@ async function boot() {
   startPolling();
   startWatchlistPolling();
   startMarketsPolling();
+  startNewsPolling();
 }
 
 /* Watchlist quotes are fetched on their own cadence and are entirely optional:
@@ -958,6 +982,27 @@ function startMarketsPolling() {
   const tick = async () => {
     const again = await pollMarkets();
     if (again) setTimeout(tick, MARKETS_POLL_MS);
+  };
+  tick();
+}
+
+/* The outlet re-asks every five minutes — the server itself only sweeps its
+ * sources every twenty, so most polls are a cheap cache read. */
+async function pollNews() {
+  try {
+    const res = await fetch(`api/news?t=${Date.now()}`, { cache: "no-store" });
+    if (!res.ok) return false;          // older serve.py — stop asking
+    renderOutlet(await res.json());
+    return true;
+  } catch {
+    return true;                         // transient; keep trying
+  }
+}
+
+function startNewsPolling() {
+  const tick = async () => {
+    const again = await pollNews();
+    if (again) setTimeout(tick, NEWS_POLL_MS);
   };
   tick();
 }

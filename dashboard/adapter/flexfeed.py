@@ -303,7 +303,10 @@ class FailoverFeed:
 
     def snapshot(self) -> dict:
         live = self.live.snapshot() if self.live else None
-        if live and live["meta"].get("connected"):
+        # Connected is not enough: a zombie gateway accepts the socket while
+        # every data request times out, leaving the feed warming for many
+        # minutes. Only a feed that has actually composed a payload wins.
+        if live and live["meta"].get("connected") and live["meta"].get("last_refresh"):
             return live
         fallback = self.fallback.snapshot() if self.fallback else None
         if fallback and fallback.get("positions"):

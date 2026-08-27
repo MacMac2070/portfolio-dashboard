@@ -115,6 +115,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
     instrument = None    # per-symbol detail for the stock page
     lookup = None        # query-time symbol search beyond the cached directory
     financials = None    # company statements behind the financials page
+    news = None          # the Outlet: ranked headlines + earnings for the book
 
     def end_headers(self):
         self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
@@ -138,6 +139,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             return self._track()
         if route == "/api/desk":
             return self._desk()
+        if route == "/api/news":
+            return self._news()
         if route == "/api/intent":
             return self._intent()
         # Prefix rather than equality — this is the one endpoint with the
@@ -272,6 +275,18 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             log.exception("track build failed")
             return self._json({"meta": {"source": "ibkr-flex", "error": str(exc)}})
         return self._json({"meta": meta, **payload})
+
+    def _news(self):
+        """The Outlet feed, or its disk cache when the service isn't running."""
+        if DashboardHandler.news is not None:
+            return self._json(DashboardHandler.news.snapshot())
+        import news as news_mod  # noqa: PLC0415
+        cached = news_mod._read_json(news_mod.NEWS_PATH)
+        return self._json(cached or {
+            "meta": {"fetched_at": None, "items": 0,
+                     "error": "news service not running"},
+            "items": [], "earnings": {"upcoming": [], "reported": []},
+        })
 
     def _desk(self):
         """Desk context: the daily yfinance pull plus request-time derivations.
@@ -697,12 +712,29 @@ def main():
             log.error("every other page is unaffected; financials will show as unavailable")
             financials = None
 
+    # Seventh source: the Outlet. yfinance only, one sweep every 20 minutes —
+    # by far the lightest poller here, but it warms behind the same gate
+    # because a cold yfinance import on a worker thread is still an import.
+    news = None
+    if live and "--no-news" not in sys.argv:
+        try:
+            from news import NewsFeed
+            ready = (lambda: bool(feed and feed.snapshot()["meta"]["last_refresh"]))
+            news = NewsFeed(gate=ready if feed else None)
+            news.start()
+            log.info("outlet starting — headlines for held markets and sectors via yfinance")
+        except Exception as exc:
+            log.error("could not start the outlet: %s", exc)
+            log.error("everything else is unaffected; the news card serves its cache")
+            news = None
+
     DashboardHandler.feed = feed
     DashboardHandler.watchlist = watchlist
     DashboardHandler.markets = markets
     DashboardHandler.instrument = instrument
     DashboardHandler.lookup = lookup
     DashboardHandler.financials = financials
+    DashboardHandler.news = news
     handler = partial(DashboardHandler, directory=str(ROOT))
 
     try:
@@ -738,6 +770,8 @@ def main():
             lookup.stop()
         if financials:
             financials.stop()
+        if news:
+            news.stop()
         try:
             import directory as _dir
             _dir.close()
