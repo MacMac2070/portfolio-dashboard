@@ -60,11 +60,14 @@ svg { display: block; }
   color: var(--text-2);
 }
 
+/* One header voice everywhere: the caps kicker the Performance spread and
+   the KPI tiles already speak. The old bold sentence-case title made the
+   same structural role wear three different costumes across one screen. */
 .card-title {
-  font-size: var(--t-title);
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--text);
+  font: 600 11px/1.2 var(--font-ui);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--text-2);
 }
 
 .display {

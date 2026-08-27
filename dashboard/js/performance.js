@@ -440,7 +440,7 @@ function renderDayCal() {
       const dir = row.r > 0 ? "pos" : row.r < 0 ? "neg" : "flat";
       cells += `<i class="dcal__cell dcal__cell--${dir} dcal__cell--l${lv}"
         data-date="${iso}" data-r="${(row.r * 100).toFixed(2)}" data-pnl="${row.pnl}"
-        >${lv >= 2 ? (row.r > 0 ? "+" : "−") : ""}</i>`;
+        >${dir === "pos" ? "+" : dir === "neg" ? "−" : ""}</i>`;
     }
     months += `<div class="dcal__month"><span class="dcal__mlabel">${
       MONTH_SHORT[m.getUTCMonth()]}</span><div class="dcal__days">${cells}</div></div>`;

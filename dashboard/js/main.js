@@ -724,9 +724,11 @@ function renderFreshness(data) {
   root.dataset.state = stale ? "stale" : "ready";
   $("feed").dataset.state = stale ? "stale" : eod ? "eod" : "live";
   setText($("feedLabel"), label);
-  // The sidebar footer carries the same truth in fewer words.
+  // One feed indicator, not two: the topbar pill owns the live state. The
+  // sidebar caption only speaks in snapshot mode, where there is no pill row
+  // saying when the figures are from.
   setText($("footMeta"), livePolling
-    ? (stale ? "Feed down" : eod ? "Feed EOD" : "Feed live")
+    ? ""
     : (meta.generated_at ? `Snapshot ${stamp(meta.generated_at)}` : "No snapshot"));
 
 }

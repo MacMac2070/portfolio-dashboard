@@ -3234,6 +3234,10 @@ a.prow--pos:active { background: var(--violet-tint-18); }
 }
 .txrow:last-child { border-bottom: 0; }
 .txrow:hover { background: var(--wash-1); }
+/* FX sweeps are bookkeeping around the real orders — kept, but muted so the
+   actual executions carry the table. Hover restores full weight to read one. */
+.txrow--sweep { opacity: 0.45; transition: opacity var(--dur-fast) var(--ease-spring); }
+.txrow--sweep:hover { opacity: 1; }
 
 .txrow__date { color: var(--text-2); font-size: 12.5px; }
 .txrow__sym {

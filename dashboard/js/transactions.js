@@ -103,11 +103,16 @@ function head() {
   }).join("");
 }
 
+/** Currency conversions the broker does around real orders — bookkeeping, not
+ *  trading. They outnumber the actual trades and drowned them; the rows stay
+ *  (the log is the log) but muted, so executions carry the page. */
+const isSweep = (r) => (r.exchange || "") === "IDEALFX";
+
 function row(r) {
   const side = sideOf(r.side);
   const fee = Number.isFinite(r.commission) ? Math.abs(r.commission) : null;
   return `
-    <div class="txrow" role="row">
+    <div class="txrow${isSweep(r) ? " txrow--sweep" : ""}" role="row">
       <span class="txrow__date num">${esc(day(r.time))}</span>
       <span class="txrow__sym">
         ${esc(r.symbol)}
@@ -153,8 +158,10 @@ then     /opt/anaconda3/bin/python3 adapter/backfill.py</span></p>
   // saying how far back it reaches is what stops a short file reading as a
   // complete history.
   const dates = rows.map((r) => r.time).sort();
+  const sweeps = rows.filter(isSweep).length;
   $("txMeta").textContent =
-    `${count(rows.length)} executions · ${day(dates[0])} – ${day(dates.at(-1))}`;
+    `${count(rows.length - sweeps)} trades · ${count(sweeps)} FX sweeps · `
+    + `${day(dates[0])} – ${day(dates.at(-1))}`;
 }
 
 export function init() {
