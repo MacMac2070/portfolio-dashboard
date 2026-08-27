@@ -6,6 +6,8 @@ backfill, or the daily job firing twice, never duplicates a row.
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 import time
 from pathlib import Path
 
@@ -55,7 +57,28 @@ def _write(path: Path, rows: list[dict], *, allow_shrink: bool = False) -> None:
                 f"refusing to shrink {path.name}: {existing} rows on disk, "
                 f"asked to write {len(rows)} — pass allow_shrink=True only if "
                 "this loss is intended")
-    path.write_text("".join(json.dumps(row) + "\n" for row in rows))
+    _atomic_write(path, "".join(json.dumps(row) + "\n" for row in rows))
+
+
+def _atomic_write(path: Path, text: str) -> None:
+    """Write via a same-directory temp file and an atomic rename.
+
+    These files are the archive, not a cache — a write interrupted by a full
+    disk or a kill signal must leave the old file intact, never a truncated
+    one. os.replace is atomic on POSIX when source and target share a
+    filesystem, which same-directory guarantees.
+    """
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+    try:
+        with os.fdopen(fd, "w") as handle:
+            handle.write(text)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 def merge_nav(new_rows: list[dict]) -> tuple[int, int]:
@@ -210,7 +233,7 @@ def write_positions_eod(rows: list[dict]) -> dict:
         "positions": rows,
     }
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    POSITIONS_PATH.write_text(json.dumps(payload, indent=2))
+    _atomic_write(POSITIONS_PATH, json.dumps(payload, indent=2))
     return payload
 
 

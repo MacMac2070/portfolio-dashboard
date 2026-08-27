@@ -16,7 +16,7 @@
 
 import {
   money, moneySigned, pctSigned, pct, qty,
-  direction, initials, price,
+  direction, initials, price, esc,
 } from "./format.js";
 import { sparkline } from "./charts.js";
 
@@ -233,15 +233,18 @@ export function positionRow(r, isLastHeld) {
   // data-con-id lets a caller patch this row's figures in place instead of
   // rebuilding it — see ovholdings.js, which renders on the 3s live poll and
   // must not blow away text selection every tick.
+  // Names arrive from provider data (openbb/Yahoo via the Watch flow), so
+  // they take the same esc() every other template gives them — a quote in a
+  // name must not escape the aria-label attribute.
   const open = `<a class="${cls}" href="#stock/${encodeURIComponent(r.key)}"`
     + `${r.con_id != null ? ` data-con-id="${r.con_id}"` : ""}`
-    + ` aria-label="${r.symbol}, ${r.name}">`;
+    + ` aria-label="${esc(r.symbol)}, ${esc(r.name)}">`;
 
   if (r.pending) {
     return `${open}
       <span class="pid">${tile(r)}<span class="pid__text">
-        <span class="pid__tk">${r.symbol}</span>
-        <span class="pid__name">${r.name}</span></span></span>
+        <span class="pid__tk">${esc(r.symbol)}</span>
+        <span class="pid__name">${esc(r.name)}</span></span></span>
       <span class="pid__name" style="grid-column:2 / -1">${
         r.owned ? "Waiting for the live feed" : "Quote unavailable"}</span>
     </a>`;
@@ -281,10 +284,10 @@ export function positionRow(r, isLastHeld) {
       <span class="pid">${tile(r)}
         <span class="pid__text">
           <span class="pid__line">
-            <span class="pid__tk">${r.symbol}</span>
+            <span class="pid__tk">${esc(r.symbol)}</span>
             ${r.owned ? '<span class="pid__pill">Owned</span>' : ""}
           </span>
-          <span class="pid__name">${r.name}</span>
+          <span class="pid__name">${esc(r.name)}</span>
         </span>
       </span>
       <span class="pstack" style="grid-column:2">

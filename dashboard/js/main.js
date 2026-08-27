@@ -418,7 +418,7 @@ function renderChart() {
     tooltip: $("tip"),
     formatValue: twr ? (v, full) => pctSigned(v, full ? 2 : 1)
                      : (v, full) => (full ? money(v) : moneyCompact(v)),
-    formatDate: (d) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
+    formatDate: (d) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }),
     benchmark: benchPoints,
     benchmarkName: benchmark?.name ?? "Benchmark",
   });
@@ -493,8 +493,8 @@ function moverRow(p) {
   const tint = dir === "up" ? "var(--pos-bg)" : dir === "down" ? "var(--neg-bg)" : "rgba(122,132,144,.12)";
   return `
     <div class="mover" data-con-id="${p.con_id}">
-      <span class="avatar" style="background:${tint}">${initials(p.symbol)}</span>
-      <span class="mover__ticker">${p.symbol}</span>
+      <span class="avatar" style="background:${tint}">${esc(initials(p.symbol))}</span>
+      <span class="mover__ticker">${esc(p.symbol)}</span>
       <svg class="mover__spark" data-spark="${p.con_id}" aria-hidden="true"></svg>
       <span class="chip ${chipClass} mover__chip">
         <i class="chip__arrow" aria-hidden="true"></i>${pctSigned(p.day_change_pct)}
@@ -570,7 +570,7 @@ function renderOutlet(data) {
   const upcoming = (earn.upcoming || []).slice(0, 2);
   if (!items.length && !reported.length && !upcoming.length) return;
 
-  const fmtD = (d) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  const fmtD = (d) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
   // The surprise chip is signed as well as tinted — never hue alone.
   const chip = (r) => (r.surprise_pct == null ? "" : `
     <span class="outlet__chip ${r.surprise_pct >= 0 ? "pos" : "neg"} num">${
@@ -698,7 +698,7 @@ function renderFreshness(data) {
     // Branch on the timestamp rather than printing a dash into the sentence:
     // "last live — —" and "received at — —" both shipped as broken copy.
     const asof = meta.positions_asof
-      ? new Date(meta.positions_asof).toLocaleDateString("en-GB", { day: "numeric", month: "short" })
+      ? new Date(meta.positions_asof).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })
       : null;
     label = stale
       ? (at ? `Disconnected · last live ${clock(meta.last_refresh)}` : "Disconnected")
@@ -892,6 +892,20 @@ async function boot() {
     // Nothing held means nothing to list below the fold either.
     $("ovHoldings")?.setAttribute("hidden", "");
     $("ovCue")?.setAttribute("hidden", "");
+    // The empty state used to be a dead end: boot returned before any poller
+    // started, so a position opened later never appeared without a manual
+    // reload. Keep asking quietly and reload into the full page when one does.
+    const recheck = async () => {
+      try {
+        const res = await fetch(`${LIVE_URL}?t=${Date.now()}`, { cache: "no-store" });
+        if (res.ok) {
+          const snap = await res.json();
+          if ((snap.positions || []).length) { location.reload(); return; }
+        }
+      } catch { /* transient; keep waiting */ }
+      setTimeout(recheck, 30000);
+    };
+    setTimeout(recheck, 30000);
     return;
   }
 

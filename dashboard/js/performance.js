@@ -377,14 +377,14 @@ function renderDrawdown() {
   plot.innerHTML = '<svg id="ddSvg" role="img" aria-label="Drawdown from peak over time"></svg>';
   underwater($("ddSvg"), dd.curve, {
     tooltip: $("tip"),
-    formatDate: (d) => new Date(d).toLocaleDateString("en-GB", { month: "short", year: "2-digit" }),
+    formatDate: (d) => new Date(d).toLocaleDateString("en-GB", { month: "short", year: "2-digit", timeZone: "UTC" }),
   });
   const cur = dd.current;
   $("ddCurrent").textContent = cur < -0.0005
     ? `${(cur * 100).toFixed(1)}% from peak` : "at peak";
   $("ddCurrent").className = `perf-card__total num ${cur < -0.0005 ? "neg" : ""}`;
 
-  const fmt = (d) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit" });
+  const fmt = (d) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit", timeZone: "UTC" });
   // Each row's wash is as wide as the episode is deep, scaled to the worst
   // on the list — the table doubles as its own bar chart. Episodes default
   // empty: a payload carrying a drawdown but no episode list must not throw.
@@ -447,7 +447,7 @@ function renderDayCal() {
   }
   host.innerHTML = `<div class="dcal__grid">${months}</div>`;
   $("calNote").textContent = `${days.length} trading days since ${new Date(track.inception)
-    .toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`;
+    .toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}`;
 
   // One delegated tooltip for the whole grid.
   const tip = $("tip");
@@ -456,7 +456,7 @@ function renderDayCal() {
     if (!cell || !tip) return;
     tip.dataset.open = "true";
     const when = new Date(cell.dataset.date).toLocaleDateString("en-GB",
-      { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+      { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
     tip.innerHTML = `<div class="tip__date">${when}</div>
       <div class="tip__val">${moneySigned(Number(cell.dataset.pnl))} · ${
         Number(cell.dataset.r) > 0 ? "+" : ""}${cell.dataset.r}%</div>`;
@@ -473,7 +473,7 @@ function renderDays() {
   const d = track?.days;
   if (!d) { host.innerHTML = ""; return; }
 
-  const fmt = (x) => new Date(x).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit" });
+  const fmt = (x) => new Date(x).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit", timeZone: "UTC" });
   const row = (r) => `
     <div class="bwdays__row">
       <span class="bwdays__date">${fmt(r.date)}</span>
@@ -534,7 +534,7 @@ function renderMasthead() {
 
   const from = track.inception ? new Date(track.inception) : null;
   const to = st.asof ? new Date(st.asof) : null;
-  const d = (x) => x.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit" }).toUpperCase();
+  const d = (x) => x.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit", timeZone: "UTC" }).toUpperCase();
   // The benchmark is named two rows down; repeating it here just ellipsizes.
   put("vRange", `PERFORMANCE${from && to ? ` · ${d(from)} → ${d(to)}` : ""}`);
 
@@ -573,7 +573,7 @@ function renderMasthead() {
   const ev = desk?.income?.next_events?.[0];
   $("vIncome").innerHTML = ev
     ? `Next payment · ${esc(ev.key)} ${new Date(ev.date).toLocaleDateString("en-GB",
-        { day: "numeric", month: "short" })}${ev.gbp != null ? ` · <b>~${money(ev.gbp)}</b>` : ""}`
+        { day: "numeric", month: "short", timeZone: "UTC" })}${ev.gbp != null ? ` · <b>~${money(ev.gbp)}</b>` : ""}`
     : "";
 }
 
@@ -657,7 +657,7 @@ then  reload — the daily job keeps it fresh from there</span></p></div>`;
       </div>`;
   }).join("");
 
-  const fmt = (d) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  const fmt = (d) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
   $("incRailEvents").innerHTML = `
     <p class="eyebrow">Next payments</p>
     ${(inc.next_events || []).slice(0, 7).map((e) => `

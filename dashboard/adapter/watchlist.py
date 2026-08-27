@@ -30,6 +30,8 @@ from datetime import date, datetime, timedelta, timezone
 import universe
 
 QUOTE_SECONDS = 60.0
+# Upper bound on watched symbols — see add_symbol.
+MAX_SYMBOLS = 200
 HISTORY_DAYS = 30
 FIRST_RETRY_SECONDS = 15.0
 
@@ -95,6 +97,11 @@ class WatchlistFeed:
             return False
         with self._lock:
             if symbol in self.symbols:
+                return False
+            # A bound, not a budget: nothing legitimate approaches it, and an
+            # unbounded list is a memory leak with an HTTP endpoint attached.
+            if len(self.symbols) >= MAX_SYMBOLS:
+                log.warning("watchlist at %d symbols; refusing %s", MAX_SYMBOLS, symbol)
                 return False
             self.symbols = [*self.symbols, symbol]
         return True

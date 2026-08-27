@@ -197,12 +197,16 @@ export function ratio(value, digits = 2) {
   return value.toFixed(digits);
 }
 
-/** "22 Oct 2026" — a bare date, for earnings and ex-dividend. */
+/** "22 Oct 2026" — a bare date, for earnings and ex-dividend.
+ *  Rendered in UTC: a bare "YYYY-MM-DD" parses as UTC midnight, and letting
+ *  the browser's zone reformat it shows yesterday's date to any viewer west
+ *  of Greenwich. The stores hold dates, not instants. */
 export function day(iso) {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  return d.toLocaleDateString("en-GB",
+    { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 }
 
 /**

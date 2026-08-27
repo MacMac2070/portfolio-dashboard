@@ -453,7 +453,7 @@ function renderEarnings() {
     <div class="earn__row${i === 0 ? " is-next" : ""}">
       <span class="earn__sym">${esc(e.key)}</span>
       <span class="earn__date">${new Date(e.date).toLocaleDateString("en-GB",
-        { weekday: "short", day: "numeric", month: "short" })}</span>
+        { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })}</span>
       <span class="earn__in num">${days(e.date)}d</span>
       <span class="earn__flag">${e.est ? "est." : "sched."}</span>
     </div>`).join("");

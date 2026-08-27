@@ -110,7 +110,12 @@ def fetch_statement(token: str, query_id: str, *,
         params["td"] = to_date.strftime("%Y%m%d")
 
     _pace()
-    root = ET.fromstring(_get(SEND_URL, params))
+    try:
+        root = ET.fromstring(_get(SEND_URL, params))
+    except ET.ParseError as exc:
+        # An HTML error page or truncated body, not XML. Raise the domain
+        # error — and never echo the request URL, which carries the token.
+        raise FlexError(f"SendRequest returned a non-XML response ({exc})") from exc
 
     status = (root.findtext("Status") or "").strip()
     if status != "Success":
@@ -134,7 +139,14 @@ def fetch_statement(token: str, query_id: str, *,
                         "falling back to %s", base_url.split("/")[2], GET_URL.split("/")[2])
             base_url = GET_URL
             body = _get(base_url, {"t": token, "q": reference, "v": VERSION})
-        statement = ET.fromstring(body)
+        try:
+            statement = ET.fromstring(body)
+        except ET.ParseError as exc:
+            # Mid-generation IBKR occasionally serves a non-XML body; that is
+            # a retry, not a crash — the attempt budget bounds it.
+            log.info("Flex returned a non-XML body (attempt %d): %s", attempt + 1, exc)
+            time.sleep(POLL_SECONDS)
+            continue
 
         # While generating, IBKR returns a FlexStatementResponse with a warning
         # rather than the report itself.
