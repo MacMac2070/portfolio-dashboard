@@ -77,9 +77,10 @@ def make_position(*, con_id: int, symbol: str, currency: str, exchange: str,
 
     # Day P&L in GBP is derived from the percentage rather than taken from
     # IBKR, so the money figure always agrees with the percentage printed
-    # beside it.
+    # beside it. A day at (or numerically past) -100% has no recoverable
+    # opening value — dividing by ~zero was a crash, so it stays None.
     day_pnl_gbp = None
-    if day_change_pct is not None:
+    if day_change_pct is not None and (1.0 + day_change_pct / 100.0) > 1e-9:
         opening = value_gbp / (1.0 + day_change_pct / 100.0)
         day_pnl_gbp = value_gbp - opening
 

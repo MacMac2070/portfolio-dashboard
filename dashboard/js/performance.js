@@ -386,9 +386,11 @@ function renderDrawdown() {
 
   const fmt = (d) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit" });
   // Each row's wash is as wide as the episode is deep, scaled to the worst
-  // on the list — the table doubles as its own bar chart.
-  const worstDepth = Math.max(...dd.episodes.slice(0, 4).map((ep) => Math.abs(ep.depth)), 1e-9);
-  $("ddEpisodes").innerHTML = dd.episodes.slice(0, 4).map((ep) => `
+  // on the list — the table doubles as its own bar chart. Episodes default
+  // empty: a payload carrying a drawdown but no episode list must not throw.
+  const episodes = (dd.episodes || []).slice(0, 4);
+  const worstDepth = Math.max(...episodes.map((ep) => Math.abs(ep.depth)), 1e-9);
+  $("ddEpisodes").innerHTML = episodes.map((ep) => `
     <div class="ddeps__row" style="--depth:${((Math.abs(ep.depth) / worstDepth) * 100).toFixed(0)}%">
       <span class="ddeps__depth num neg">−${Math.abs(ep.depth * 100).toFixed(1)}%</span>
       <span class="ddeps__span">${fmt(ep.peak_date)} → ${fmt(ep.trough_date)}</span>
@@ -479,8 +481,8 @@ function renderDays() {
       <span class="bwdays__pnl num">${moneySigned(r.pnl)}</span>
     </div>`;
   host.innerHTML = `
-    <div class="bwdays__col"><p class="eyebrow">Best</p>${d.best.map(row).join("")}</div>
-    <div class="bwdays__col"><p class="eyebrow">Worst</p>${d.worst.map(row).join("")}</div>`;
+    <div class="bwdays__col"><p class="eyebrow">Best</p>${(d.best || []).map(row).join("")}</div>
+    <div class="bwdays__col"><p class="eyebrow">Worst</p>${(d.worst || []).map(row).join("")}</div>`;
   // The win-rate line rides the heatmap caption now — one home for day stats.
   const cal = $("calNote");
   if (cal && !cal.textContent.includes("up days")) {
@@ -592,14 +594,25 @@ function renderFlowLine() {
   ].filter(Boolean).join(" · ");
 }
 
+/** One bad section must not blank the five after it: each card renders in
+ *  its own fence, and a throw becomes a console warning instead of a silent
+ *  half-empty page. */
+function safe(fn) {
+  try {
+    fn();
+  } catch (err) {
+    console.warn(`performance: ${fn.name || "render"} failed`, err);
+  }
+}
+
 function renderTrack() {
-  renderMasthead();
-  renderMonthlyGrid();
-  renderDrawdown();
-  renderDayCal();
-  renderDays();
-  renderIncomeRail();
-  renderFlowLine();
+  safe(renderMasthead);
+  safe(renderMonthlyGrid);
+  safe(renderDrawdown);
+  safe(renderDayCal);
+  safe(renderDays);
+  safe(renderIncomeRail);
+  safe(renderFlowLine);
 }
 
 /* ---------------- income rail ----------------

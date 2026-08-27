@@ -50,10 +50,21 @@ export function moneySigned(value, opts) {
   return value < 0 ? `${MINUS}${body}` : `+${body}`;
 }
 
-/** +2.31% — two decimals, always signed. */
+/** +2.31% — always signed; decimals follow `digits`. One cached formatter per
+ *  precision: round-tripping through the fixed 2dp `plain2` silently re-rounded
+ *  every caller that asked for 1dp or 0dp back to 2 (+0.00% where +0.0% was
+ *  meant). */
+const pctFormats = new Map();
 export function pctSigned(value, digits = 2) {
   if (value == null || !Number.isFinite(value)) return "—";
-  const body = `${plain2.format(Math.abs(value).toFixed(digits))}%`;
+  let fmt = pctFormats.get(digits);
+  if (!fmt) {
+    fmt = new Intl.NumberFormat("en-GB", {
+      minimumFractionDigits: digits, maximumFractionDigits: digits,
+    });
+    pctFormats.set(digits, fmt);
+  }
+  const body = `${fmt.format(Math.abs(value))}%`;
   return value < 0 ? `${MINUS}${body}` : `+${body}`;
 }
 
