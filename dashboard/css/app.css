@@ -3963,6 +3963,11 @@ a.prow--pos:active { background: var(--violet-tint-18); }
 .pspread--tables .bwdays { padding: 0; }
 .pspread--tables .ddeps__span,
 .pspread--tables .bwdays__date { white-space: nowrap; font-size: 11px; }
+/* The rail budgets its height to fit three sections; the shave is padding,
+   never type. */
+.pspread--tables .ddeps__row { gap: var(--s-2); padding-top: 2px; padding-bottom: 2px; }
+.pspread--tables .bwdays__col .eyebrow { margin-bottom: 4px; }
+.pspread--tables .bwdays__row { padding: 2px 0; }
 .pspread--tables .bwdays__pnl { white-space: nowrap; }
 /* The band budgets 4+4 day rows; the fifth returns on release. */
 .pspread--tables .bwdays__row:nth-of-type(n+5) { display: none; }
@@ -3971,22 +3976,44 @@ a.prow--pos:active { background: var(--violet-tint-18); }
 .pspread--tables .bwdays { grid-template-columns: 1fr 1fr; gap: var(--s-3); }
 .pspread--tables .bwdays__row { gap: 6px; font-size: 11px; }
 .pspread--tables .bwdays__r { padding: 1px 5px; }
+/* Each section of the rail opens with a full-bleed rule — the spread's own
+   hairline idiom, one grade stronger, running edge to edge so the three
+   tables read as separate panels rather than one run-on list. */
+.pspread--tables .pane__head--mid {
+  margin-top: var(--s-2);
+  padding-top: var(--s-2);
+  border-top: 1px solid var(--border-strong);
+  margin-left: calc(-1 * var(--s-5));
+  margin-right: calc(-1 * var(--s-5));
+  padding-left: var(--s-5);
+  padding-right: var(--s-5);
+}
 /* Currency exposure rides the rail's floor in the rail's own voice: violet
    tick (its bars' ink, not the pane's red), hairline rows, 11px figures,
    a thin fill under each — the Overview card's chrome stays behind. */
 .pspread--tables .pane__head--ccy { --pane-accent: var(--brand-soft); }
 .pspread--tables .pane__head--ccy .link-all { margin-left: auto; font-size: 10.5px; }
 .pspread--tables .ccy { padding: 0; gap: 0; }
+/* Single-line rows: the weight bar is the row's own underline rather than a
+   second line — same trick the episode washes play, and what lets five
+   currencies share the rail's floor with the day tables. */
 .pspread--tables .ccy__row {
-  gap: 3px;
-  padding: 5px 0 7px;
+  position: relative;
+  gap: 0;
+  padding: 3px 0 6px;
   border-top: 1px solid var(--border);
 }
 .pspread--tables .ccy__row:first-child { border-top: 0; }
+.pspread--tables .ccy__row .bar {
+  position: absolute;
+  left: 0; right: 0; bottom: 3px;
+  height: 2px;
+  background: var(--wash-2);
+  border-radius: 0;
+}
 .pspread--tables .ccy__code { font-size: 11px; }
 .pspread--tables .ccy__pct { font-size: 10.5px; }
 .pspread--tables .ccy__val { font-size: 11.5px; font-weight: 600; }
-.pspread--tables .bar { height: 3px; }
 /* The locked band shows date + return chip; the £ figure returns on release,
    where the column has the width to carry it. */
 .pspread--tables .bwdays__pnl { display: none; }
