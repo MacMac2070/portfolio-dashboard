@@ -3971,6 +3971,22 @@ a.prow--pos:active { background: var(--violet-tint-18); }
 .pspread--tables .bwdays { grid-template-columns: 1fr 1fr; gap: var(--s-3); }
 .pspread--tables .bwdays__row { gap: 6px; font-size: 11px; }
 .pspread--tables .bwdays__r { padding: 1px 5px; }
+/* Currency exposure rides the rail's floor in the rail's own voice: violet
+   tick (its bars' ink, not the pane's red), hairline rows, 11px figures,
+   a thin fill under each — the Overview card's chrome stays behind. */
+.pspread--tables .pane__head--ccy { --pane-accent: var(--brand-soft); }
+.pspread--tables .pane__head--ccy .link-all { margin-left: auto; font-size: 10.5px; }
+.pspread--tables .ccy { padding: 0; gap: 0; }
+.pspread--tables .ccy__row {
+  gap: 3px;
+  padding: 5px 0 7px;
+  border-top: 1px solid var(--border);
+}
+.pspread--tables .ccy__row:first-child { border-top: 0; }
+.pspread--tables .ccy__code { font-size: 11px; }
+.pspread--tables .ccy__pct { font-size: 10.5px; }
+.pspread--tables .ccy__val { font-size: 11.5px; font-weight: 600; }
+.pspread--tables .bar { height: 3px; }
 /* The locked band shows date + return chip; the £ figure returns on release,
    where the column has the width to carry it. */
 .pspread--tables .bwdays__pnl { display: none; }
@@ -3986,13 +4002,9 @@ a.prow--pos:active { background: var(--violet-tint-18); }
 .pband--income { --pane-accent: var(--fin-1); }
 .pband--flow   { --pane-accent: var(--brand-soft); }
 .pband--costs  { --pane-accent: var(--fin-3); }
-/* Moved in from Overview; the pane supplies the padding the card used to. */
-.pband--ccy    { --pane-accent: var(--brand-soft); }
-.pband--ccy .ccy { padding: var(--s-2) 0 0; }
-.pband--ccy .pane__head .link-all { margin-left: auto; }
 .pband-split {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px 340px;
+  grid-template-columns: minmax(0, 1fr) 360px;
   gap: var(--grid-gap);
 }
 .pband .irail { padding: var(--s-2) 0 0; }
