@@ -158,8 +158,12 @@ def main() -> int:
         gateway_error = str(exc)
         log.error("gateway unavailable: %s", exc)
     except Exception as exc:
-        log.exception("refresh failed: %s", exc)
-        return 1
+        # A zombie Gateway accepts the socket and then drops it mid-request
+        # (ConnectionError, not GatewayUnavailable). Whatever the flavour of
+        # broken, the answer is the same: fall to Flex and carry on — a dead
+        # Gateway must never abort the store refreshes that don't need it.
+        gateway_error = str(exc)
+        log.exception("gateway build failed; falling to Flex: %s", exc)
 
     if payload is None:
         _refresh_positions()
