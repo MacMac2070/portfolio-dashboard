@@ -36,14 +36,19 @@ a finished series per range and draws it; it does not slice, rebase or divide.
 from __future__ import annotations
 
 import logging
+from datetime import date, timedelta
 
 log = logging.getLogger("benchmark")
 
-# Mirrors RANGE_DAYS in js/main.js. Trailing point counts, not calendar days:
-# the series is one point per recorded day, so a gap in recording shortens the
-# window rather than emptying it.
+# Mirrors RANGE_DAYS in js/main.js — CALENDAR day spans, anchored on the
+# series' own last date. They used to be trailing point counts, which made
+# "1M" thirty trading days (five and a half weeks) and "1Y" seventeen months;
+# IBKR's own app measures calendar windows, and the two disagreed by whole
+# percentage points. "1D" stays a two-row special case (yesterday's close
+# against the one before), "ALL" is everything. If you change one side,
+# change the other.
 RANGE_DAYS: dict[str, float] = {
-    "1D": 2, "7D": 7, "1M": 30, "3M": 90, "6M": 180, "1Y": 365, "ALL": float("inf"),
+    "1D": 2, "7D": 7, "1M": 30, "3M": 91, "6M": 182, "1Y": 365, "ALL": float("inf"),
 }
 
 DEFAULT_SYMBOL = "^FTSE"
@@ -69,12 +74,26 @@ DEFAULT_SYMBOL = "^FTSE"
 MIN_ANCHOR_SHARE = 0.20
 
 
-def slice_range(points: list, key: str) -> list:
-    """The page's own slice, so the two arrays cannot come out different lengths."""
+def slice_start(dates: list[str], key: str) -> int:
+    """Index where a range's window opens — the page's own rule, mirrored.
+
+    Calendar cutoff against the series' last date, so a business-day series
+    yields ~22 rows for "1M" whatever holidays fell in it. Returns an index
+    rather than a slice because build() cuts three parallel arrays with it.
+    Falls back to the last two rows when the window would be shorter.
+    """
+    if not dates:
+        return 0
     days = RANGE_DAYS.get(key, 30)
     if days == float("inf"):
-        return list(points)
-    return list(points[-max(2, int(days)):])
+        return 0
+    if key == "1D":
+        return max(0, len(dates) - 2)
+    cutoff = (date.fromisoformat(dates[-1]) - timedelta(days=int(days))).isoformat()
+    for i, stamp in enumerate(dates):
+        if stamp >= cutoff:
+            return min(i, max(0, len(dates) - 2))
+    return max(0, len(dates) - 2)
 
 
 def align(nav_dates: list[str], index_rows: list[tuple[str, float]]) -> list[float | None]:
@@ -171,8 +190,9 @@ def build(nav_rows: list[dict], index_rows: list[tuple[str, float]],
 
     ranges: dict[str, dict] = {}
     for key in RANGE_DAYS:
-        nav_slice = slice_range(values, key)
-        idx_slice = slice_range(carried, key)
+        start = slice_start(dates, key)
+        nav_slice = values[start:]
+        idx_slice = carried[start:]
         points = rebase(nav_slice, idx_slice)
 
         # Is the anchor representative of the window, or was the account still

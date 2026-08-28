@@ -56,24 +56,50 @@ def _refresh_attribution() -> None:
         log.info("attribution: skipped (%s)", exc)
         return
 
-    # Ends at the last day IBKR has reported rather than today: Activity
-    # Statements are generated at close of business, and a window running into
-    # an unfinished day is refused with "1003 Statement is not available".
+    # The whole span first — and the NAV history rides the same statement.
+    # This merge is what keeps the equity curve moving when the Gateway never
+    # runs: for months the daily job never advanced nav_history at all (the
+    # only writers were the Gateway snapshot row and a manual backfill), so
+    # the curve silently froze at whatever the last hand-run left behind.
+    try:
+        root = flex.fetch_activity(config)
+        nav_rows = flex.parse_nav_history(root)
+        if nav_rows:
+            added, total = store.merge_nav(nav_rows)
+            log.info("nav history: %d new, %d stored (through %s)",
+                     added, total, nav_rows[-1]["date"])
+        periods = flex.parse_change_in_nav_periods(root)
+        cash = flex.parse_cash_transactions(root)
+        if periods:
+            added, total = store.merge_nav_change(periods)
+            log.info("attribution: whole span — %d period(s), %d new, %d stored",
+                     len(periods), added, total)
+        if cash:
+            added, total = store.merge_cash(cash)
+            log.info("attribution: whole span — %d cash row(s), %d new, %d stored",
+                     len(cash), added, total)
+    except Exception:
+        # A Flex outage must not fail the job: the stored figures still serve,
+        # and the next run picks this up.
+        log.exception("attribution: whole span failed; the stored figures still serve")
+
+    # Month windows come from the REFRESHED series, so a freshly-merged week
+    # is included the same night it lands. Ends at the last day IBKR has
+    # reported rather than today: Activity Statements are generated at close
+    # of business, and a window running into an unfinished day is refused
+    # with "1003 Statement is not available".
     latest = store.nav_latest()
     end = date.fromisoformat(latest) if latest else date.today() - timedelta(days=1)
-    windows = [(None, None)]                      # the whole span, for the Sankey
-    windows += flex.snap_to_reported(
+    windows = flex.snap_to_reported(
         flex.month_windows(end.replace(day=1), end), store.nav_dates())
 
     for start, end in windows:
-        label = "whole span" if start is None else start.strftime("%b %Y")
+        label = start.strftime("%b %Y")
         try:
             root = flex.fetch_activity(config, from_date=start, to_date=end)
             periods = flex.parse_change_in_nav_periods(root)
             cash = flex.parse_cash_transactions(root)
         except Exception:
-            # A Flex outage must not fail the job: the snapshot and the NAV
-            # point are already written, and the next run picks this up.
             log.exception("attribution: %s failed; the stored figures still serve", label)
             continue
 

@@ -80,7 +80,9 @@ function setStyle(node, prop, value) {
 
 /** Region colour comes from its fixed index, so it never shifts on filtering. */
 
-const RANGE_DAYS = { "1D": 2, "7D": 7, "1M": 30, "3M": 90, "6M": 180, "1Y": 365, ALL: Infinity };
+// CALENDAR day spans (1D = last two closes, ALL = everything) — mirrored in
+// adapter/benchmark.py RANGE_DAYS; change both or the benchmark line vanishes.
+const RANGE_DAYS = { "1D": 2, "7D": 7, "1M": 30, "3M": 91, "6M": 182, "1Y": 365, ALL: Infinity };
 const RANGE_LABEL = { "1D": "1D", "7D": "7D", "1M": "1M", "3M": "3M", "6M": "6M", "1Y": "1Y", ALL: "All" };
 const RANGE_NOTE = {
   "1D": "past day · daily close",
@@ -217,9 +219,18 @@ function renderKpis(data) {
 /* ---------------- equity curve ---------------- */
 
 function sliceRange(points, range) {
+  // Calendar windows anchored on the series' own last date, mirroring
+  // adapter/benchmark.py's slice_start — the two must agree or the page
+  // rejects the benchmark for count mismatch. "1M" used to mean the last 30
+  // ROWS of a business-day series (five and a half weeks), which is how this
+  // chart and IBKR's own app came to disagree by whole percentage points.
   const days = RANGE_DAYS[range] ?? 30;
   if (!Number.isFinite(days)) return points;
-  return points.slice(-Math.max(2, days));
+  if (range === "1D" || !points.length) return points.slice(-2);
+  const last = new Date(points[points.length - 1].date);
+  const cutoff = new Date(last.getTime() - days * 86400000).toISOString().slice(0, 10);
+  const out = points.filter((p) => p.date >= cutoff);
+  return out.length >= 2 ? out : points.slice(-2);
 }
 
 /* ---------------- benchmark ---------------- */
@@ -358,7 +369,17 @@ function renderChart() {
   const plot = $("chartPlot");
   const points = sliceRange(navHistory, activeRange);
 
-  $("chartNote").textContent = RANGE_NOTE[activeRange];
+  // The series can lag the wall clock (Flex is end-of-day; a missed nightly
+  // widens the gap) — name where the window actually ends rather than
+  // letting "past month" imply it reaches today.
+  const lastDate = points[points.length - 1]?.date;
+  const lagDays = lastDate ? (Date.now() - new Date(lastDate).getTime()) / 86400000 : 0;
+  const staleTail = lastDate && lagDays > 2
+    ? ` · to ${new Date(lastDate).toLocaleDateString("en-GB",
+        { day: "numeric", month: "short", timeZone: "UTC" })}`
+    : "";
+
+  $("chartNote").textContent = RANGE_NOTE[activeRange] + staleTail;
   for (const id of ["chartChangeLabel", "chartHighLabel", "chartLowLabel"]) {
     const suffix = id.includes("Change") ? "change" : id.includes("High") ? "high" : "low";
     $(id).textContent = `${RANGE_LABEL[activeRange]} ${suffix}`;
@@ -397,7 +418,7 @@ function renderChart() {
   // Falls back to NAV silently while the track record is still loading.
   const twr = chartMode === "twr" ? twrSeries(points) : null;
   if (twr) {
-    $("chartNote").textContent = `${RANGE_NOTE[activeRange]} · deposits excluded`;
+    $("chartNote").textContent = `${RANGE_NOTE[activeRange]} · deposits excluded${staleTail}`;
     // The server withholds the benchmark where deposits dominate the NAV
     // change — a verdict about the £ chart. Here deposits are already out,
     // but the withheld points are gone with it, so only the wording changes.

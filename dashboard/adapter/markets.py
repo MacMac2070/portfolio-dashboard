@@ -367,7 +367,11 @@ class MarketFeed:
             as_of = dates[-1]
             stale = (today - date.fromisoformat(as_of)).days > STALE_DAYS
 
-            month_ref = closes[-23] if len(closes) >= 23 else closes[0]
+            # A calendar month back, not 23 rows back — 23 trading days
+            # drifts with holidays and recording gaps, and it is labelled
+            # month_pct.
+            month_start = (today - timedelta(days=30)).isoformat()
+            month_ref = next((c for c, d in zip(closes, dates) if d >= month_start), closes[0])
             year_ref = next((c for c, d in zip(closes, dates) if d >= year_start), closes[0])
 
             derived[str(symbol)] = {
