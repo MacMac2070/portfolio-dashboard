@@ -14,3 +14,11 @@ __pycache__/
 
 .DS_Store
 .claude/settings.local.json
+
+# Expense tracker (isolated module): live credentials and the local database.
+expense-tracker/.env.expense-tracker
+expense-tracker/data/
+expense-tracker/logs/
+
+# Runtime logs — regenerated every run, never history.
+dashboard/logs/
