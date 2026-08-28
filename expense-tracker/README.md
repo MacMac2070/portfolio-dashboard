@@ -28,6 +28,8 @@ SQLite one, so migration is a data copy plus swapping `store.py`'s internals.
 
 ## Status
 
+Full roadmap, contracts and the hard stops: **[PLAN.md](PLAN.md)**.
+
 - [x] Scaffold: config, store (dedupe on `source_transaction_id`, INSERT OR
       IGNORE — manual `category`/`reviewed` edits are never overwritten),
       categoriser (fixed list, forced JSON, Ollama-down → null), consent
