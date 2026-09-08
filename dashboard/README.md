@@ -626,8 +626,12 @@ critiqued), scoped to features the existing data can feed honestly:
 
 The stores are now guarded archives: Flex reaches back 365 days, so from
 ~Oct 2026 the oldest rows exist nowhere else — `store._write` refuses to
-shrink a file, the daily job logs a row census, and committing `data/` is
-the backup.
+shrink a file and the daily job logs a row census. The real ledgers never
+enter this repository: `dashboard/data/` is gitignored and backed up outside
+git. What the repository ships instead is a mock dataset, CSVs under
+`dashboard/data/mock/` and the generator in `dashboard/scripts/` that turns
+them into the files the app reads, so the dashboard runs end to end on
+invented figures; see `dashboard/data/mock/README.md`.
 
 ## The de-AI pass (20 Aug 2026)
 
