@@ -286,7 +286,6 @@ function render() {
   const logo = skin.logo || "";
   $("stockMono").textContent = skin.mono || "";
   tile.style.background = skin.tint || "#EDF0F3";
-  tile.style.borderColor = skin.edge || "rgba(10,13,18,.16)";
   $("stockMono").style.color = skin.ink || "#2E2452";
 
   let img = tile.querySelector("img");

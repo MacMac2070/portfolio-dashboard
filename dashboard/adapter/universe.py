@@ -9,10 +9,10 @@ wherever it turns up and no sector re-implements the distinction.
 already maps them to yfinance symbols — that mapping is the bridge between what
 the IB feed reports and what openbb quotes.
 
-Each row shows the issuer's own mark, served as SVG from a public symbol-logo
-service and displayed for identification only. `brand` is the issuer's hue,
-used for the ticker monogram that stands in wherever no mark is published — the
-tile is a light plate because marks are drawn for light ground.
+Each row names the issuer's own mark — `logo` is a slug into the vendored set
+marks.py describes, displayed for identification only. `brand` is the issuer's
+hue, used for the ticker monogram that stands in wherever no mark is published;
+the monogram's plate is light because a small dark-on-light letterform reads.
 
 Sector is a *separate axis from region*. `regions.py` drives Overview's
 allocation donut and answers "where is this exposure"; sector answers "what kind
@@ -33,6 +33,8 @@ import json
 from dataclasses import dataclass, replace
 from pathlib import Path
 
+import marks
+
 SEMIS = "Semiconductors"
 BIGTECH = "Big tech"
 ETFS = "ETFs"
@@ -49,9 +51,6 @@ SECTOR_ORDER = (SEMIS, BIGTECH, ETFS, AIRLINES, FINANCIALS, OTHER)
 # The monogram hue for a name with no curated brand colour. The project violet,
 # so an auto-added tile reads as part of the system rather than as a stray.
 DEFAULT_BRAND = "#7C55E8"
-
-
-LOGO_BASE = "https://assets.parqet.com/logos/symbol/"
 
 
 # Canonical venue code -> the label a stock page prints in its sub-line.
@@ -121,9 +120,9 @@ class Ticker:
     sector: str
     brand: str          # issuer hue, for the monogram fallback
     con_id: int | None = None   # present => you hold it => live IB data
-    # Symbol the logo service knows this issuer by, when it differs from the
-    # quote symbol — HY9H's mark is filed under its Korean primary listing.
-    # A full https:// URL here overrides the service entirely.
+    # The issuer's mark: a slug into the set marks.py describes ("apple",
+    # "meta-platforms"). A full https:// URL here bypasses that set. None
+    # means no mark is published and the monogram shows.
     logo: str | None = None
     # Filled from _VENUE when TICKERS is built — never passed positionally.
     exchange: str = ""  # canonical venue code, see EXCHANGE_NAMES
@@ -154,76 +153,110 @@ class Ticker:
 
     @property
     def logo_url(self) -> str:
-        """The issuer's own mark, as SVG so it stays crisp at any tile size.
+        """Where the tile fetches the issuer's mark from — local when vendored.
 
-        Verified 31 Jul: 33 of 35 symbols resolve directly from the service.
-        The two that 404 carry an explicit override below.
+        "" when the ticker has no slug, which every tile renderer takes as
+        "draw the monogram". Every curated name below is vendored under
+        assets/logos/; `python adapter/marks.py` audits that.
         """
-        ref = self.logo or self.symbol
-        return ref if ref.startswith("http") else f"{LOGO_BASE}{ref}?format=svg"
+        return marks.url_for(self.logo)
 
 
 # --------------------------------------------------------------------------
 # Held positions. con_id ties each to the live IB feed.
 # --------------------------------------------------------------------------
 _HELD = [
-    Ticker("293",   "0293.HK", "Cathay Pacific Airways",           AIRLINES,   "#006564", 1616420),
-    Ticker("C6L",   "C6L.SI",  "Singapore Airlines",               AIRLINES,   "#F5A800", 92216536),
+    Ticker("293",   "0293.HK", "Cathay Pacific Airways",           AIRLINES,   "#006564", 1616420,
+           logo="cathay-pacific"),
+    Ticker("C6L",   "C6L.SI",  "Singapore Airlines",               AIRLINES,   "#F5A800", 92216536,
+           logo="singapore-airlines"),
 
-    Ticker("700",   "0700.HK", "Tencent Holdings",                 BIGTECH,    "#1E7BEE", 152791428),
-    Ticker("AAPL",  "AAPL",    "Apple",                            BIGTECH,    "#A2AAAD", 265598),
-    Ticker("AMZN",  "AMZN",    "Amazon.com",                       BIGTECH,    "#FF9900", 3691937),
-    Ticker("GOOGL", "GOOGL",   "Alphabet",                         BIGTECH,    "#4285F4", 208813719),
-    Ticker("META",  "META",    "Meta Platforms",                   BIGTECH,    "#0064E0", 107113386),
+    Ticker("700",   "0700.HK", "Tencent Holdings",                 BIGTECH,    "#1E7BEE", 152791428,
+           logo="tencent"),
+    Ticker("AAPL",  "AAPL",    "Apple",                            BIGTECH,    "#A2AAAD", 265598,
+           logo="apple"),
+    Ticker("AMZN",  "AMZN",    "Amazon.com",                       BIGTECH,    "#FF9900", 3691937,
+           logo="amazon"),
+    Ticker("GOOGL", "GOOGL",   "Alphabet",                         BIGTECH,    "#4285F4", 208813719,
+           logo="alphabet"),
+    Ticker("META",  "META",    "Meta Platforms",                   BIGTECH,    "#0064E0", 107113386,
+           logo="meta-platforms"),
 
+    # The library files the SK group butterfly under sk-telecom and carries no
+    # separate hynix mark; the butterfly is what hynix prints on its own badge.
     Ticker("HY9H",  "HY9H.F",  "SK hynix · GDR",                   SEMIS,      "#EA002C", 517397504,
-           logo="000660.KS"),   # mark is filed under the Korean primary listing
-    Ticker("INTC",  "INTC",    "Intel",                            SEMIS,      "#0068B5", 270639),
-    Ticker("SMSN",  "SMSN.IL", "Samsung Electronics · GDR",        SEMIS,      "#1428A0", 16520545),
+           logo="sk-telecom"),
+    Ticker("INTC",  "INTC",    "Intel",                            SEMIS,      "#0068B5", 270639,
+           logo="intel"),
+    Ticker("SMSN",  "SMSN.IL", "Samsung Electronics · GDR",        SEMIS,      "#1428A0", 16520545,
+           logo="samsung"),
 
-    # 3115.HK and ES3.SI both 404 on the logo service, so they carry the
-    # design's hand-picked marks for the index provider and the fund manager.
+    # A fund wears its issuer's mark, as every broker draws it: the two iShares
+    # lines share one tile and the name tells them apart.
     Ticker("3115",  "3115.HK", "iShares Core Hang Seng Index ETF", ETFS,       "#C8102E", 256718140,
-           logo="https://s3-symbol-logo.tradingview.com/hang-seng-bank--big.svg"),
+           logo="ishares"),
     Ticker("ES3",   "ES3.SI",  "SPDR Straits Times Index ETF",     ETFS,       "#0072CE", 92214874,
-           logo="https://s3-symbol-logo.tradingview.com/state-street--big.svg"),
-    Ticker("IUCS",  "IUCS.L",  "iShares S&P 500 Consumer Staples", ETFS,       "#6E7B8B", 270617971),
-    Ticker("XDJP",  "XDJP.L",  "Xtrackers Nikkei 225 UCITS ETF",   ETFS,       "#0018A8", 123279007),
+           logo="spdr-sandp500-etf-tr"),   # the SPDR wordmark, filed under its flagship
+    Ticker("IUCS",  "IUCS.L",  "iShares S&P 500 Consumer Staples", ETFS,       "#6E7B8B", 270617971,
+           logo="ishares"),
+    Ticker("XDJP",  "XDJP.L",  "Xtrackers Nikkei 225 UCITS ETF",   ETFS,       "#0018A8", 123279007,
+           logo="xtrackers"),   # DWS's ETF brand — the file is the DWS mark
 
-    Ticker("HSBA",  "HSBA.L",  "HSBC Holdings",                    FINANCIALS, "#DB0011", 909083),
+    Ticker("HSBA",  "HSBA.L",  "HSBC Holdings",                    FINANCIALS, "#DB0011", 909083,
+           logo="hsbc"),
 ]
 
 # --------------------------------------------------------------------------
 # Watchlist-only. No con_id, so no quantity, cost or P&L is ever shown.
 # --------------------------------------------------------------------------
 _WATCHED = [
-    Ticker("MU",    "MU",      "Micron Technology",                SEMIS,      "#0084C9"),
+    Ticker("MU",    "MU",      "Micron Technology",                SEMIS,      "#0084C9",
+           logo="micron-technology"),
     # Relisted after the Western Digital spinoff — verify before assuming stale.
-    Ticker("SNDK",  "SNDK",    "Sandisk",                          SEMIS,      "#E31937"),
-    Ticker("AMD",   "AMD",     "Advanced Micro Devices",           SEMIS,      "#ED1C24"),
-    Ticker("NVDA",  "NVDA",    "NVIDIA",                           SEMIS,      "#76B900"),
-    Ticker("TSM",   "TSM",     "Taiwan Semiconductor",             SEMIS,      "#C41230"),
-    Ticker("ASML",  "ASML",    "ASML Holding",                     SEMIS,      "#1A5FD0"),
-    Ticker("QCOM",  "QCOM",    "QUALCOMM",                         SEMIS,      "#3253DC"),
-    Ticker("AVGO",  "AVGO",    "Broadcom",                         SEMIS,      "#CC092F"),
+    Ticker("SNDK",  "SNDK",    "Sandisk",                          SEMIS,      "#E31937",
+           logo="sandisk"),
+    Ticker("AMD",   "AMD",     "Advanced Micro Devices",           SEMIS,      "#ED1C24",
+           logo="advanced-micro-devices"),
+    Ticker("NVDA",  "NVDA",    "NVIDIA",                           SEMIS,      "#76B900",
+           logo="nvidia"),
+    Ticker("TSM",   "TSM",     "Taiwan Semiconductor",             SEMIS,      "#C41230",
+           logo="taiwan-semiconductor"),
+    Ticker("ASML",  "ASML",    "ASML Holding",                     SEMIS,      "#1A5FD0",
+           logo="asml"),
+    Ticker("QCOM",  "QCOM",    "QUALCOMM",                         SEMIS,      "#3253DC",
+           logo="qualcomm"),
+    Ticker("AVGO",  "AVGO",    "Broadcom",                         SEMIS,      "#CC092F",
+           logo="broadcom"),
 
-    Ticker("MSFT",  "MSFT",    "Microsoft",                        BIGTECH,    "#00A4EF"),
-    Ticker("NFLX",  "NFLX",    "Netflix",                          BIGTECH,    "#E50914"),
-    Ticker("TSLA",  "TSLA",    "Tesla",                            BIGTECH,    "#CC0000"),
-    Ticker("BABA",  "9988.HK", "Alibaba Group",                    BIGTECH,    "#FF6A00"),
-    Ticker("BIDU",  "9888.HK", "Baidu",                            BIGTECH,    "#2932E1"),
-    Ticker("JD",    "9618.HK", "JD.com",                           BIGTECH,    "#D22630"),
-    Ticker("NTES",  "9999.HK", "NetEase",                          BIGTECH,    "#D6000F"),
+    Ticker("MSFT",  "MSFT",    "Microsoft",                        BIGTECH,    "#00A4EF",
+           logo="microsoft"),
+    Ticker("NFLX",  "NFLX",    "Netflix",                          BIGTECH,    "#E50914",
+           logo="netflix"),
+    Ticker("TSLA",  "TSLA",    "Tesla",                            BIGTECH,    "#CC0000",
+           logo="tesla"),
+    Ticker("BABA",  "9988.HK", "Alibaba Group",                    BIGTECH,    "#FF6A00",
+           logo="alibaba"),
+    Ticker("BIDU",  "9888.HK", "Baidu",                            BIGTECH,    "#2932E1",
+           logo="baidu"),
+    Ticker("JD",    "9618.HK", "JD.com",                           BIGTECH,    "#D22630",
+           logo="jd-com"),
+    Ticker("NTES",  "9999.HK", "NetEase",                          BIGTECH,    "#D6000F",
+           logo="netease"),
     # The one Chinese name with no HK line, so it stays on Nasdaq in USD.
-    Ticker("PDD",   "PDD",     "PDD Holdings",                     BIGTECH,    "#E02E24"),
+    Ticker("PDD",   "PDD",     "PDD Holdings",                     BIGTECH,    "#E02E24",
+           logo="pinduoduo"),
 
     # Quotes thinly — see the history fallback in watchlist.py.
-    Ticker("VUSA",  "VUSA.L",  "Vanguard S&P 500 UCITS ETF",       ETFS,       "#96151D"),
+    Ticker("VUSA",  "VUSA.L",  "Vanguard S&P 500 UCITS ETF",       ETFS,       "#96151D",
+           logo="vanguard"),
 
-    Ticker("IAG",   "IAG.L",   "Intl. Consolidated Airlines",      AIRLINES,   "#2E5AA8"),
+    Ticker("IAG",   "IAG.L",   "Intl. Consolidated Airlines",      AIRLINES,   "#2E5AA8",
+           logo="international-consolidated-airlines-group"),
 
-    Ticker("BARC",  "BARC.L",  "Barclays",                         FINANCIALS, "#00AEEF"),
-    Ticker("LLOY",  "LLOY.L",  "Lloyds Banking Group",             FINANCIALS, "#006A4D"),
+    Ticker("BARC",  "BARC.L",  "Barclays",                         FINANCIALS, "#00AEEF",
+           logo="barclays"),
+    Ticker("LLOY",  "LLOY.L",  "Lloyds Banking Group",             FINANCIALS, "#006A4D",
+           logo="lloyds"),
 ]
 
 # --------------------------------------------------------------------------
@@ -362,6 +395,31 @@ def sector_for(con_id: int | None, symbol: str) -> str:
     return OTHER
 
 
+def key_for(con_id: int | None, symbol: str = "") -> str | None:
+    """Resolve a contract ID or broker symbol to its canonical universe key.
+
+    Matches con_id first (contract ID is stable across venues, whereas IBKR
+    uses venue-suffixed symbols like HSBAl on LSE), then exact symbol/key,
+    then prefix matching for venue-suffixed ticker names.
+    """
+    if con_id is not None:
+        try:
+            cid = int(con_id)
+            for t in TICKERS.values():
+                if t.con_id == cid:
+                    return t.key
+        except (TypeError, ValueError):
+            pass
+    if symbol:
+        for t in TICKERS.values():
+            if t.key == symbol or t.symbol == symbol:
+                return t.key
+        for t in TICKERS.values():
+            if symbol.startswith(t.key):
+                return t.key
+    return None
+
+
 def sector_sort_key(sector: str) -> int:
     """Fixed display and colour order, so a sector keeps its hue when another
     one drops out of the portfolio — the same contract regions.sort_key holds.
@@ -415,16 +473,16 @@ def tile_colours(t: Ticker) -> dict:
     not in the registry at all, and the two must not drift.
     """
     return {
-        # Light plate, per the design — marks are drawn for light ground.
+        # The monogram's light plate. A mark covers it edge to edge; the tile's
+        # hairline ring comes from the theme (app.css .ptile::after), not here.
         "tint": "#EDF0F3",
-        "edge": "rgba(10,13,18,.16)",
         "ink": _mix(t.brand or DEFAULT_BRAND, "#0A0D12", MONO_INK_MIX),
     }
 
 
 def synthetic(symbol: str, name: str = "", *, sector: str = OTHER,
               exchange: str = "", currency: str = "", region: str = "",
-              brand: str = DEFAULT_BRAND) -> Ticker:
+              brand: str = DEFAULT_BRAND, logo: str | None = None) -> Ticker:
     """A Ticker for a symbol that is not in the curated registry.
 
     `key == symbol`, so `#stock/0700.HK` addresses it directly. The registry's
@@ -433,13 +491,15 @@ def synthetic(symbol: str, name: str = "", *, sector: str = OTHER,
     quantity/cost/P&L path in the app already treats it as watch-only — that
     property is doing real work here, not just describing.
 
-    `logo` stays None so `logo_url` points the logo service at the raw symbol.
-    Most will 404, and stock.js already removes an <img> that fails to load,
-    falling back to the monogram.
+    `logo` is resolved when the caller does not know it — one cached network
+    lookup per symbol per process (see marks.resolve). None from that means no
+    mark is published and the monogram shows; nothing here can raise.
     """
+    if logo is None:
+        logo = marks.resolve(symbol, exchange)
     return Ticker(
         key=symbol, symbol=symbol, name=name or symbol, sector=sector,
-        brand=brand, con_id=None, logo=None,
+        brand=brand, con_id=None, logo=logo or None,
         exchange=exchange, currency=currency, region=region,
     )
 

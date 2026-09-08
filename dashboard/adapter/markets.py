@@ -28,9 +28,17 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+import quotes
+import resilience
+import store
+
 QUOTE_SECONDS = 60.0
 HISTORY_DAYS = 30
 FIRST_RETRY_SECONDS = 15.0
+BREAKER = "yfinance"        # shared with every other module that asks Yahoo
+# The sterling crosses the benchmark restates a foreign index with. Yahoo's
+# GBPUSD=X is dollars per pound; a rate into GBP is its reciprocal.
+FX_SYMBOLS = ("GBPUSD=X", "GBPEUR=X", "GBPHKD=X", "GBPSGD=X", "GBPJPY=X", "GBPKRW=X")
 # A close older than this is reported with its date and no day-change rather
 # than being passed off as today's figure.
 STALE_DAYS = 3
@@ -178,6 +186,7 @@ class MarketFeed:
         # 30 closes, but the Overview benchmark line needs the whole series and
         # there is no reason to fetch it twice — see adapter/benchmark.py.
         self._history: dict[str, list[tuple[str, float]]] = {}
+        self._fx_day: str | None = None
         self._series_day: str | None = None
         self._last_refresh: str | None = None
         self._error: str | None = None
@@ -202,11 +211,31 @@ class MarketFeed:
     def history(self, symbol: str) -> list[tuple[str, float]]:
         """The full daily close series for one index, oldest first.
 
-        Empty until the first successful refresh. Copied under the lock because
-        the worker thread replaces the dict wholesale on every poll.
+        From the last refresh when there has been one, else straight from the
+        quote store — so the benchmark line draws before the feed has warmed
+        and through an outage. Copied under the lock because the worker thread
+        replaces the dict wholesale on every poll.
         """
         with self._lock:
-            return list(self._history.get(symbol, ()))
+            rows = list(self._history.get(symbol, ()))
+        if rows:
+            return rows
+        return quotes.series(symbol, start=(date.today() - timedelta(days=420)).isoformat())
+
+    @staticmethod
+    def fx_series(currency: str) -> list[tuple[str, float]]:
+        """(date, rate into GBP) for a currency, oldest first, or [].
+
+        The quote store's Yahoo cross first; the Flex ConversionRates store
+        as the fallback for a day the cross lacks.
+        """
+        if not currency or currency == "GBP":
+            return []
+        rows = {d: 1.0 / c for d, c in quotes.series(f"GBP{currency}") if c}
+        for (day, ccy), rate in store.fx_history().items():
+            if ccy == currency and day not in rows and rate:
+                rows[day] = rate
+        return sorted(rows.items())
 
     @staticmethod
     def catalogue() -> list[dict]:
@@ -243,6 +272,7 @@ class MarketFeed:
                 "indices": len(self.symbols),
                 "quoted": len(series),
                 "error": self._error,
+                "breaker": resilience.get(BREAKER).snapshot(),
                 "served_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             }
 
@@ -314,9 +344,23 @@ class MarketFeed:
 
     def _run(self) -> None:
         self._await_gate()
+        breaker = resilience.get(BREAKER)
         while not self._stop.is_set():
+            if not breaker.allow():
+            # Yahoo known to be down: keep the last good values, say so in meta,
+            # and look again when the breaker's window lapses rather than
+            # asking a dead provider every fifteen seconds for four days.
+                with self._lock:
+                    self._error = breaker.reason()
+                self._sleep(min(breaker.retry_after() + 1.0, self.poll_seconds))
+                continue
             ok = self._refresh()
-            self._sleep(self.poll_seconds if ok else FIRST_RETRY_SECONDS)
+            if ok:
+                breaker.record_success()
+            else:
+                breaker.record_failure(self._error)
+            self._sleep(self.poll_seconds if ok
+                        else max(FIRST_RETRY_SECONDS, breaker.retry_after()))
 
     def _sleep(self, seconds: float) -> None:
         waited = 0.0
@@ -331,33 +375,65 @@ class MarketFeed:
         endpoint: indices quote thinly, and every market is shut at the weekend,
         so `last_price` is routinely absent while the series is complete. This is
         the same fallback already proven for VUSA on the watchlist.
+
+        The series comes from the quote store, not from the call. The call
+        fetches only what the store lacks — a week's overlap when coverage is
+        current, the full window when it is not — and whatever it returns is
+        stored first. So a failed call still redraws the board from stored
+        closes, each marked with its own date, and eleven indices × 420 days
+        every minute became eleven × seven.
         """
-        start = (date.today() - timedelta(days=420)).isoformat()
+        today = date.today()
+        start = quotes.plan_fetch_all(self.symbols, today)
+        fetched = False
         try:
             from openbb import obb
             obb.user.preferences.output_type = "dataframe"
             frame = obb.index.price.historical(
                 symbol=",".join(self.symbols), provider="yfinance",
                 start_date=start, interval="1d").reset_index()
+            if "symbol" not in frame.columns:
+                log.warning("unexpected history shape; no symbol column")
+            else:
+                for symbol, sub in frame.groupby("symbol"):
+                    quotes.upsert(str(symbol), zip((str(d)[:10] for d in sub["date"]), sub["close"]),
+                                  source="yfinance")
+                fetched = True
         except Exception as exc:
             log.warning("index history failed: %s", exc)
             with self._lock:
                 self._error = str(exc)
-            return False
 
-        if "symbol" not in frame.columns:
-            log.warning("unexpected history shape; no symbol column")
-            return False
+        if fetched and self._fx_day != today.isoformat():
+            self._refresh_fx(today)
 
-        today = date.today()
+        derived, history = self._derive(today)
+        with self._lock:
+            if derived:
+                self._series = derived
+                self._history = history
+                if fetched:
+                    self._last_refresh = datetime.now(timezone.utc).isoformat(timespec="seconds")
+                    self._error = None
+
+        missing = [s for s in self.symbols if s not in derived]
+        if missing:
+            log.info("no series for: %s", ", ".join(missing))
+        stale_now = [s for s, d in derived.items() if d["stale"]]
+        if stale_now:
+            log.info("stale (>%dd): %s", STALE_DAYS, ", ".join(stale_now))
+        return fetched and bool(derived)
+
+    def _derive(self, today: date) -> tuple[dict[str, dict], dict[str, list[tuple[str, float]]]]:
+        """Level, the three returns and the sparkline for every index, from
+        whatever the store holds for the last 420 days."""
         year_start = f"{today.year}-01-01"
+        window_start = (today - timedelta(days=420)).isoformat()
         derived: dict[str, dict] = {}
         history: dict[str, list[tuple[str, float]]] = {}
 
-        for symbol, sub in frame.groupby("symbol"):
-            sub = sub.sort_values("date")
-            rows = [(str(d)[:10], _finite(c)) for d, c in zip(sub["date"], sub["close"])]
-            rows = [(d, c) for d, c in rows if c is not None]
+        for symbol in self.symbols:
+            rows = [(d, c) for d, c in quotes.series(symbol, start=window_start) if c is not None]
             if len(rows) < 2:
                 continue
 
@@ -366,6 +442,10 @@ class MarketFeed:
             last, prev = closes[-1], closes[-2]
             as_of = dates[-1]
             stale = (today - date.fromisoformat(as_of)).days > STALE_DAYS
+            # A repeated close from before today is the provider re-serving the
+            # last print, not a session that moved 0.00% — an index never lands
+            # exactly flat. No day figure; the card says "as of" instead.
+            same_close = last == prev and date.fromisoformat(as_of) < today
 
             # A calendar month back, not 23 rows back — 23 trading days
             # drifts with holidays and recording gaps, and it is labelled
@@ -374,33 +454,46 @@ class MarketFeed:
             month_ref = next((c for c, d in zip(closes, dates) if d >= month_start), closes[0])
             year_ref = next((c for c, d in zip(closes, dates) if d >= year_start), closes[0])
 
-            derived[str(symbol)] = {
+            derived[symbol] = {
                 "level": last,
                 # A stale close has no "today" — say so rather than printing the
                 # move from whenever it last traded as if it were this session.
-                "day_pct": None if stale else (last / prev - 1.0) * 100.0,
+                "day_pct": None if (stale or same_close) else (last / prev - 1.0) * 100.0,
                 "month_pct": (last / month_ref - 1.0) * 100.0 if month_ref else None,
                 "year_pct": (last / year_ref - 1.0) * 100.0 if year_ref else None,
                 "spark": closes[-HISTORY_DAYS:],
                 "as_of": as_of,
                 "stale": stale,
             }
-            history[str(symbol)] = rows
+            history[symbol] = rows
+        return derived, history
 
-        with self._lock:
-            if derived:
-                self._series = derived
-                self._history = history
-                self._last_refresh = datetime.now(timezone.utc).isoformat(timespec="seconds")
-                self._error = None
+    def _refresh_fx(self, today: date) -> None:
+        """The sterling crosses, once a day, into the same store.
 
-        missing = [s for s in self.symbols if s not in derived]
-        if missing:
-            log.info("no series for: %s", ", ".join(missing))
-        stale_now = [s for s, d in derived.items() if d["stale"]]
-        if stale_now:
-            log.info("stale (>%dd): %s", STALE_DAYS, ", ".join(stale_now))
-        return bool(derived)
+        They restate a foreign index in pounds for the benchmark line and the
+        beta/alpha block — the return a sterling investor would have had, not
+        the one a local investor did. Same provider, same breaker, same
+        planning rule as the indices.
+        """
+        start = quotes.plan_fetch_all(FX_SYMBOLS, today)
+        try:
+            from openbb import obb
+            obb.user.preferences.output_type = "dataframe"
+            frame = obb.currency.price.historical(
+                symbol=",".join(FX_SYMBOLS), provider="yfinance",
+                start_date=start, interval="1d").reset_index()
+        except Exception as exc:
+            log.warning("fx history failed: %s", exc)
+            return
+        if "symbol" in frame.columns:
+            for symbol, sub in frame.groupby("symbol"):
+                quotes.upsert(str(symbol).replace("=X", ""),
+                              zip((str(d)[:10] for d in sub["date"]), sub["close"]), source="yfinance")
+        elif len(FX_SYMBOLS) == 1 and "close" in frame:
+            quotes.upsert(FX_SYMBOLS[0].replace("=X", ""),
+                          zip((str(d)[:10] for d in frame["date"]), frame["close"]), source="yfinance")
+        self._fx_day = today.isoformat()
 
 
 if __name__ == "__main__":

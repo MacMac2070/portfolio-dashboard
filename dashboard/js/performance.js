@@ -208,14 +208,18 @@ function renderBars(which) {
 
   const colours = isCost ? COST_COLOURS : INCOME_COLOURS;
   const off = isCost ? hidden.cost : hidden.income;
+  // Costs drop their all-zero bands server-side (attribution.py: "a legend
+  // entry that visibly does nothing reads as a broken toggle"); income gets
+  // the same rule here, so an Interest swatch never points at empty months.
+  const present = isCost || showPnl ? series : series.filter((s) => s.values.some((v) => v));
 
   // Hidden bands are filtered out here rather than inside the chart: with them
   // gone, groupedBars() rescales the axis and totals the tooltip over what is
   // left without needing to know anything was switched off.
   const drawn = showPnl
-    ? series.map((s) => ({ ...s, color: pnlColour }))
-    : series.filter((s) => !off.has(s.key))
-            .map((s) => ({ ...s, color: colours[s.key] || "var(--text-3)" }));
+    ? present.map((s) => ({ ...s, color: pnlColour }))
+    : present.filter((s) => !off.has(s.key))
+             .map((s) => ({ ...s, color: colours[s.key] || "var(--text-3)" }));
 
   // The cost tooltip itemises five figures behind three drawn bands, so a
   // hidden band takes its detail rows with it. `detail_keys` comes from
@@ -268,7 +272,7 @@ function renderBars(which) {
   // One series needs no legend — the card title names it. Two or more always
   // get one, so identity is never colour alone.
   if (showPnl || drawn.length + off.size < 2) legendEl.innerHTML = "";
-  else legend(legendEl, series, colours, isCost ? "cost" : "income");
+  else legend(legendEl, present, colours, isCost ? "cost" : "income");
 }
 
 function renderAll() {
@@ -329,6 +333,94 @@ function washStyle(v) {
   return `background: rgba(${base}, ${alpha})`;
 }
 
+/* ---------------- metric explainers ----------------
+ *
+ * Each ratio row's ? opens a popover that names the formula AND the actual
+ * inputs behind this specific number — the window, the benchmark, the count
+ * of observations. The reader chose this methodology once and will have
+ * forgotten it in three months; the inputs are what make the figure
+ * auditable rather than merely defined. Click-to-open, Escape closes. */
+let whyContext = null;   // {st, ra, benchName} captured on each verdict render
+
+function whyWindow() {
+  return ($("vRange")?.textContent || "").split("· ")[1] || "the tracked span";
+}
+
+// renderVerdict's fmtPct is local to it; the popovers format for themselves.
+const whyPct = (v, dp = 1) =>
+  (v == null ? "—" : `${v > 0 ? "+" : ""}${(v * 100).toFixed(dp)}%`);
+
+const WHY = {
+  mwr: (c) => c.st?.mwr && [
+    "Money-weighted return (XIRR): what the account's actual pounds earned, every deposit and withdrawal timed and weighted.",
+    `${c.st.mwr.flows} dated GBP flows, ${whyWindow()} · annualized ${whyPct(c.st.mwr.ann)} · equals TWR when nothing flows.`,
+  ],
+  alpha: (c) => c.ra && [
+    "Return above what market exposure alone would earn: mean daily return minus beta × benchmark, annualized × 252.",
+    `${c.ra.n} aligned days vs ${c.benchName}, ${whyWindow()}, GBP, rf 0.`,
+  ],
+  beta: (c) => c.ra && [
+    "Market sensitivity: covariance of daily portfolio and benchmark returns over the benchmark's variance.",
+    `${c.ra.n} aligned days vs ${c.benchName}, ${whyWindow()}.`,
+  ],
+  vol: (c) => c.ra && [
+    "Annualized standard deviation of daily returns — the typical size of the portfolio's swings.",
+    `${c.ra.n} daily returns × √252, ${whyWindow()}. Broad equity indices sit near 15–20%.`,
+  ],
+  sharpe: (c) => c.ra && [
+    "Return per unit of risk: mean daily return over its standard deviation, × √252.",
+    `${c.ra.n} days, rf 0 — with cash near 4–5%, a textbook Sharpe reads a few tenths lower.`,
+  ],
+  sortino: (c) => c.st?.risk && [
+    "Sharpe's downside-only sibling: mean daily return over the deviation of losing days alone, × √252.",
+    `${c.st.risk ? "Portfolio series only" : ""} · ${whyWindow()} · rf 0 · upside volatility not penalised.`,
+  ],
+  calmar: (c) => c.st?.risk && [
+    "Annualized return divided by the worst peak-to-trough fall — pain-adjusted return.",
+    `Max drawdown ${c.st.risk.max_dd != null ? `${(c.st.risk.max_dd * 100).toFixed(1)}%` : "—"}, ${whyWindow()}.`,
+  ],
+};
+
+let whyPopEl = null;
+
+function closeWhy() {
+  if (whyPopEl) { whyPopEl.hidden = true; whyPopEl.dataset.for = ""; }
+}
+
+document.addEventListener("click", (event) => {
+  const btn = event.target.closest(".mwhy");
+  if (!btn) {
+    if (!event.target.closest(".mpop")) closeWhy();
+    return;
+  }
+  if (!whyPopEl) {
+    whyPopEl = document.createElement("div");
+    whyPopEl.className = "mpop";
+    whyPopEl.setAttribute("role", "note");
+    whyPopEl.hidden = true;
+    document.body.append(whyPopEl);
+  }
+  const key = btn.dataset.why;
+  if (!whyPopEl.hidden && whyPopEl.dataset.for === key) { closeWhy(); return; }
+  const parts = WHY[key]?.(whyContext || {}) || [
+    "Not enough data yet.",
+    "This figure appears once 60 observations exist (and, for alpha/beta, a benchmark).",
+  ];
+  whyPopEl.innerHTML = `<p class="mpop__what">${parts[0]}</p><p class="mpop__inputs">${parts[1]}</p>`;
+  whyPopEl.dataset.for = key;
+  whyPopEl.hidden = false;
+  const r = btn.getBoundingClientRect();
+  whyPopEl.style.left = `${r.right + 10}px`;
+  whyPopEl.style.top = `${r.top - 8}px`;
+  const pr = whyPopEl.getBoundingClientRect();
+  if (pr.right > window.innerWidth - 8) whyPopEl.style.left = `${r.left - pr.width - 10}px`;
+  if (pr.bottom > window.innerHeight - 8) whyPopEl.style.top = `${window.innerHeight - pr.height - 8}px`;
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closeWhy();
+});
+
 function renderMonthlyGrid() {
   const host = $("monthlyGrid");
   if (!host) return;
@@ -359,8 +451,6 @@ function renderMonthlyGrid() {
     </tbody></table>`;
 
   $("gridNote").textContent = "from IBKR's own monthly figures";
-  // When the spread squeezes the grid into a scroll, recent months win.
-  host.scrollLeft = host.scrollWidth;
 }
 
 function renderDrawdown() {
@@ -385,6 +475,14 @@ function renderDrawdown() {
   $("ddCurrent").className = `perf-card__total num ${cur < -0.0005 ? "neg" : ""}`;
 
   const fmt = (d) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit", timeZone: "UTC" });
+  // The live ATH reading beside the from-peak figure: when the last high was
+  // set and how long the account has sat under it. Silent at a fresh high —
+  // "at peak" already says it.
+  const athEl = $("ddAth");
+  if (athEl) {
+    athEl.textContent = dd.ath_date && cur < -0.0005
+      ? `ATH ${fmt(dd.ath_date)} · ${dd.days_underwater}d under` : "";
+  }
   // Each row's wash is as wide as the episode is deep, scaled to the worst
   // on the list — the table doubles as its own bar chart. Episodes default
   // empty: a payload carrying a drawdown but no episode list must not throw.
@@ -443,7 +541,8 @@ function renderDayCal() {
         >${dir === "pos" ? "+" : dir === "neg" ? "−" : ""}</i>`;
     }
     months += `<div class="dcal__month"><span class="dcal__mlabel">${
-      MONTH_SHORT[m.getUTCMonth()]}</span><div class="dcal__days">${cells}</div></div>`;
+      MONTH_SHORT[m.getUTCMonth()]}</span><div class="dcal__wd" aria-hidden="true"
+      ><i>M</i><i>T</i><i>W</i><i>T</i><i>F</i></div><div class="dcal__days">${cells}</div></div>`;
   }
   host.innerHTML = `<div class="dcal__grid">${months}</div>`;
   $("calNote").textContent = `${days.length} trading days since ${new Date(track.inception)
@@ -539,6 +638,14 @@ function renderMasthead() {
   put("vRange", `PERFORMANCE${from && to ? ` · ${d(from)} → ${d(to)}` : ""}`);
 
   put("vSi", fmtPct(st.si, 1), st.si);
+  // The figure is only time-weighted if the deposits it excludes are the ones
+  // the broker reports. The nightly reconciliation says; the caption repeats it.
+  const cap = document.querySelector(".pverdict__herocap");
+  if (cap) {
+    cap.textContent = track?.meta?.flows_check === "fail"
+      ? "since inception · deposits unverified"
+      : "since inception";
+  }
   put("vMtd", fmtPct(st.mtd), st.mtd);
   put("vYtd", fmtPct(st.ytd), st.ytd);
   const delta = (st.bench?.si != null && st.si != null) ? st.si - st.bench.si : null;
@@ -568,6 +675,12 @@ function renderMasthead() {
   put("vBeta", ra?.beta == null ? "—" : ra.beta.toFixed(2));
   put("vVol", ra?.vol_ann == null ? "—" : `${(ra.vol_ann * 100).toFixed(1)}%`);
   put("vSharpe", ra?.sharpe == null ? "—" : ra.sharpe.toFixed(2));
+  // MWR is signed like the returns above it; sortino and calmar are
+  // magnitudes like the ratios they sit with.
+  put("vMwr", st.mwr?.period == null ? "—" : fmtPct(st.mwr.period, 1), st.mwr?.period ?? null);
+  put("vSortino", st.risk?.sortino == null ? "—" : st.risk.sortino.toFixed(2));
+  put("vCalmar", st.risk?.calmar == null ? "—" : st.risk.calmar.toFixed(2));
+  whyContext = { st, ra, benchName };
 
   // The one income echo, so the appendix never hides a due date.
   const ev = desk?.income?.next_events?.[0];
@@ -587,10 +700,15 @@ function renderFlowLine() {
   const deposits = find("Deposits");
   const costs = flow.links.filter((l) => l.kind === "cost" && l.target !== "Ending NAV")
     .reduce((s2, l) => s2 + l.value, 0);
+  // Flex's own currency-translation total: for a six-currency book, the
+  // broker-audited answer to "how much of the move was FX" belongs in the
+  // headline, not only as a Sankey ribbon.
+  const fxTotal = data?.monthly?.fx_total;
   node.innerHTML = [
     deposits != null ? `<b>${money(deposits)}</b> in` : null,
     `<b>${money(flow.ending)}</b> ending NAV`,
     costs ? `<b>${money(costs)}</b> costs` : null,
+    fxTotal ? `FX translation <b>${money(fxTotal)}</b>` : null,
   ].filter(Boolean).join(" · ");
 }
 

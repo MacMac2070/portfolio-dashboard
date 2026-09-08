@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import logging
 import re
 import sqlite3
 import threading
@@ -75,10 +76,14 @@ EXCHANGE_REGION = {
     "JPX": "Japan", "TAI": "Taiwan",
 }
 
+log = logging.getLogger("directory")
+
 _lock = threading.RLock()
 _local = threading.local()
 _writer: ThreadPoolExecutor | None = None
 _payload_cache: tuple[str, bytes, bytes] | None = None
+_checkpoint_stop: threading.Event | None = None
+_checkpoint_thread: threading.Thread | None = None
 
 
 def _now() -> str:
@@ -109,6 +114,14 @@ def connect(readonly: bool = True) -> sqlite3.Connection:
                               isolation_level=None)
         con.execute("PRAGMA journal_mode=WAL")
         con.execute("PRAGMA synchronous=NORMAL")
+        # The WAL was 6.6 MB against a 2.9 MB database in Sep 2026: long-lived
+        # readers keep it from checkpointing, and nothing truncated it. This
+        # cap alone did not fix it — journal_size_limit is per-connection and
+        # does not persist, so a fresh connection reverts to SQLite's 32 KB
+        # platform default regardless. The actual fix is checkpoint() below,
+        # called after build() and periodically by start_checkpoint_timer();
+        # this stays as a cheap secondary bound on the writer connection.
+        con.execute("PRAGMA journal_size_limit=4194304")
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA busy_timeout=2000")
     return con
@@ -142,12 +155,78 @@ def _writer_pool() -> ThreadPoolExecutor:
         return _writer
 
 
+def _log_write_error(future) -> None:
+    exc = future.exception()
+    if exc is not None:
+        log.warning("directory: background write failed: %s", exc)
+
+
+def _submit(fn, *args) -> Any:
+    """Queue a write and log it if it never lands — fire-and-forget dropped
+    the error along with the Future before; nothing changes about the
+    non-blocking contract, callers still don't wait on the result."""
+    future = _writer_pool().submit(fn, *args)
+    future.add_done_callback(_log_write_error)
+    return future
+
+
 def _write_conn() -> sqlite3.Connection:
     con = getattr(_local, "wcon", None)
     if con is None:
         con = _local.wcon = connect(readonly=False)
         _ensure_schema(con)
     return con
+
+
+def checkpoint() -> None:
+    """Force a full WAL checkpoint and truncate the file back down.
+
+    The default passive checkpoint after each commit doesn't shrink the WAL,
+    only recycles it — and connect()'s readers, cached forever per thread
+    (see _reader/_write_conn), routinely block even that. journal_size_limit
+    alone did not fix this: it is per-connection and does not persist, which
+    is why the WAL was still 6.6 MB against a 2.9 MB database in Sep 2026
+    despite the writer setting it. Called after build() and periodically by
+    the checkpoint timer below.
+    """
+    try:
+        _write_conn().execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    except sqlite3.Error as exc:
+        log.warning("directory: checkpoint failed: %s", exc)
+
+
+def _checkpoint_loop(stop: threading.Event, interval: float) -> None:
+    while not stop.wait(interval):
+        checkpoint()
+
+
+def start_checkpoint_timer(interval: float = 300.0) -> None:
+    """Periodic WAL checkpoint for a long-lived process (serve.py).
+
+    build()'s own nightly checkpoint covers the batch rebuild; this is for
+    the continuous process, whose cached reader connections are what
+    actually starve checkpointing for hours at a stretch.
+    """
+    global _checkpoint_stop, _checkpoint_thread
+    with _lock:
+        if _checkpoint_thread is not None:
+            return
+        _checkpoint_stop = threading.Event()
+        _checkpoint_thread = threading.Thread(
+            target=_checkpoint_loop, args=(_checkpoint_stop, interval),
+            name="directory-checkpoint", daemon=True)
+        _checkpoint_thread.start()
+
+
+def stop_checkpoint_timer() -> None:
+    global _checkpoint_stop, _checkpoint_thread
+    with _lock:
+        stop, thread = _checkpoint_stop, _checkpoint_thread
+        _checkpoint_stop = _checkpoint_thread = None
+    if stop is not None:
+        stop.set()
+    if thread is not None:
+        thread.join(timeout=2.0)
 
 
 def _ensure_schema(con: sqlite3.Connection) -> None:
@@ -359,7 +438,7 @@ def upsert_remote(rows: Iterable[dict]) -> Any:
     batch = list(rows)
     if not batch:
         return None
-    return _writer_pool().submit(_do_upsert, batch)
+    return _submit(_do_upsert, batch)
 
 
 def learn_currency(symbol: str, currency: str, region: str = "") -> Any:
@@ -386,7 +465,7 @@ def note_hit(symbol: str) -> Any:
     filters its own copy and does not need to re-download for a counter."""
     if not symbol:
         return None
-    return _writer_pool().submit(_do_note_hit, symbol)
+    return _submit(_do_note_hit, symbol)
 
 
 # --------------------------------------------------------------------------
@@ -521,6 +600,10 @@ def build(log_to=print) -> dict:
     except Exception:
         con.rollback()
         raise
+
+    # A batched executemany over ~16k rows is exactly the kind of write that
+    # leaves the WAL sitting large afterward if nothing ever checkpoints it.
+    checkpoint()
 
     global _payload_cache
     with _lock:

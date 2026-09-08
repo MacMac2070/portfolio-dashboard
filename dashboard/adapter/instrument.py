@@ -67,6 +67,7 @@ from typing import Any, Callable
 
 import directory
 import markets
+import resilience
 import units
 import universe
 
@@ -94,6 +95,8 @@ TTL: dict[str, float] = {
 
 MAX_ENTRIES = 1024        # 35 symbols x ~12 groups ~= 420; this is a backstop
 FOLLOWER_WAIT = 6.0       # how long a second caller waits on the leader's fetch
+NEG_TTL = 60.0            # an empty answer is remembered this long, not the group's TTL
+BREAKER = "yfinance"      # shared with every other module that asks Yahoo
 REQUEST_BUDGET = 8.0      # never hold an HTTP worker longer than this
 GATE_TIMEOUT = 90.0
 MAX_POINTS = 400          # MAX on INTC is 11,688 raw daily bars
@@ -248,7 +251,11 @@ class InstrumentService:
 
         try:
             value, provider, errors = producer()
-            entry = _Entry(value, time.monotonic(), ttl, provider, errors)
+            # An empty answer is remembered briefly — not for the group's full
+            # TTL, and not for no time at all: the four ETFs Yahoo files no
+            # fundamentals for were re-asked on every single click.
+            empty = value is None or (hasattr(value, "__len__") and len(value) == 0)
+            entry = _Entry(value, time.monotonic(), NEG_TTL if empty else ttl, provider, errors)
             with self._lock:
                 self._cache[key] = entry
                 self._evict()
@@ -275,12 +282,20 @@ class InstrumentService:
         without that the GBp divisor cannot be resolved.
         """
         errors: list = []
+        breaker = resilience.get(BREAKER)
         for tag, kwargs in (("yfinance", {"provider": "yfinance"}), ("default", {})):
+            if tag == "yfinance" and not breaker.allow():
+                errors.append((tag, breaker.reason()))
+                continue
             try:
                 df = call(**kwargs)
             except Exception as exc:
                 errors.append((tag, f"{type(exc).__name__}: {exc}"[:160]))
+                if tag == "yfinance":
+                    breaker.record_failure(exc)
                 continue
+            if tag == "yfinance":
+                breaker.record_success()
             try:
                 df = df.reset_index()
             except Exception:
@@ -381,10 +396,14 @@ class InstrumentService:
         """
         blank = {"eps_ttm": None, "next_earnings": None, "ex_dividend": None,
                  "ratings": None, "after_hours": None, "shares_outstanding": None}
+        breaker = resilience.get(BREAKER)
+        if not breaker.allow():
+            return blank, "none", [("yfinance-direct", breaker.reason())]
         try:
             from yfinance import Ticker
             t = Ticker(symbol)
             info = t.get_info() or {}
+            breaker.record_success()
 
             out = dict(blank)
             out["eps_ttm"] = _finite(info.get("trailingEps"))
@@ -427,6 +446,7 @@ class InstrumentService:
 
             return out, "yfinance-direct", []
         except Exception as exc:
+            breaker.record_failure(exc)
             return blank, "none", [("yfinance-direct", f"{type(exc).__name__}: {exc}"[:160])]
 
     # ---------------- series shaping ----------------

@@ -143,6 +143,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             return self._news()
         if route == "/api/intent":
             return self._intent()
+        if route == "/api/health":
+            return self._health()
         # Prefix rather than equality — this is the one endpoint with the
         # instrument key in the path.
         if route.startswith("/api/instrument/"):
@@ -267,14 +269,64 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             # Same source _benchmark reads: whatever the market feed last
             # pulled, keyed by index symbol. Absent feed -> no benchmark row,
             # which track.build treats as an honest gap, not an error.
-            history = (DashboardHandler.markets.history
-                       if DashboardHandler.markets is not None else None)
+            history = None
+            if DashboardHandler.markets is not None:
+                # Restated in sterling, like the benchmark line, so beta and
+                # alpha compare a GBP portfolio with a GBP index.
+                import benchmark as bench  # noqa: PLC0415
+                feed = DashboardHandler.markets
+                currencies = {c["symbol"]: c.get("currency") for c in markets_catalogue()}
+
+                def history(symbol, _feed=feed, _ccy=currencies):
+                    return bench.fx_adjust(_feed.history(symbol), _feed.fx_series(_ccy.get(symbol) or "GBP"))
             payload = track.build(index_history=history,
                                   benchmark_symbol=self._query("symbol") or None)
         except Exception as exc:
             log.exception("track build failed")
             return self._json({"meta": {"source": "ibkr-flex", "error": str(exc)}})
+        # Freshness belongs in meta like every other endpoint; the body keeps
+        # its copy so nothing reading it today breaks.
+        meta["generated_at"] = payload.get("generated_at")
+        # The return is only time-weighted if the deposits it excludes are the
+        # deposits the broker reports. reconcile.py checks that nightly; a
+        # failed check means every deposit is being counted as performance,
+        # and the page must not print that as a track record.
+        import store as store_mod  # noqa: PLC0415
+        quality = store_mod.read_json(store_mod.QUALITY_PATH)
+        flows = next((c for c in (quality or {}).get("checks", []) if c.get("id") == "flows.deposits"), None)
+        meta["flows_check"] = (flows or {}).get("status")
+        if meta["flows_check"] == "fail":
+            payload["ready"] = False
+            meta["error"] = flows.get("summary")
         return self._json({"meta": meta, **payload})
+
+    def _health(self):
+        """Is the pipeline OK? One verdict for the header chip.
+
+        Built from disk plus whatever this process knows live — the feed's own
+        meta and the provider breakers. Always 200: a failing pipeline is a
+        payload, not an HTTP error, same as every other endpoint here.
+        """
+        import health  # noqa: PLC0415 — adapter/ is on sys.path
+
+        feed_meta = None
+        if DashboardHandler.feed is not None:
+            try:
+                feed_meta = DashboardHandler.feed.snapshot().get("meta")
+            except Exception:
+                log.exception("health: feed snapshot failed")
+        breakers = None
+        try:
+            import resilience  # noqa: PLC0415
+            breakers = resilience.snapshot_all()
+        except Exception:
+            log.exception("health: breaker snapshot failed")
+        try:
+            return self._json(health.build(feed=feed_meta, breakers=breakers))
+        except Exception as exc:
+            log.exception("health build failed")
+            return self._json({"meta": {"error": str(exc), "served_at": None},
+                               "status": "fail", "checks": []})
 
     def _news(self):
         """The Outlet feed, or its disk cache when the service isn't running."""
@@ -355,6 +407,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         payload = {"meta": {"error": None}, "targets": targets,
                    "rules": merged,
                    "rules_source": "config" if rules else "default"}
+        assert "providers" not in json.dumps(payload) and "api_key" not in json.dumps(payload)
         assert "flex_token" not in json.dumps(payload)
         return self._json(payload)
 
@@ -467,10 +520,11 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             return self._json({"meta": {"source": "none", "error": str(exc)},
                                "available": catalogue, "benchmark": None})
 
-        rows = []
+        rows, fx_rows = [], []
         if DashboardHandler.markets is not None:
             try:
                 rows = DashboardHandler.markets.history(entry["symbol"])
+                fx_rows = DashboardHandler.markets.fx_series(entry["currency"])
             except Exception as exc:
                 log.exception("index history unavailable")
                 meta["error"] = str(exc)
@@ -479,7 +533,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
         try:
             payload = bench.build(nav_rows, rows, entry["symbol"],
-                                  entry["name"], entry["currency"])
+                                  entry["name"], entry["currency"], fx_rows=fx_rows)
         except Exception as exc:
             log.exception("benchmark build failed")
             return self._json({"meta": {"source": "openbb-yfinance", "error": str(exc)},
@@ -586,8 +640,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
 
 def main():
-    logging.basicConfig(level=logging.INFO,
-                        format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    import logsetup  # noqa: PLC0415 — adapter/ is on sys.path
+    logsetup.configure("serve")
 
     positional = [a for a in sys.argv[1:] if not a.startswith("-")]
     live = "--no-live" not in sys.argv
@@ -752,6 +806,10 @@ def main():
                 import directory as _dir
                 log.info("directory          %d symbols, version %s",
                          _dir.count(), _dir.version() or "not built")
+                # This process is what holds directory.sqlite3's reader
+                # connections open for hours at a stretch — the periodic
+                # checkpoint is what actually bounds the WAL file's size.
+                _dir.start_checkpoint_timer()
             except Exception as exc:
                 log.warning("directory unavailable: %s", exc)
             httpd.serve_forever()
@@ -774,6 +832,7 @@ def main():
             news.stop()
         try:
             import directory as _dir
+            _dir.stop_checkpoint_timer()
             _dir.close()
         except Exception:
             pass

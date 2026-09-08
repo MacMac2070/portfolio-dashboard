@@ -174,23 +174,44 @@ def parse_nav_history(root: ET.Element) -> list[dict]:
     Reads EquitySummaryByReportDateInBase, the section an Activity Statement
     emits for "Net Asset Value (NAV) in Base".
     """
-    rows: dict[str, float] = {}
+    rows: dict[str, dict] = {}
     for node in _iter(root, "EquitySummaryByReportDateInBase"):
         date = node.get("reportDate")
         total = node.get("total")
         if not date or total is None:
             continue
         try:
-            rows[_iso(date)] = float(total)
+            row = {"date": _iso(date), "nav_gbp": float(total), "source": "flex"}
         except ValueError:
             continue
+        # The split behind the total, when the query carries it: what the
+        # positions are worth, what is cash, what is accrued and not yet paid.
+        # reconcile.positions_vs_nav checks the Open Positions section against
+        # `stock`, which is the only way a position the snapshot lost shows up.
+        cash = _num_or_none(node, "cash")
+        stock = _num_or_none(node, "stock")
+        if cash is not None:
+            row["cash_gbp"] = cash
+        if stock is not None:
+            row["stock_gbp"] = stock
+        accruals = [_num_or_none(node, k) for k in ("dividendAccruals", "interestAccruals")]
+        if any(a is not None for a in accruals):
+            row["accruals_gbp"] = sum(a for a in accruals if a is not None)
+        rows[row["date"]] = row
 
-    return [{"date": d, "nav_gbp": rows[d], "source": "flex"} for d in sorted(rows)]
+    return [rows[d] for d in sorted(rows)]
 
 
 def parse_trades(root: ET.Element) -> list[dict]:
-    """Executions, oldest first."""
+    """Executions, oldest first.
+
+    `asset` and `fx_to_base` are read when the query carries them and are
+    None otherwise; readers treat None as "not reported", never as zero. The
+    ledger holds FX conversions (IDEALFX) beside stock fills, and `asset` is
+    what lets a replay tell them apart without guessing from the venue.
+    """
     out = []
+    levels = []
     for node in _iter(root, "Trade"):
         date = node.get("tradeDate") or node.get("dateTime", "")[:8]
         if not date:
@@ -218,11 +239,134 @@ def parse_trades(root: ET.Element) -> list[dict]:
             "quantity": abs(quantity),
             "price": price,
             "commission": commission,
+            "asset": node.get("assetCategory") or None,
+            "fx_to_base": _num_or_none(node, "fxRateToBase"),
+            "realized_pnl": _num_or_none(node, "fifoPnlRealized"),
+            "open_close": node.get("openCloseIndicator") or None,
+            # Stamp duty and the like; with the commission, what the broker
+            # folds into its own cost basis and what the lots must too.
+            "taxes": _num_or_none(node, "taxes"),
+            "commission_currency": node.get("ibCommissionCurrency") or None,
             "source": "flex",
         })
+        levels.append((node.get("levelOfDetail") or "").upper())
+
+    # A query with both "Executions" and "Orders" ticked reports every fill
+    # twice, once per level of detail. Keep the executions; an order row is a
+    # rollup of them and would double every quantity in a replay.
+    if "EXECUTION" in levels and "ORDER" in levels:
+        out = [row for row, level in zip(out, levels) if level != "ORDER"]
 
     out.sort(key=lambda row: (row["time"], row["exec_id"]))
     return out
+
+
+# IBKR's CorporateAction.type codes, bucketed to what a replay must do with
+# them. Unknown codes are kept as "other" and the reconciliation names them.
+ACTION_KINDS = {
+    "FS": "split", "RS": "split", "FI": "split",
+    "TC": "ticker_change",
+    "SO": "spin_off", "SD": "stock_dividend", "SR": "rights",
+    "DW": "delisting", "TO": "tender", "BM": "merger", "CA": "merger", "CS": "merger",
+    "CD": "cash_dividend", "DI": "dividend_reinvest",
+}
+
+
+def parse_corporate_actions(root: ET.Element) -> list[dict]:
+    """Splits, ticker changes, spin-offs, mergers and delistings, oldest first.
+
+    Each row is a signed share quantity on a date — exactly the shape a fill
+    has — so the position replay and the lot engine take them without ratio
+    arithmetic: a 4-for-1 split on 100 shares arrives as +300. `proceeds` is
+    the cash side, when there is one, in the row's own currency.
+    """
+    out: dict[str, dict] = {}
+    for node in _iter(root, "CorporateAction"):
+        level = (node.get("levelOfDetail") or "DETAIL").upper()
+        if level not in ("DETAIL", ""):
+            continue
+        stamp = node.get("reportDate") or node.get("dateTime", "")[:8]
+        try:
+            con_id = int(node.get("conid") or 0)
+        except ValueError:
+            continue
+        if not stamp or not con_id:
+            continue
+        code = (node.get("type") or "").upper()
+        action_id = node.get("actionID") or node.get("transactionID") or ""
+        row = {
+            "action_id": action_id,
+            "con_id": con_id,
+            "symbol": node.get("symbol") or "",
+            "date": _iso(stamp)[:10],
+            "code": code,
+            "kind": ACTION_KINDS.get(code, "other"),
+            "quantity": _num_or_none(node, "quantity") or 0.0,
+            "proceeds": _num_or_none(node, "proceeds"),
+            "value": _num_or_none(node, "value"),
+            "currency": node.get("currency") or "",
+            "fx_to_base": _num_or_none(node, "fxRateToBase"),
+            "description": node.get("actionDescription") or node.get("description") or "",
+            "source": "flex",
+        }
+        out[f"{action_id or stamp}|{con_id}|{code}"] = row
+    return sorted(out.values(), key=lambda r: (r["date"], r["con_id"], r["action_id"]))
+
+
+def parse_transfers(root: ET.Element) -> list[dict]:
+    """Positions moved in or out of the account, as signed quantities."""
+    out: dict[str, dict] = {}
+    for node in _iter(root, "Transfer"):
+        stamp = node.get("reportDate") or node.get("date") or node.get("dateTime", "")[:8]
+        try:
+            con_id = int(node.get("conid") or 0)
+        except ValueError:
+            continue
+        qty = _num_or_none(node, "quantity")
+        if not stamp or not con_id or not qty:
+            continue
+        direction = (node.get("direction") or "").upper()
+        signed = -abs(qty) if direction == "OUT" else abs(qty)
+        tx_id = node.get("transactionID") or ""
+        row = {
+            "action_id": tx_id,
+            "con_id": con_id,
+            "symbol": node.get("symbol") or "",
+            "date": _iso(stamp)[:10],
+            "code": (node.get("type") or "TRANSFER").upper(),
+            "kind": "transfer",
+            "quantity": signed,
+            "proceeds": None,
+            "value": _num_or_none(node, "positionAmount"),
+            "currency": node.get("currency") or "",
+            "fx_to_base": _num_or_none(node, "fxRateToBase"),
+            "description": f"{direction.lower() or 'transfer'} {node.get('account') or ''}".strip(),
+            "source": "flex",
+        }
+        out[f"{tx_id or stamp}|{con_id}|transfer"] = row
+    return sorted(out.values(), key=lambda r: (r["date"], r["con_id"], r["action_id"]))
+
+
+def parse_conversion_rates(root: ET.Element) -> list[dict]:
+    """Daily FX into base from the ConversionRates section, oldest first.
+
+    One row per (date, currency): the rate IBKR used to translate that
+    currency into pounds on that day. It is what lots.py needs to price a
+    trade whose own row predates the Trades query carrying fxRateToBase, and
+    what the benchmark uses to restate an index in sterling.
+    """
+    out: dict[tuple[str, str], dict] = {}
+    for node in _iter(root, "ConversionRate"):
+        day = node.get("reportDate")
+        ccy = (node.get("fromCurrency") or "").upper()
+        base = (node.get("toCurrency") or "").upper()
+        rate = _num_or_none(node, "rate")
+        if not day or not ccy or rate is None or rate <= 0:
+            continue
+        if base and base != "GBP":
+            continue
+        out[(_iso(day), ccy)] = {"date": _iso(day), "currency": ccy, "rate": rate, "source": "flex"}
+    return [out[k] for k in sorted(out)]
 
 
 def _num_or_none(node, name: str) -> float | None:
@@ -417,8 +561,26 @@ def parse_change_in_nav_periods(root: ET.Element) -> list[dict]:
 
 
 # CashTransaction.type values, normalised to the buckets the income and cost
-# charts draw. IBKR's exact strings vary a little by report vintage, so the
-# match is done on a lowercased substring rather than on equality.
+# charts draw. The exact strings IBKR uses come first; the substring table
+# below is the fallback for a vintage that words one differently. The order
+# matters in the fallback — "Bond Interest Paid" contains "bond interest" —
+# which is exactly why the exact table exists.
+CASH_TYPES = {
+    "Dividends": "dividends",
+    "Payment In Lieu Of Dividends": "dividends",
+    "Withholding Tax": "withholding_tax",
+    "Broker Interest Paid": "interest_paid",
+    "Broker Interest Received": "interest_received",
+    "Bond Interest Paid": "interest_paid",
+    "Bond Interest Received": "interest_received",
+    "Commission Adjustments": "commissions",
+    "Sales Tax": "sales_tax",
+    "Other Fees": "other_fees",
+    "Advisor Fees": "other_fees",
+    "Broker Fees": "other_fees",
+    "Deposits/Withdrawals": "deposits_withdrawals",
+    "Deposits & Withdrawals": "deposits_withdrawals",
+}
 CASH_BUCKETS = (
     ("payment in lieu", "dividends"),
     ("dividend", "dividends"),
@@ -437,7 +599,12 @@ CASH_BUCKETS = (
 
 
 def _bucket(kind: str) -> str:
+    exact = CASH_TYPES.get((kind or "").strip())
+    if exact:
+        return exact
     low = (kind or "").lower()
+    if "interest" in low and "paid" in low:
+        return "interest_paid"
     for needle, name in CASH_BUCKETS:
         if needle in low:
             return name

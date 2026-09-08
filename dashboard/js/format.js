@@ -30,6 +30,22 @@ export function money(value, { decimals = 0 } = {}) {
   return fixMinus((decimals === 2 ? gbp2 : gbp0).format(value));
 }
 
+/** £52k / £1.2M — axis ticks. Unlike moneyCompact, thousands compact too:
+ *  four near-identical "£52,000" strings down a y-axis read at a glance as
+ *  "£52k", and the freed width goes to the plot. */
+export function moneyAxis(value) {
+  if (value == null || !Number.isFinite(value)) return "—";
+  const abs = Math.abs(value);
+  const sign = value < 0 ? MINUS : "";
+  if (abs >= 1e9) return `${sign}£${(abs / 1e9).toFixed(1)}B`;
+  if (abs >= 1e6) return `${sign}£${(abs / 1e6).toFixed(1)}M`;
+  if (abs >= 1e3) {
+    const k = abs / 1e3;
+    return `${sign}£${(k >= 100 ? k.toFixed(0) : k.toFixed(1).replace(/\.0$/, ""))}k`;
+  }
+  return money(value);
+}
+
 /** £1.2M / £3.4B once figures outrun the tile. */
 export function moneyCompact(value) {
   if (value == null || !Number.isFinite(value)) return "—";

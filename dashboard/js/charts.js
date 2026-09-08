@@ -67,6 +67,26 @@ function extent(values) {
   return [lo, hi];
 }
 
+// .plot__axis is 9.5px Geist Mono, a monospace with a ~0.6em advance: the
+// per-character stand-in when the SVG is not rendered and cannot be measured.
+const AXIS_CH = 9.5 * 0.6;
+
+/**
+ * Left gutter wide enough for the widest axis label plus `gap`, measured from
+ * the rendered text so a £0–£150 axis does not inherit the gutter a £1,000,000
+ * one needs. The labels must already be in the document.
+ */
+function axisGutter(labels, gap, fallback) {
+  let widest = 0;
+  for (const label of labels) {
+    let len = 0;
+    try { len = label.getComputedTextLength(); } catch { len = 0; }
+    if (!(len > 0)) len = (label.textContent || "").length * AXIS_CH;
+    widest = Math.max(widest, len);
+  }
+  return widest > 0 ? Math.ceil(widest) + gap : fallback;
+}
+
 /* ---------------- sparkline ---------------- */
 
 /**
@@ -223,6 +243,7 @@ export function donutActive(svg, activeIndex, centre = {}) {
  */
 export function equityCurve(svg, points, {
   tooltip, formatValue, formatDate, benchmark = null, benchmarkName = "Benchmark",
+  events = null,
 } = {}) {
   svg.replaceChildren();
   if (!points || points.length < 2) return;
@@ -348,10 +369,60 @@ export function equityCurve(svg, points, {
     try { line.style.setProperty("--len", line.getTotalLength()); } catch { /* no layout yet */ }
   });
 
+  // Trades and dividends as marks on the curve, so "did I add before or after
+  // it ran" reads off the chart instead of a cross-referenced log. Shape
+  // carries the kind (▲ buy below, ▼ sell above, ● dividend), never colour
+  // alone; a day with several events collapses to a counted badge, and the
+  // crosshair tooltip itemises whatever the hovered day holds.
+  const eventsAt = new Map();
+  if (events?.length) {
+    const dateIndex = new Map(points.map((p, i) => [p.date, i]));
+    for (const ev of events) {
+      const i = dateIndex.get(ev.date);
+      if (i == null) continue;
+      if (!eventsAt.has(i)) eventsAt.set(i, []);
+      eventsAt.get(i).push(ev);
+    }
+    const marks = el("g", { class: "plot__events" });
+    for (const [i, group] of eventsAt) {
+      const cx = x(i), cy = y(points[i].value);
+      if (group.length > 1) {
+        marks.append(el("circle", { class: "plot__evbadge", cx, cy: cy + 13, r: 6.5 }));
+        const count = el("text", {
+          class: "plot__evcount", x: cx, y: cy + 16, "text-anchor": "middle",
+        });
+        count.textContent = group.length;
+        marks.append(count);
+        continue;
+      }
+      const kind = group[0].kind;
+      if (kind === "sell") {
+        marks.append(el("path", {
+          class: "plot__ev plot__ev--sell",
+          d: `M${cx - 4},${cy - 14} h8 l-4,6.5 Z`,
+        }));
+      } else if (kind === "div") {
+        marks.append(el("circle", {
+          class: "plot__ev plot__ev--div", cx, cy: cy + 11, r: 3,
+        }));
+      } else {
+        marks.append(el("path", {
+          class: "plot__ev plot__ev--buy",
+          d: `M${cx - 4},${cy + 14} h8 l-4,-6.5 Z`,
+        }));
+      }
+    }
+    svg.append(marks);
+  }
+
   // The shape as a sentence, so the chart is not silent to a screen reader.
+  // A <desc> child, not <title>: the browser renders <title> as its own native
+  // bubble on top of the styled tooltip (the Sankey ribbons and the drawdown
+  // chart had the same bug). <desc> is exposed as the accessible description
+  // and never drawn; the caller's aria-label on the svg stays the name.
   const firstV = values[0], lastV = values[values.length - 1];
   const fmtPlain = (v) => (formatValue ? formatValue(v, true) : String(v));
-  const summary = el("title");
+  const summary = el("desc");
   summary.textContent =
     `Portfolio value over ${points.length} days, ${lastV >= firstV ? "up" : "down"} from `
     + `${fmtPlain(firstV)} to ${fmtPlain(lastV)}.`
@@ -398,12 +469,14 @@ export function equityCurve(svg, points, {
     }
 
     const fmt = (v) => (formatValue ? formatValue(v, true) : String(v));
+    const dayEvents = eventsAt.get(i) || [];
     tooltip.dataset.open = "true";
     tooltip.innerHTML =
       `<div class="tip__date">${formatDate ? formatDate(point.date) : point.date}</div>` +
       `<div class="tip__val">${fmt(point.value)}</div>` +
       (Number.isFinite(bv)
-        ? `<div class="tip__bench">${benchmarkName} ${fmt(bv)}</div>` : "");
+        ? `<div class="tip__bench">${benchmarkName} ${fmt(bv)}</div>` : "") +
+      dayEvents.map((ev) => `<div class="tip__event">${ev.label}</div>`).join("");
     tooltip.style.left = `${Math.min(event.clientX + 14, window.innerWidth - tooltip.offsetWidth - 8)}px`;
     tooltip.style.top = `${event.clientY - 8}px`;
   };
@@ -492,7 +565,11 @@ export function priceChart(svg, {
   const xLabels = el("g");
   const xTicks = w < 460 ? 2 : 4;
   const stride = Math.max(1, Math.floor((series.length - 1) / xTicks));
+  const lastX = x(series.length - 1);
   for (let i = 0; i < series.length; i += stride) {
+    // Interior ticks centre on their point; anything close enough to collide
+    // with the final label steps aside for it.
+    if (lastX - x(i) < 46) continue;
     const label = el("text", {
       class: "plot__axis", x: x(i), y: h - 7,
       "text-anchor": i === 0 ? "start" : "middle",
@@ -500,6 +577,15 @@ export function priceChart(svg, {
     label.textContent = formatLabel ? formatLabel(labels?.[i], i) : (labels?.[i] ?? "");
     xLabels.append(label);
   }
+  // The newest session always gets a label, end-anchored so it never clips
+  // mid-glyph at the plot edge — it used to fall on a stride and centre there.
+  const lastLabel = el("text", {
+    class: "plot__axis", x: lastX, y: h - 7, "text-anchor": "end",
+  });
+  lastLabel.textContent = formatLabel
+    ? formatLabel(labels?.[series.length - 1], series.length - 1)
+    : (labels?.[series.length - 1] ?? "");
+  xLabels.append(lastLabel);
   svg.append(xLabels);
 
   const path = series
@@ -663,7 +749,7 @@ export function groupedBars(svg, {
   const box = svg.getBoundingClientRect();
   const w = Math.max(320, Math.round(box.width) || 780);
   const h = Math.max(72, Math.round(box.height) || 260);
-  const padL = 62, padR = 14, padT = 14, padB = 32;
+  const padR = 14, padT = 14, padB = 32;
 
   svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
   svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
@@ -680,25 +766,29 @@ export function groupedBars(svg, {
   if (lo < 0) lo -= pad;
   if (hi > 0) hi += pad;
 
-  const plotW = w - padL - padR;
   const y = (v) => padT + (1 - (v - lo) / (hi - lo)) * (h - padT - padB);
   const zeroY = y(0);
 
+  // Labels first: the gutter is sized to the widest of them, so everything
+  // that hangs off padL waits until they are in the document.
   const grid = el("g");
+  const ticks = [];
   for (const value of niceTicks(lo, hi, h < 200 ? 3 : 5)) {
     const yy = y(value);
     if (yy < padT - 1 || yy > h - padB + 1) continue;
-    grid.append(el("line", {
-      class: "plot__grid", x1: padL, x2: w - padR, y1: yy, y2: yy,
-
-    }));
-    const label = el("text", {
-      class: "plot__axis", x: padL - 8, y: yy + 3, "text-anchor": "end",
-    });
+    const label = el("text", { class: "plot__axis", y: yy + 3, "text-anchor": "end" });
     label.textContent = formatValue ? formatValue(value) : Math.round(value);
     grid.append(label);
+    ticks.push({ yy, label });
   }
   svg.append(grid);
+
+  const padL = axisGutter(ticks.map((t) => t.label), 8, 62);
+  const plotW = w - padL - padR;
+  for (const { yy, label } of ticks) {
+    label.setAttribute("x", padL - 8);
+    grid.append(el("line", { class: "plot__grid", x1: padL, x2: w - padR, y1: yy, y2: yy }));
+  }
 
   // Drawn after the gridlines and distinctly: it is the reference every bar is
   // read against, not another tick.
@@ -1155,23 +1245,31 @@ export function underwater(svg, curve, { tooltip, formatDate } = {}) {
   svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
   svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
 
-  const padL = 40, padR = 8, padT = 6, padB = 22;
+  const padR = 8, padT = 6, padB = 22;
   const worst = Math.min(...curve.map((p) => p.dd));
   const floor = Math.min(worst * 1.15, -0.02);   // headroom below the trough
-
-  const x = (i) => padL + (i / (curve.length - 1)) * (w - padL - padR);
   const y = (v) => padT + (v / floor) * (h - padT - padB);
 
   const grid = el("g");
+  const ticks = [];
   for (const value of niceTicks(floor, 0, 3)) {
     if (value > 0 || value < floor) continue;
     const yy = y(value);
-    grid.append(el("line", { class: "plot__grid", x1: padL, x2: w - padR, y1: yy, y2: yy }));
-    const label = el("text", { class: "plot__axis", x: padL - 6, y: yy + 3, "text-anchor": "end" });
+    const label = el("text", { class: "plot__axis", y: yy + 3, "text-anchor": "end" });
     label.textContent = `${Math.round(value * 100)}%`;
     grid.append(label);
+    ticks.push({ yy, label });
   }
   svg.append(grid);
+
+  // Floor of 20: the first month label is centred on padL and needs ~17px of
+  // its own to the left of it.
+  const padL = Math.max(20, axisGutter(ticks.map((t) => t.label), 6, 40));
+  const x = (i) => padL + (i / (curve.length - 1)) * (w - padL - padR);
+  for (const { yy, label } of ticks) {
+    label.setAttribute("x", padL - 6);
+    grid.append(el("line", { class: "plot__grid", x1: padL, x2: w - padR, y1: yy, y2: yy }));
+  }
 
   const defs = el("defs");
   const fadeId = `ddfade-${++gradientSeq}`;

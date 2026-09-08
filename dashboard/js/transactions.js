@@ -7,18 +7,29 @@
  *
  * The store is merge-by-key on exec_id, so the file is append-only and a
  * re-run of the backfill never duplicates a fill.
+ *
+ * Reading it is a filtered act, though: the FX sweeps IBKR books around real
+ * orders outnumber the trades roughly two to one and drowned them, so sweeps
+ * are hidden by default behind a counted toggle. The side pills and the text
+ * filter narrow the view the same way — the record itself is never touched.
  */
-import { price, qty, day, esc, count } from "./format.js";
+import { price, qty, day, esc, count, initials } from "./format.js";
 
 const TX_URL = "data/transactions.jsonl";
+const WATCHLIST_URL = "/api/watchlist";
 
 const $ = (id) => document.getElementById(id);
 
 let rows = [];
 let loaded = false;
+/** symbol -> {mono,tint,ink,logo}, holdings' plate data by ticker key. */
+let tiles = {};
 /** Which column is sorted, and which way. Date-descending by default: the
  *  question a trade log answers first is "what did I do most recently". */
 let sort = { key: "time", dir: -1 };
+let showSweeps = false;
+let side = "all";        // all | buy | sell
+let query = "";
 
 /**
  * BOT/SLD are IBKR's own codes and mean nothing to a reader, so they are
@@ -60,6 +71,11 @@ const cash = (v) => new Intl.NumberFormat("en-GB", {
  *  restate a year-old trade at a rate that did not apply to it. */
 const considerationOf = (r) => (r.quantity || 0) * (r.price || 0);
 
+/** Currency conversions the broker does around real orders — bookkeeping, not
+ *  trading. Hidden by default behind the counted toggle; shown, they stay
+ *  muted so executions still carry the page. */
+const isSweep = (r) => (r.exchange || "") === "IDEALFX";
+
 async function load() {
   try {
     const res = await fetch(`${TX_URL}?t=${Date.now()}`);
@@ -75,7 +91,44 @@ async function load() {
   }
 }
 
-function sorted() {
+/** The same plate data the Holdings table renders from, keyed by ticker. On
+ *  any failure the plates simply fall back to monograms. */
+async function loadTiles() {
+  try {
+    const res = await fetch(WATCHLIST_URL);
+    if (!res.ok) return;
+    const payload = await res.json();
+    for (const t of Object.values(payload?.universe?.tickers || {})) {
+      tiles[t.key] = {
+        mono: t.mono || initials(t.key),
+        tint: t.tint, ink: t.ink, logo: t.logo,
+      };
+    }
+  } catch { /* monogram fallback */ }
+}
+
+/** The issuer's mark at row scale — the Holdings plate idiom, one size down. */
+function plate(symbol) {
+  const t = tiles[symbol] || { mono: initials(symbol) };
+  return `
+    <span class="ptile ptile--sm"${t.ink ? ` style="color:${esc(t.ink)}"` : ""}>
+      <span class="ptile__mono">${esc(t.mono)}</span>
+      ${t.logo ? `<img class="ptile__img" src="${esc(t.logo)}" alt=""
+           onerror="this.remove()">` : ""}
+    </span>`;
+}
+
+function filtered() {
+  const q = query.trim().toUpperCase();
+  return rows.filter((r) => {
+    if (!showSweeps && isSweep(r)) return false;
+    if (side !== "all" && sideOf(r.side).label.toLowerCase() !== side) return false;
+    if (q && !`${r.symbol} ${r.exchange || ""}`.toUpperCase().includes(q)) return false;
+    return true;
+  });
+}
+
+function sorted(list) {
   const key = sort.key;
   const value = (r) => {
     if (key === "value") return considerationOf(r);
@@ -83,7 +136,7 @@ function sorted() {
     if (key === "side") return sideOf(r.side).label;
     return r[key];
   };
-  return [...rows].sort((a, b) => {
+  return [...list].sort((a, b) => {
     const av = value(a), bv = value(b);
     if (typeof av === "number" && typeof bv === "number") return (av - bv) * sort.dir;
     return String(av).localeCompare(String(bv)) * sort.dir;
@@ -103,20 +156,15 @@ function head() {
   }).join("");
 }
 
-/** Currency conversions the broker does around real orders — bookkeeping, not
- *  trading. They outnumber the actual trades and drowned them; the rows stay
- *  (the log is the log) but muted, so executions carry the page. */
-const isSweep = (r) => (r.exchange || "") === "IDEALFX";
-
 function row(r) {
   const side = sideOf(r.side);
   const fee = Number.isFinite(r.commission) ? Math.abs(r.commission) : null;
   return `
     <div class="txrow${isSweep(r) ? " txrow--sweep" : ""}" role="row">
       <span class="txrow__date num">${esc(day(r.time))}</span>
-      <span class="txrow__sym">
+      <span class="txrow__sym">${plate(r.symbol)}<span class="txrow__symtext">
         ${esc(r.symbol)}
-        <span class="txrow__venue">${esc(r.exchange || "")}</span>
+        <span class="txrow__venue">${esc(r.exchange || "")}</span></span>
       </span>
       <span class="txrow__side"><span class="txpill ${side.cls}">${side.label}</span></span>
       <span class="txrow__n num">${qty(r.quantity)}</span>
@@ -127,6 +175,31 @@ function row(r) {
     </div>`;
 }
 
+/** Per-currency totals over the trades on screen. Sweeps never count — moving
+ *  cash between currencies is not buying anything — and staying in the trade
+ *  currency follows the consideration column's own rule. */
+function foot(list) {
+  const per = new Map();
+  for (const r of list) {
+    if (isSweep(r)) continue;
+    const ccy = r.currency || "—";
+    const t = per.get(ccy) || { bought: 0, sold: 0, fees: 0 };
+    if (sideOf(r.side).label === "Sell") t.sold += considerationOf(r);
+    else t.bought += considerationOf(r);
+    if (Number.isFinite(r.commission)) t.fees += Math.abs(r.commission);
+    per.set(ccy, t);
+  }
+  if (!per.size) return "";
+  const groups = [...per.entries()]
+    .sort((a, b) => (b[1].bought + b[1].sold) - (a[1].bought + a[1].sold))
+    .map(([ccy, t]) => `
+      <span class="txfoot__group"><b>${esc(ccy)}</b>
+        bought <span class="num">${cash(t.bought)}</span>
+        · sold <span class="num">${cash(t.sold)}</span>
+        · fees <span class="num">${cash(t.fees)}</span></span>`);
+  return `<span class="txfoot__note">shown trades</span>${groups.join("")}`;
+}
+
 function render() {
   const host = $("txBody");
   const headHost = $("txHead");
@@ -135,6 +208,9 @@ function render() {
   if (!rows.length) {
     headHost.innerHTML = "";
     $("txMeta").textContent = "";
+    $("txControls")?.setAttribute("hidden", "");
+    const footHost = $("txFoot");
+    if (footHost) footHost.innerHTML = "";
     host.innerHTML = `
       <div class="collecting">
         <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.4"
@@ -150,18 +226,27 @@ then     /opt/anaconda3/bin/python3 adapter/backfill.py</span></p>
     return;
   }
 
-  const list = sorted();
+  $("txControls")?.removeAttribute("hidden");
+  const list = sorted(filtered());
   headHost.innerHTML = head();
-  host.innerHTML = list.map(row).join("");
+  host.innerHTML = list.length ? list.map(row).join("") : `
+    <div class="txnone">No trades match — clear the side or symbol filter.</div>`;
+  const footHost = $("txFoot");
+  if (footHost) footHost.innerHTML = foot(list);
 
-  // The span is the record's own, not the selected range: this is a log, and
+  // The span is the record's own, not the selected filter: this is a log, and
   // saying how far back it reaches is what stops a short file reading as a
-  // complete history.
+  // complete history. A narrowed view says so with a shown-count up front.
   const dates = rows.map((r) => r.time).sort();
   const sweeps = rows.filter(isSweep).length;
+  const trades = rows.length - sweeps;
+  const narrowed = side !== "all" || query.trim() !== "" || showSweeps;
   $("txMeta").textContent =
-    `${count(rows.length - sweeps)} trades · ${count(sweeps)} FX sweeps · `
+    `${narrowed ? `${count(list.length)} shown · ` : ""}`
+    + `${count(trades)} trades · ${count(sweeps)} FX sweeps · `
     + `${day(dates[0])} – ${day(dates.at(-1))}`;
+  const sweepBtn = $("txSweeps");
+  if (sweepBtn) sweepBtn.textContent = `FX sweeps · ${count(sweeps)}`;
 }
 
 export function init() {
@@ -178,12 +263,31 @@ export function init() {
     sort = sort.key === key ? { key, dir: -sort.dir } : { key, dir: -1 };
     render();
   });
+
+  for (const button of document.querySelectorAll("#txControls [data-side]")) {
+    button.addEventListener("click", () => {
+      side = button.dataset.side;
+      for (const other of document.querySelectorAll("#txControls [data-side]")) {
+        other.setAttribute("aria-pressed", String(other === button));
+      }
+      render();
+    });
+  }
+  $("txSweeps")?.addEventListener("click", () => {
+    showSweeps = !showSweeps;
+    $("txSweeps").setAttribute("aria-pressed", String(showSweeps));
+    render();
+  });
+  $("txFilter")?.addEventListener("input", () => {
+    query = $("txFilter").value;
+    render();
+  });
 }
 
 export async function route() {
   if (!loaded) {
     loaded = true;
-    rows = await load();
+    [rows] = await Promise.all([load(), loadTiles()]);
   }
   render();
 }

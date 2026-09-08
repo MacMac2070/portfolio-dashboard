@@ -8,6 +8,11 @@ dashboard/config.local.json
 dashboard/data/directory.sqlite3
 dashboard/data/directory.sqlite3-shm
 dashboard/data/directory.sqlite3-wal
+# The daily-close cache adapter/quotes.py keeps: rebuilt from the providers,
+# never the only copy of anything.
+dashboard/data/quotes.sqlite3
+dashboard/data/quotes.sqlite3-shm
+dashboard/data/quotes.sqlite3-wal
 
 __pycache__/
 *.py[cod]

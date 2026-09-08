@@ -31,18 +31,6 @@
           <rect x="2.6" y="2.6" width="6" height="6" rx="1.6"/><rect x="11.4" y="2.6" width="6" height="6" rx="1.6"/>
           <rect x="2.6" y="11.4" width="6" height="6" rx="1.6"/><rect x="11.4" y="11.4" width="6" height="6" rx="1.6"/>
         </svg>Overview</a>
-      <a class="nav-item" href="#holdings" data-nav="holdings">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6">
-          <rect x="2.4" y="5.6" width="15.2" height="11" rx="2"/><path d="M7 5.6V4.2a1.6 1.6 0 0 1 1.6-1.6h2.8A1.6 1.6 0 0 1 13 4.2v1.4M2.4 10.4h15.2"/>
-        </svg>Watchlist</a>
-      <a class="nav-item" href="#transactions" data-nav="transactions">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6">
-          <path d="M3 7h11l-2.6-2.8M17 13H6l2.6 2.8"/>
-        </svg>Transactions</a>
-      <a class="nav-item" href="#market" data-nav="market">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">
-          <path d="m10 2.9 2.2 4.5 5 .7-3.6 3.5.85 4.95L10 14.2l-4.45 2.35.85-4.95L2.8 8.1l5-.7Z"/>
-        </svg>Market watch</a>
     </nav>
 
     <nav class="nav-group" aria-label="Analysis">
@@ -100,8 +88,25 @@
           <span id="feedLabel">Connecting…</span>
         </span>
         <span class="venue-chip">IBKR · GBP</span>
+        <!-- One verdict on the pipeline, from /api/health: did the nightly job
+             run, is the NAV series current, is a provider paused. The feed
+             pill beside it speaks for the live socket; this speaks for the
+             files. The title lists every check. -->
+        <span class="health-chip" id="healthChip" data-state="pending" title="Checking…">
+          <i class="health-chip__dot" aria-hidden="true"></i>
+          <span id="healthLabel">Data</span>
+        </span>
       </div>
     </header>
+
+    <!-- Only for what the feed pill does not already say: a missed nightly
+         run, a stale NAV series, an archive that shrank. Hidden otherwise. -->
+    <div class="data-banner" id="dataBanner" role="status" data-state="warn" hidden>
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+        <circle cx="8" cy="8" r="6.4"/><path d="M8 4.6v4M8 11.2v.3"/>
+      </svg>
+      <span id="dataCopy"></span>
+    </div>
 
     <!-- Scrolling ticker.
          aria-hidden because the strip renders every holding twice by
@@ -218,6 +223,9 @@
                 <span class="u-sr">Compare against</span>
                 <select class="benchbar__select" id="benchSelect"></select>
               </label>
+              <!-- Buys, sells and dividends drawn on the curve; remembered. -->
+              <button class="range benchbar__events" type="button" id="chartEvents"
+                      aria-pressed="true">Events</button>
             </div>
 
             <div class="chart-card__foot" id="chartFoot">
@@ -372,7 +380,7 @@
 
             </div>
           </div>
-          <span class="positions__foot">Each mark is the trademark of its issuer, served as SVG from a public symbol-logo service and shown for identification only; a ticker monogram stands in where no mark is published. Range shows the 30-day low and high in the instrument's own currency.</span>
+          <span class="positions__foot">Each mark is the trademark of its issuer, drawn as SVG and shown for identification only; a ticker monogram stands in where no mark is published. Range shows the 30-day low and high in the instrument's own currency.</span>
         </section>
       </section>
 
@@ -383,10 +391,24 @@
             <h2 class="card-title" id="txTitle">Transactions</h2>
             <span class="perf-card__period" id="txMeta"></span>
           </div>
+          <!-- Reading controls: the record is append-only, these narrow the
+               view, never the file. Sweeps are hidden by default. -->
+          <div class="txcontrols" id="txControls" hidden>
+            <div class="ranges" role="group" aria-label="Filter by side">
+              <button class="range" type="button" data-side="all" aria-pressed="true">All</button>
+              <button class="range" type="button" data-side="buy" aria-pressed="false">Buys</button>
+              <button class="range" type="button" data-side="sell" aria-pressed="false">Sells</button>
+            </div>
+            <input class="txfilter" id="txFilter" type="search" placeholder="Filter symbol…"
+                   aria-label="Filter transactions by symbol">
+            <button class="range txsweeps" type="button" id="txSweeps"
+                    aria-pressed="false">FX sweeps</button>
+          </div>
           <!-- Header and body are separate hosts so a sort rewrites one of
                them, not both. -->
           <div class="txhead" id="txHead" role="row"></div>
           <div class="txbody" id="txBody" role="table" aria-labelledby="txTitle"></div>
+          <div class="txfoot" id="txFoot"></div>
         </section>
       </section>
 
@@ -418,12 +440,33 @@
               <div class="pverdict__row"><span>MTD</span><b class="num" id="vMtd">—</b></div>
               <div class="pverdict__row"><span>YTD</span><b class="num" id="vYtd">—</b></div>
               <div class="pverdict__row"><span id="vBenchLabel">vs benchmark</span><b class="num" id="vBench">—</b></div>
+              <!-- TWR's complement: what the money actually in the account
+                   earned, deposits timed and weighted. Every metric row's ?
+                   opens a popover naming the formula AND the actual inputs
+                   behind this specific number — see whyFor() in performance.js. -->
+              <div class="pverdict__row"><span>MWR · money-weighted
+                <button class="mwhy" type="button" data-why="mwr" aria-label="How MWR is computed">?</button></span>
+                <b class="num" id="vMwr">—</b></div>
             </div>
             <div class="pverdict__ratios" id="vRatios">
-              <div class="pverdict__row"><span>alpha (ann.)</span><b class="num" id="vAlpha">—</b></div>
-              <div class="pverdict__row"><span>beta</span><b class="num" id="vBeta">—</b></div>
-              <div class="pverdict__row"><span>volatility</span><b class="num" id="vVol">—</b></div>
-              <div class="pverdict__row"><span>sharpe · rf 0</span><b class="num" id="vSharpe">—</b></div>
+              <div class="pverdict__row"><span>alpha (ann.)
+                <button class="mwhy" type="button" data-why="alpha" aria-label="How alpha is computed">?</button></span>
+                <b class="num" id="vAlpha">—</b></div>
+              <div class="pverdict__row"><span>beta
+                <button class="mwhy" type="button" data-why="beta" aria-label="How beta is computed">?</button></span>
+                <b class="num" id="vBeta">—</b></div>
+              <div class="pverdict__row"><span>volatility
+                <button class="mwhy" type="button" data-why="vol" aria-label="How volatility is computed">?</button></span>
+                <b class="num" id="vVol">—</b></div>
+              <div class="pverdict__row"><span>sharpe · rf 0
+                <button class="mwhy" type="button" data-why="sharpe" aria-label="How sharpe is computed">?</button></span>
+                <b class="num" id="vSharpe">—</b></div>
+              <div class="pverdict__row"><span>sortino · rf 0
+                <button class="mwhy" type="button" data-why="sortino" aria-label="How sortino is computed">?</button></span>
+                <b class="num" id="vSortino">—</b></div>
+              <div class="pverdict__row"><span>calmar
+                <button class="mwhy" type="button" data-why="calmar" aria-label="How calmar is computed">?</button></span>
+                <b class="num" id="vCalmar">—</b></div>
             </div>
             <!-- The race: both runners on one scale, the edge made visible. -->
             <div class="pverdict__race" id="vRace" hidden>
@@ -461,6 +504,7 @@
           <div class="pspread pspread--dd">
             <div class="pane__head">
               <span class="pane__kicker">Drawdown</span>
+              <span class="pane__note num" id="ddAth"></span>
               <span class="pane__total num" id="ddCurrent"></span>
             </div>
             <div class="plot plot--dd" id="ddPlot">
@@ -609,9 +653,9 @@
 
       <section class="view view--scroll" id="view-market" role="tabpanel" aria-label="Market watch" hidden>
 
-        <!-- One screenful exactly: hero, desk context, bar and the 4x2 board
-             share the viewport; the news digest lives below the fold, where a
-             long list belongs. -->
+        <!-- One screenful exactly: hero, bar and the 4x2 board share the
+             viewport; the desk context and the news digest live below the
+             fold, where the longer lists belong. -->
         <div class="board-fit">
         <section class="board-hero" aria-labelledby="boardDate">
           <div class="board-hero__top">
@@ -626,25 +670,6 @@
           </div>
           <div class="clockstrip" id="clockStrip" aria-label="Local time by market"></div>
         </section>
-
-        <!-- Desk context: the overnight diff and the earnings rail live where
-             the session clocks already answer "what is trading now". -->
-        <div class="desk-row">
-          <section class="card desk-card" aria-labelledby="onTitle">
-            <div class="card__head">
-              <h2 class="card-title" id="onTitle">Overnight</h2>
-              <span class="perf-card__period" id="onNote"></span>
-            </div>
-            <div class="onight" id="onightBody"></div>
-          </section>
-          <section class="card desk-card" aria-labelledby="erTitle">
-            <div class="card__head">
-              <h2 class="card-title" id="erTitle">Earnings</h2>
-              <span class="perf-card__period" id="erNote"></span>
-            </div>
-            <div class="earn" id="earnBody"></div>
-          </section>
-        </div>
 
         <div class="board-bar">
           <span class="board-bar__title">All markets</span>
@@ -672,6 +697,25 @@
 
         <p class="board-foot">Index levels quote in each market's own currency and are price return,
           excluding dividends. Exposure converts your positions to GBP at the mid-market rate.</p>
+
+        <!-- Desk context: the overnight diff and the earnings rail, the first
+             stop below the board. -->
+        <div class="desk-row">
+          <section class="card desk-card" aria-labelledby="onTitle">
+            <div class="card__head">
+              <h2 class="card-title" id="onTitle">Overnight</h2>
+              <span class="perf-card__period" id="onNote"></span>
+            </div>
+            <div class="onight" id="onightBody"></div>
+          </section>
+          <section class="card desk-card" aria-labelledby="erTitle">
+            <div class="card__head">
+              <h2 class="card-title" id="erTitle">Earnings</h2>
+              <span class="perf-card__period" id="erNote"></span>
+            </div>
+            <div class="earn" id="earnBody"></div>
+          </section>
+        </div>
 
         <section class="card desk-card" aria-labelledby="digestTitle">
           <div class="card__head">
@@ -896,6 +940,8 @@
             <div class="shero__id">
               <span class="ptile shero__tile" id="finTile">
                 <span class="ptile__mono" id="finMono">—</span>
+                <img class="ptile__img" id="finLogo" alt="" hidden
+                     onerror="this.hidden=true">
               </span>
               <div class="shero__names">
                 <div class="shero__line">

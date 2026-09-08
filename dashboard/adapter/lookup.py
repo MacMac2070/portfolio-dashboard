@@ -35,6 +35,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable
 
 import directory
+import resilience
 import units
 import universe
 
@@ -42,6 +43,7 @@ log = logging.getLogger("lookup")
 
 TTL = 15 * 60.0        # a name's identity does not move
 NEG_TTL = 60.0         # a miss cached briefly, so a typo is not re-fetched
+BREAKER = "yfinance"   # shared with every other module that asks Yahoo
 MAX_ENTRIES = 512
 FOLLOWER_WAIT = 3.0
 MIN_QUERY = 2
@@ -226,7 +228,17 @@ class LookupService:
                 return self._cache.get(key)
 
         try:
-            rows, provider, errors = self._yahoo(key)
+            breaker = resilience.get(BREAKER)
+            if breaker.allow():
+                rows, provider, errors = self._yahoo(key)
+                # A miss is Yahoo answering "nothing by that name"; only an
+                # error is Yahoo not answering.
+                if errors:
+                    breaker.record_failure(errors[0][1])
+                else:
+                    breaker.record_success()
+            else:
+                rows, provider, errors = [], "none", [("yahoo", breaker.reason())]
             entry = _Entry(rows, time.monotonic(),
                            TTL if rows else NEG_TTL, provider, errors)
             with self._lock:

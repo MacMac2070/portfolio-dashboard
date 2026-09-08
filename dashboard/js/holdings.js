@@ -48,7 +48,7 @@ function rowFor(key) {
   const t = universe?.tickers?.[key];
   if (!t) return null;
   const tile = {
-    mono: t.mono || initials(t.key), tint: t.tint, edge: t.edge, ink: t.ink,
+    mono: t.mono || initials(t.key), tint: t.tint, ink: t.ink,
     logo: t.logo,
   };
 
@@ -63,6 +63,9 @@ function rowFor(key) {
       quantity: live.quantity, avgCost: live.quantity ? costLocal / live.quantity : null,
       value: live.value_gbp, cost: costLocal,
       pl: live.unrealised_gbp, retPct: live.unrealised_pct,
+      // The same return against what was actually paid in sterling, and the
+      // currency's share of the difference — null until the ledger can say.
+      plTd: live.unrealised_gbp_tradedate, fxPl: live.fx_pnl_gbp,
       dayGbp: live.day_pnl_gbp,
       weight: navTotal ? (live.value_gbp / navTotal) * 100 : null,
       spark: live.spark || [], ...tile,
@@ -266,6 +269,7 @@ export function positionRow(r, isLastHeld) {
       <span class="pstack pstack--wide" style="grid-column:7">
         <span class="pstack__main pstack__main--lg num" style="color:${plDir}">${moneySigned(r.pl)}</span>
         <span class="pstack__ret" style="color:${plDir}">${pctSigned(r.retPct)}</span>
+        ${r.plTd != null ? `<span class="pstack__sub num" title="Return on the sterling actually paid at each trade's own rate; FX is the currency's share of the difference">${moneySigned(r.plTd)} paid · FX ${moneySigned(r.fxPl)}</span>` : ""}
       </span>
       <span class="pweight num" style="grid-column:8">${
         r.weight != null ? pct(r.weight, 1) : DASH}</span>`
@@ -469,6 +473,10 @@ function patchRows(all) {
       if (plMain) {
         setLive(plMain, moneySigned(r.pl));
         if (plMain.style.color !== colour) plMain.style.color = colour;
+      }
+      const plSub = stacks[2]?.querySelector(".pstack__sub");
+      if (plSub && r.plTd != null) {
+        setLive(plSub, `${moneySigned(r.plTd)} paid · FX ${moneySigned(r.fxPl)}`);
       }
       if (plRet) {
         setLive(plRet, pctSigned(r.retPct));

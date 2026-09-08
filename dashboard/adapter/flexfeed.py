@@ -20,6 +20,7 @@ import time
 from datetime import datetime, timezone
 
 import derive
+import lots
 import store
 
 log = logging.getLogger(__name__)
@@ -97,31 +98,47 @@ def compose_payload(*, quotes: dict | None = None, fx: dict | None = None,
             ibkr_daily_pnl=None,
             ibkr_market_value=value,
         )
-        positions.append(derive.make_position(
-            con_id=raw["con_id"],
-            symbol=raw["symbol"],
-            currency=raw["currency"],
-            exchange=raw.get("exchange", ""),
-            quantity=raw["quantity"],
-            price=price,
-            market_value=value,
-            average_cost=cost if cost is not None else 0.0,
-            unrealized_pnl=unrealised,
-            day_change_pct=change_pct,
-            day_change_source=change_source,
-            spark=sparks.get(raw["con_id"], []),
-            to_gbp=to_gbp,
-        ))
+        try:
+            positions.append(derive.make_position(
+                con_id=raw["con_id"],
+                symbol=raw["symbol"],
+                currency=raw["currency"],
+                exchange=raw.get("exchange", ""),
+                quantity=raw["quantity"],
+                price=price,
+                market_value=value,
+                average_cost=cost if cost is not None else 0.0,
+                unrealized_pnl=unrealised,
+                day_change_pct=change_pct,
+                day_change_source=change_source,
+                spark=sparks.get(raw["con_id"], []),
+                to_gbp=to_gbp,
+                cost_gbp_tradedate=lots.tradedate_cost(raw["con_id"], raw["quantity"]),
+            ))
+        except derive.MissingRate as exc:
+            log.error("no GBP rate for %s (%s); the row is kept unpriced", raw["symbol"], exc)
+            positions.append(derive.unpriced_position(
+                con_id=raw["con_id"], symbol=raw["symbol"], currency=raw["currency"],
+                exchange=raw.get("exchange", ""), quantity=raw["quantity"], price=price,
+                spark=sparks.get(raw["con_id"], [])))
 
-    # Cash is inferred, not reported: the Flex NAV for the snapshot's day
-    # minus what the positions were worth that day. It only moves when the
+    # Cash comes from the statement when the NAV row carries its split, and
+    # is otherwise inferred: the Flex NAV for the snapshot's day minus what
+    # the positions were worth that day. Either way it only moves when the
     # EOD file does, which is the honest cadence for a figure Flex owns.
-    invested = sum(p["value_gbp"] for p in positions)
+    invested = sum(p["value_gbp"] for p in positions if p.get("value_gbp") is not None)
     asof = eod.get("asof")
-    nav_asof = store.nav_on_or_before(asof)
-    eod_invested = sum((r.get("value") or 0.0) * (r.get("fx_to_base") or fx.get(r.get("currency"), 0.0))
-                      for r in rows)
-    cash = (nav_asof - eod_invested) if nav_asof is not None else 0.0
+    nav_row = store.nav_row_on_or_before(asof)
+    if nav_row and nav_row.get("cash_gbp") is not None:
+        cash = nav_row["cash_gbp"]
+        cash_source = "flex-nav"
+    elif nav_row:
+        eod_invested = sum((r.get("value") or 0.0) * (r.get("fx_to_base") or fx.get(r.get("currency"), 0.0))
+                          for r in rows)
+        cash = nav_row["nav_gbp"] - eod_invested
+        cash_source = "inferred"
+    else:
+        cash, cash_source = 0.0, "none"
 
     agg = derive.aggregate(positions, nav=cash + invested, cash=cash,
                            account_daily_pnl=None)
@@ -130,6 +147,11 @@ def compose_payload(*, quotes: dict | None = None, fx: dict | None = None,
             "generated_at": _now(),
             "account_id": next((r.get("account_id") for r in rows if r.get("account_id")), ""),
             "base_currency": "GBP",
+            "cash_source": cash_source,
+            # Which cost the row's `cost_gbp` is: Flex reports FIFO cost basis.
+            # The trade-date fields are always FIFO from the ledger.
+            "cost_convention": "flex-fifo@spot",
+            "fx_missing": [p["symbol"] for p in positions if p.get("fx_missing")],
             "fx_source": fx_source,
             "daily_pnl_source": agg["daily_pnl_source"],
             "gateway": "not-used",

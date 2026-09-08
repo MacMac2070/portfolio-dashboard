@@ -4,6 +4,8 @@ asserts count parity at runtime, so a drift here makes the benchmark line
 silently vanish."""
 from datetime import date, timedelta
 
+import pytest
+
 import benchmark
 
 
@@ -64,3 +66,29 @@ def test_build_counts_stay_parallel():
     # And 1M genuinely covers about a month of those dates.
     month = out["ranges"]["1M"]
     assert 20 <= month["count"] <= 23
+
+
+# ---------------------------------------------------------------- FX restatement
+
+def test_fx_adjust_restates_in_sterling_and_forward_fills_never_backfills():
+    index = [("2026-09-01", 100.0), ("2026-09-02", 110.0), ("2026-09-03", 120.0)]
+    fx = [("2026-08-31", 0.80), ("2026-09-02", 0.75)]           # no rate on the 1st or 3rd
+    out = benchmark.fx_adjust(index, fx)
+    assert out == [("2026-09-01", 80.0), ("2026-09-02", 82.5), ("2026-09-03", 90.0)]
+    # A rate that only starts later never reaches earlier closes.
+    assert benchmark.fx_adjust(index, [("2026-09-03", 0.5)]) == [("2026-09-03", 60.0)]
+    assert benchmark.fx_adjust(index, []) == index
+
+
+def test_build_restates_a_foreign_index_and_keeps_the_local_line():
+    nav = [{"date": "2026-09-01", "nav_gbp": 1000.0}, {"date": "2026-09-02", "nav_gbp": 1010.0},
+           {"date": "2026-09-03", "nav_gbp": 1020.0}]
+    index = [("2026-09-01", 100.0), ("2026-09-02", 100.0), ("2026-09-03", 100.0)]   # flat locally
+    fx = [("2026-09-01", 0.80), ("2026-09-02", 0.80), ("2026-09-03", 0.76)]          # dollar falls 5%
+    out = benchmark.build(nav, index, "^GSPC", "S&P 500", "USD", fx_rows=fx)
+    assert out["fx_adjusted"] is True and "GBP" in out["note"]
+    all_pts = out["ranges"]["ALL"]
+    assert all_pts["points"][-1] == pytest.approx(950.0)          # a sterling investor lost 5%
+    assert all_pts["points_local"][-1] == pytest.approx(1000.0)   # a local one was flat
+    gbp = benchmark.build(nav, index, "^FTSE", "FTSE 100", "GBP", fx_rows=fx)
+    assert gbp["fx_adjusted"] is False and gbp["ranges"]["ALL"]["points_local"] is None

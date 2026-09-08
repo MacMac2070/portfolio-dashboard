@@ -167,14 +167,45 @@ def _since_inception(nav_rows: list[dict]) -> list[dict]:
     return []
 
 
+def fx_adjust(index_rows: list[tuple[str, float]],
+              fx_rows: list[tuple[str, float]]) -> list[tuple[str, float]]:
+    """Index closes restated in sterling: each close × that day's rate into
+    GBP, the rate carried forward over a day the FX series lacks and never
+    taken from a later one. Returns the input untouched without FX rows."""
+    if not index_rows or not fx_rows:
+        return index_rows
+    fx = sorted(fx_rows)
+    out = []
+    k = 0
+    rate = None
+    for day, close in sorted(index_rows):
+        while k < len(fx) and fx[k][0] <= day:
+            rate = fx[k][1]
+            k += 1
+        if rate:
+            out.append((day, close * rate))
+    return out
+
+
 def build(nav_rows: list[dict], index_rows: list[tuple[str, float]],
-          symbol: str, name: str, currency: str) -> dict:
+          symbol: str, name: str, currency: str,
+          fx_rows: list[tuple[str, float]] | None = None) -> dict:
     """Every range at once, each sliced then rebased, ready to draw.
 
     `nav_rows` is the parsed nav_history: [{date, nav_gbp}, ...] oldest first.
     Returns the same shape whether or not the index had data, so the page has
     one code path and an unwarmed feed is an empty line rather than an error.
+
+    With `fx_rows` — (date, rate into GBP) for the index's currency — the
+    line is the index restated in sterling: the return a sterling investor
+    would have earned, currency moves included, which is the only honest
+    comparison for a NAV reported in pounds. The unhedged line rides along as
+    `points_local` for anyone who wants the local-investor view.
     """
+    local_rows = index_rows
+    adjusted = fx_adjust(index_rows, fx_rows) if currency != "GBP" and fx_rows else []
+    index_rows = adjusted or index_rows
+    fx_adjusted = bool(adjusted)
     # Drop the leading zero-NAV rows Flex pads the series with, before anything
     # is sliced. The page does the same in `sinceInception` (js/main.js) — these
     # two are deliberate mirrors, and if you change one, change the other. The
@@ -187,6 +218,7 @@ def build(nav_rows: list[dict], index_rows: list[tuple[str, float]],
     dates = [r["date"] for r in nav_rows]
     values = [r["nav_gbp"] for r in nav_rows]
     carried = align(dates, index_rows)
+    carried_local = align(dates, local_rows) if fx_adjusted else None
 
     ranges: dict[str, dict] = {}
     for key in RANGE_DAYS:
@@ -194,6 +226,7 @@ def build(nav_rows: list[dict], index_rows: list[tuple[str, float]],
         nav_slice = values[start:]
         idx_slice = carried[start:]
         points = rebase(nav_slice, idx_slice)
+        points_local = rebase(nav_slice, carried_local[start:]) if carried_local else None
 
         # Is the anchor representative of the window, or was the account still
         # being filled? See MIN_ANCHOR_SHARE.
@@ -205,9 +238,11 @@ def build(nav_rows: list[dict], index_rows: list[tuple[str, float]],
             if share < MIN_ANCHOR_SHARE:
                 withheld = "funding"
                 points = [None] * len(points)
+                points_local = [None] * len(points) if points_local else None
 
         ranges[key] = {
             "points": points,
+            "points_local": points_local,
             # The page asserts this against its own slice before drawing.
             "count": len(points),
             "covered": sum(1 for p in points if p is not None),
@@ -223,7 +258,9 @@ def build(nav_rows: list[dict], index_rows: list[tuple[str, float]],
         "currency": currency,
         "available": bool(index_rows),
         "as_of": index_rows[-1][0] if index_rows else None,
+        "fx_adjusted": fx_adjusted,
         "note": ("rebased to the portfolio's first value in each range; "
-                 f"shown in {currency}, unhedged"),
+                 + (f"restated in GBP at daily rates from {currency}" if fx_adjusted
+                    else f"shown in {currency}, unhedged")),
         "ranges": ranges,
     }

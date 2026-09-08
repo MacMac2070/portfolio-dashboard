@@ -63,10 +63,12 @@ cat > "$PLIST" <<PLIST_EOF
   <key>ThrottleInterval</key>
   <integer>30</integer>
 
+  <!-- serve.py keeps its own rotated log at logs/serve.log; this file only
+       catches an interpreter that dies before logging starts. -->
   <key>StandardOutPath</key>
-  <string>$DIR/logs/live.log</string>
+  <string>$DIR/logs/serve.launchd.log</string>
   <key>StandardErrorPath</key>
-  <string>$DIR/logs/live.log</string>
+  <string>$DIR/logs/serve.launchd.log</string>
 
   <key>ProcessType</key>
   <string>Background</string>
@@ -80,7 +82,7 @@ launchctl bootstrap "gui/$UID" "$PLIST"
 echo "Installed $LABEL"
 echo "  serves    : http://localhost:$PORT"
 echo "  endpoint  : http://localhost:$PORT/api/snapshot"
-echo "  log       : $DIR/logs/live.log"
+echo "  log       : $DIR/logs/serve.log (rotated; launchd's own in serve.launchd.log)"
 echo
 echo "Status:  launchctl print gui/$UID/$LABEL | head -20"
 echo "Remove:  ./install-live-feed.sh --remove"

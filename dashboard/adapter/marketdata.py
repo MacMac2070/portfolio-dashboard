@@ -25,6 +25,10 @@ from __future__ import annotations
 import logging
 import math
 
+import providers
+import quotes
+import resilience
+
 log = logging.getLogger(__name__)
 
 # IBKR conId -> yfinance symbol. conId because it is stable; see regions.py.
@@ -48,12 +52,11 @@ QUOTE_SYMBOLS: dict[int, str] = {
 
 BASE = "GBP"
 FX_CURRENCIES = ("USD", "HKD", "EUR", "SGD", "JPY")
+BREAKER = "yfinance"        # shared with every other module that asks Yahoo
 
 
 def _obb():
-    from openbb import obb
-    obb.user.preferences.output_type = "dataframe"
-    return obb
+    return providers.obb()
 
 
 def _finite(value) -> float | None:
@@ -71,21 +74,44 @@ def fx_rates(fallback: dict[str, float]) -> tuple[dict[str, float], str]:
     want is its reciprocal.
     """
     rates = {BASE: 1.0}
-    try:
-        obb = _obb()
-        for currency in FX_CURRENCIES:
-            try:
-                df = obb.currency.price.historical(
-                    symbol=f"{BASE}{currency}", provider="yfinance", interval="1d")
-                close = _finite(df["close"].iloc[-1])
-                if close and close > 0:
-                    rates[currency] = 1.0 / close
-            except Exception as exc:
-                log.debug("openbb FX %s%s failed: %s", BASE, currency, exc)
-    except Exception as exc:
-        log.warning("openbb unavailable for FX: %s", exc)
+    breaker = resilience.get(BREAKER)
+    if not breaker.allow():
+        log.info("FX: %s; using the broker's rates", breaker.reason())
+    else:
+        try:
+            obb = _obb()
+            for currency in FX_CURRENCIES:
+                try:
+                    df = obb.currency.price.historical(
+                        symbol=f"{BASE}{currency}", provider="yfinance", interval="1d")
+                    close = _finite(df["close"].iloc[-1])
+                    if close and close > 0:
+                        rates[currency] = 1.0 / close
+                except Exception as exc:
+                    log.debug("openbb FX %s%s failed: %s", BASE, currency, exc)
+            if len(rates) > 1:
+                breaker.record_success()
+            else:
+                breaker.record_failure("no FX rows")
+        except Exception as exc:
+            log.warning("openbb unavailable for FX: %s", exc)
+            breaker.record_failure(exc)
 
     missing = [c for c in FX_CURRENCIES if c not in rates]
+    if missing:
+        # Second source before the broker's account rates: the ECB's daily
+        # reference rates, keyless and covering every currency here.
+        try:
+            ecb = providers.fx_ecb(missing)
+            for currency in list(missing):
+                if currency in ecb:
+                    rates[currency] = ecb[currency]
+                    missing.remove(currency)
+            if ecb:
+                log.info("FX from ECB reference rates for: %s", ", ".join(sorted(ecb)))
+        except Exception as exc:
+            log.info("ECB reference rates unavailable: %s", str(exc)[:120])
+    used_ecb = any(c in rates for c in FX_CURRENCIES) and missing != [c for c in FX_CURRENCIES if c not in rates]
     if missing:
         for currency in missing:
             if currency in fallback:
@@ -93,7 +119,7 @@ def fx_rates(fallback: dict[str, float]) -> tuple[dict[str, float], str]:
         source = "ibkr" if len(missing) == len(FX_CURRENCIES) else "openbb+ibkr"
         log.info("FX fell back to IBKR rates for: %s", ", ".join(missing))
     else:
-        source = "openbb"
+        source = "openbb+ecb" if used_ecb else "openbb"
 
     for currency, rate in fallback.items():
         rates.setdefault(currency, rate)
@@ -112,29 +138,43 @@ def prior_closes(con_ids: list[int]) -> dict[int, dict]:
         return {}
 
     out: dict[int, dict] = {}
-    try:
-        obb = _obb()
-        df = obb.equity.price.quote(symbol=",".join(wanted.values()), provider="yfinance")
-        by_symbol = {}
-        for row in df.to_dict("records"):
-            symbol = row.get("symbol")
-            if not symbol:
-                continue
-            # GBp is pence; IBKR reports pounds.
-            divisor = 100.0 if str(row.get("currency", "")).strip() == "GBp" else 1.0
-            last = _finite(row.get("last_price"))
-            prev = _finite(row.get("prev_close"))
-            by_symbol[symbol] = {
-                "last": last / divisor if last is not None else None,
-                "prev": prev / divisor if prev is not None else None,
-            }
-        for con_id, symbol in wanted.items():
-            hit = by_symbol.get(symbol)
-            if hit:
-                out[con_id] = {**hit, "symbol": symbol}
-    except Exception as exc:
-        log.warning("openbb quotes unavailable, day change will fall back to IBKR: %s", exc)
+    breaker = resilience.get(BREAKER)
+    if not breaker.allow():
+        log.info("quotes: %s; day change will fall back to IBKR", breaker.reason())
+        return out
 
+    obb = _obb()
+    last_exc: Exception | str | None = None
+    for tag, kwargs in providers.tiers("quote"):
+        try:
+            df = obb.equity.price.quote(symbol=",".join(wanted.values()), **kwargs)
+            by_symbol = {}
+            for row in df.to_dict("records"):
+                symbol = row.get("symbol")
+                if not symbol:
+                    continue
+                # GBp is pence; IBKR reports pounds.
+                divisor = 100.0 if str(row.get("currency", "")).strip() == "GBp" else 1.0
+                last = _finite(row.get("last_price"))
+                prev = _finite(row.get("prev_close"))
+                by_symbol[symbol] = {
+                    "last": last / divisor if last is not None else None,
+                    "prev": prev / divisor if prev is not None else None,
+                }
+            for con_id, symbol in wanted.items():
+                hit = by_symbol.get(symbol)
+                if hit:
+                    out[con_id] = {**hit, "symbol": symbol}
+            if out:
+                breaker.record_success()
+                return out
+        except Exception as exc:
+            last_exc = exc
+            log.debug("%s quotes failed: %s", tag, exc)
+
+    log.warning("openbb quotes unavailable from every tier, day change will fall back to IBKR: %s",
+                last_exc)
+    breaker.record_failure(last_exc or "no tier returned data")
     return out
 
 
@@ -152,31 +192,47 @@ def price_series(con_ids: list[int], days: int = 30) -> dict[int, list[float]]:
     if not wanted:
         return {}
 
-    start = (date.today() - timedelta(days=days * 2 + 10)).isoformat()
+    window = (date.today() - timedelta(days=days * 2 + 10)).isoformat()
     out: dict[int, list[float]] = {}
-    try:
+    breaker = resilience.get(BREAKER)
+    if breaker.allow():
         obb = _obb()
-        df = obb.equity.price.historical(
-            symbol=",".join(wanted.values()), provider="yfinance",
-            start_date=start, interval="1d")
-        df = df.reset_index()
+        last_exc: Exception | str | None = None
+        fetched = False
+        for tag, kwargs in providers.tiers("history"):
+            try:
+                df = obb.equity.price.historical(
+                    symbol=",".join(wanted.values()),
+                    start_date=quotes.plan_fetch_all(list(wanted.values()), full_days=days * 2 + 10),
+                    interval="1d", **kwargs)
+                df = df.reset_index()
+                if "symbol" in df.columns:
+                    grouped = {str(sym): sub for sym, sub in df.groupby("symbol")}
+                else:
+                    # A single symbol comes back without a symbol column.
+                    grouped = {next(iter(wanted.values())): df}
+                for symbol, sub in grouped.items():
+                    if "close" in sub and "date" in sub:
+                        quotes.upsert(symbol, zip((str(d)[:10] for d in sub["date"]), sub["close"]),
+                                      source=tag)
+                fetched = True
+                breaker.record_success()
+                break
+            except Exception as exc:
+                last_exc = exc
+                log.debug("%s history failed: %s", tag, exc)
+        if not fetched:
+            log.warning("openbb history unavailable from every tier, sparklines from the store: %s",
+                        last_exc)
+            breaker.record_failure(last_exc or "no tier returned data")
+    else:
+        log.info("history: %s; sparklines from the store", breaker.reason())
 
-        if "symbol" in df.columns:
-            grouped = {str(sym): sub for sym, sub in df.groupby("symbol")}
-        else:
-            # A single symbol comes back without a symbol column.
-            grouped = {next(iter(wanted.values())): df}
-
-        for con_id, symbol in wanted.items():
-            sub = grouped.get(symbol)
-            if sub is None or "close" not in sub:
-                continue
-            closes = [c for c in (_finite(v) for v in sub["close"].tolist()) if c is not None]
-            if len(closes) >= 2:
-                out[con_id] = closes[-days:]
-    except Exception as exc:
-        log.warning("openbb history unavailable, sparklines omitted: %s", exc)
-
+    # Whatever the store holds now, fetched today or earlier.
+    for con_id, symbol in wanted.items():
+        closes = [c for _, c in quotes.series(symbol, start=window)]
+        if len(closes) >= 2:
+            out[con_id] = closes[-days:]
     return out
 
 

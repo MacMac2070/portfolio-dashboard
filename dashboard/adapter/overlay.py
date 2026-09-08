@@ -1,8 +1,8 @@
 """Names you added from the search bar, persisted outside the curated registry.
 
-`universe.py` is hand-written: brand hex colours sampled per issuer, logo
-overrides for the two marks the service does not carry, a `_VENUE` table, and
-comments explaining every judgement. A web request must not rewrite that file —
+`universe.py` is hand-written: brand hex colours sampled per issuer, the mark
+slug each name wears, a `_VENUE` table, and comments explaining every
+judgement. A web request must not rewrite that file —
 a malformed append is a syntax error that takes down every page until someone
 fixes it by hand, and machine-appended entries would erode the curation the file
 exists for.
@@ -27,6 +27,7 @@ from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
+import marks
 import universe
 
 log = logging.getLogger("overlay")
@@ -132,6 +133,11 @@ def add(key: str, *, name: str = "", symbol: str = "", sector: str = "",
     kind = (row.get("type") or "").upper()
     sector = sector or (universe.ETFS if kind == "ETF" else universe.OTHER)
 
+    # The issuer's mark, looked up once here and stored, so the entry reads
+    # like a curated row from then on and no restart ever asks the network
+    # for it again. None is stored as "" and reads back as "no mark".
+    logo = marks.resolve(symbol, exchange) or ""
+
     # An unlabelled venue is not a reason to refuse. universe.exchange_display()
     # passes an unknown code through unchanged by design, and Yahoo returns
     # plenty this table has never named (NEO, SET, JKT, IST…). Refusing here
@@ -149,7 +155,7 @@ def add(key: str, *, name: str = "", symbol: str = "", sector: str = "",
             return {"ok": False, "error": f"watchlist full ({MAX_ENTRIES})"}
         rows.append({
             "key": key, "symbol": symbol, "name": name, "sector": sector,
-            "brand": universe.DEFAULT_BRAND, "exchange": exchange,
+            "brand": universe.DEFAULT_BRAND, "logo": logo, "exchange": exchange,
             "currency": currency, "region": region, "added_at": _now(),
         })
         doc.update({"schema": SCHEMA, "updated_at": _now(), "entries": rows})
@@ -162,7 +168,7 @@ def add(key: str, *, name: str = "", symbol: str = "", sector: str = "",
     # dash until a restart re-reads the file.
     live = replace(universe.synthetic(
         symbol, name, sector=sector, exchange=exchange,
-        currency=currency, region=region), key=key)
+        currency=currency, region=region, logo=logo), key=key)
     universe.register(live)
 
     return {"ok": True, "added": True, "key": key, "sector": sector,

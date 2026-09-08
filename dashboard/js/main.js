@@ -6,7 +6,7 @@
  */
 
 import {
-  money, moneyCompact, moneySigned, pctSigned, pct, qty,
+  money, moneyAxis, moneySigned, pctSigned, pct, qty,
   direction, stamp, clock, initials, esc,
 } from "./format.js";
 import { sparkline, equityCurve, countUp } from "./charts.js";
@@ -42,6 +42,7 @@ const WATCH_POLL_MS = 20000;
 const MARKETS_POLL_MS = 30000;
 // The outlet's cadence. Headlines age in hours; five minutes is plenty.
 const NEWS_POLL_MS = 5 * 60 * 1000;
+const HEALTH_POLL_MS = 60 * 1000;
 const MIN_CURVE_POINTS = 5;
 
 /* Live cadence. The feed recomposes every 3s, so five missed polls is a
@@ -208,6 +209,11 @@ function renderKpis(data) {
   const unrealChip = $("kpiUnrealChip");
   paintChip(dayChip, k.daily_pnl_pct);
   paintChip(unrealChip, k.unrealised_pnl_pct);
+  // Two cost conventions, one tile: the figure is the market return at
+  // today's rate; the title carries the return on what was paid, and the FX.
+  $("kpiUnreal").title = k.fx_pnl != null
+    ? `${moneySigned(k.unrealised_pnl_tradedate)} on the sterling paid at trade-date rates · of which FX ${moneySigned(k.fx_pnl)}`
+    : "Market return on cost, both converted at today's rate";
 
   for (const [node, value] of [[$("kpiDay"), k.daily_pnl], [$("kpiUnreal"), k.unrealised_pnl]]) {
     const dir = direction(value);
@@ -299,7 +305,7 @@ function renderBenchBar(bench, dirOverride = null) {
   if (bar.dataset.direction !== dir) bar.dataset.direction = dir;
 
   setText(note, bench.reason || (drawing && benchmark?.currency && benchmark.currency !== "GBP"
-    ? `${benchmark.currency} · unhedged`
+    ? (benchmark.fx_adjusted ? `${benchmark.currency} · in GBP at daily rates` : `${benchmark.currency} · unhedged`)
     : ""));
 
   // With no picker, no line and nothing to explain, the strip would be a
@@ -438,10 +444,11 @@ function renderChart() {
   equityCurve($("chartSvg"), twr ?? points, {
     tooltip: $("tip"),
     formatValue: twr ? (v, full) => pctSigned(v, full ? 2 : 1)
-                     : (v, full) => (full ? money(v) : moneyCompact(v)),
+                     : (v, full) => (full ? money(v) : moneyAxis(v)),
     formatDate: (d) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }),
     benchmark: benchPoints,
     benchmarkName: benchmark?.name ?? "Benchmark",
+    events: chartEventsOn ? chartEventList : null,
   });
 
   const changeNode = $("chartChange");
@@ -506,15 +513,70 @@ function renderAllocation(data) {
 
 function initAllocation() { ring(); }
 
+/* ---------------- equity-curve events ----------------
+ *
+ * Buys, sells and dividends joined onto the curve by date, so the chart can
+ * answer "did I add before or after it ran" without the trade log. Loaded
+ * lazily from the same static files those views read; the toggle is
+ * remembered per browser. */
+let chartEventList = null;
+let chartEventsOn = true;
+try { chartEventsOn = localStorage.getItem("pd.chartEvents") !== "off"; } catch { /* private mode */ }
+
+async function loadChartEvents() {
+  const fmtP = (v) => Number(v).toLocaleString("en-GB", { maximumFractionDigits: 4 });
+  const parse = (text) => text.split("\n").map((line) => {
+    try { return JSON.parse(line); } catch { return null; }
+  });
+  try {
+    const [txRes, cashRes] = await Promise.all([
+      fetch("data/transactions.jsonl"), fetch("data/cash_transactions.jsonl"),
+    ]);
+    const events = [];
+    if (txRes.ok) {
+      for (const r of parse(await txRes.text())) {
+        if (!r?.time || !r.symbol) continue;
+        if ((r.exchange || "") === "IDEALFX") continue;   // sweeps are not trades
+        const sell = String(r.side || "").toUpperCase().startsWith("S");
+        events.push({
+          date: String(r.time).slice(0, 10),
+          kind: sell ? "sell" : "buy",
+          label: `${sell ? "▼ Sold" : "▲ Bought"} ${qty(r.quantity)} ${r.symbol} @ ${fmtP(r.price)}`,
+        });
+      }
+    }
+    if (cashRes.ok) {
+      for (const r of parse(await cashRes.text())) {
+        if (r?.bucket !== "dividends" || !r.date) continue;
+        events.push({
+          date: r.date, kind: "div",
+          label: `● Dividend ${r.symbol || ""} ${money(r.amount_gbp, { decimals: 2 })}`,
+        });
+      }
+    }
+    chartEventList = events;
+    renderChart();
+  } catch { /* markers stay off; the curve is unaffected */ }
+}
+
 /* ---------------- movers ---------------- */
+
+/* Tile data (logo, ink, monogram) by ticker key, from the watchlist poll —
+ * the movers wear the same issuer plates the tables do, instead of sliced
+ * monograms that turned "293" into "29". */
+let moverTiles = new Map();
 
 function moverRow(p) {
   const dir = direction(p.day_change_pct);
   const chipClass = dir === "up" ? "chip--pos" : dir === "down" ? "chip--neg" : "chip--flat";
-  const tint = dir === "up" ? "var(--pos-bg)" : dir === "down" ? "var(--neg-bg)" : "rgba(122,132,144,.12)";
+  const t = moverTiles.get(p.con_id) || moverTiles.get(p.symbol) || {};
   return `
     <div class="mover" data-con-id="${p.con_id}">
-      <span class="avatar" style="background:${tint}">${esc(initials(p.symbol))}</span>
+      <span class="ptile ptile--sm"${t.ink ? ` style="color:${esc(t.ink)}"` : ""}>
+        <span class="ptile__mono">${esc(t.mono || initials(p.symbol))}</span>
+        ${t.logo ? `<img class="ptile__img" src="${esc(t.logo)}" alt=""
+             onerror="this.remove()">` : ""}
+      </span>
       <span class="mover__ticker">${esc(p.symbol)}</span>
       <svg class="mover__spark" data-spark="${p.con_id}" aria-hidden="true"></svg>
       <span class="chip ${chipClass} mover__chip">
@@ -831,6 +893,18 @@ function wireShell() {
     const name = tabFromHash();
     if (name) showTab(name);
   });
+
+  const evBtn = $("chartEvents");
+  if (evBtn) {
+    evBtn.setAttribute("aria-pressed", String(chartEventsOn));
+    evBtn.addEventListener("click", () => {
+      chartEventsOn = !chartEventsOn;
+      evBtn.setAttribute("aria-pressed", String(chartEventsOn));
+      try { localStorage.setItem("pd.chartEvents", chartEventsOn ? "on" : "off"); } catch { /* private mode */ }
+      renderChart();
+    });
+    loadChartEvents();
+  }
   for (const item of document.querySelectorAll(".nav-item[data-nav]")) {
     item.addEventListener("click", (event) => {
       const name = item.dataset.nav;
@@ -971,6 +1045,7 @@ async function boot() {
   startWatchlistPolling();
   startMarketsPolling();
   startNewsPolling();
+  startHealthPolling();
 }
 
 /* Watchlist quotes are fetched on their own cadence and are entirely optional:
@@ -981,6 +1056,22 @@ async function pollWatchlist() {
     const res = await fetch(`${WATCH_URL}?t=${Date.now()}`, { cache: "no-store" });
     if (!res.ok) return false;          // older serve.py — stop asking
     const payload = await res.json();
+    const tickers = payload?.universe?.tickers;
+    if (tickers) {
+      // Keyed by con_id first: mover rows carry IBKR position symbols, which
+      // do not always match universe keys (HSBA vs HSBAI) — the same reason
+      // Holdings joins its live rows on con_id.
+      moverTiles = new Map();
+      for (const t of Object.values(tickers)) {
+        const tile = { mono: t.mono, ink: t.ink, logo: t.logo };
+        if (t.con_id != null) moverTiles.set(t.con_id, tile);
+        moverTiles.set(t.key, tile);
+      }
+      // The movers list rebuilds only when its ticker set changes; tiles
+      // arriving after its first paint would otherwise never show. Clearing
+      // the gate lets the next live tick redraw the rows with their plates.
+      applyLive._moversKey = "";
+    }
     holdings.updateQuotes(payload);
     stock.updateQuotes(payload);
     search.updateQuotes(payload);
@@ -1040,6 +1131,60 @@ function startNewsPolling() {
   const tick = async () => {
     const again = await pollNews();
     if (again) setTimeout(tick, NEWS_POLL_MS);
+  };
+  tick();
+}
+
+/* ---------------- pipeline health ---------------- */
+
+// Checks the feed pill already speaks for. The banner stays quiet on these so
+// a Gateway-less week reads as one amber pill, not a pill and a banner.
+const HEALTH_QUIET = new Set(["snapshot.source", "feed"]);
+const HEALTH_RANK = { ok: 0, pending: 0, warn: 1, fail: 2 };
+
+function renderHealth(report) {
+  const chip = $("healthChip");
+  if (!chip) return;
+  const checks = report.checks || [];
+  const status = HEALTH_RANK[report.status] === undefined ? "fail" : report.status;
+  const counts = report.counts || {};
+  const label = status === "ok" ? "Data ok"
+    : status === "warn" ? `Data · ${counts.warn || 1} warning${counts.warn === 1 ? "" : "s"}`
+    : status === "fail" ? `Data · ${counts.fail || 1} failing`
+    : "Data";
+  chip.dataset.state = status;
+  setText($("healthLabel"), label);
+  chip.title = checks.length
+    ? checks.map((c) => `${c.status.toUpperCase().padEnd(8)}${c.summary}`).join("\n")
+    : (report.meta?.error || "No checks reported");
+
+  const banner = $("dataBanner");
+  if (!banner) return;
+  const loud = checks
+    .filter((c) => !HEALTH_QUIET.has(c.id) && HEALTH_RANK[c.status] > 0)
+    .sort((a, b) => HEALTH_RANK[b.status] - HEALTH_RANK[a.status]);
+  if (!loud.length) { banner.hidden = true; return; }
+  const worst = loud[0];
+  banner.dataset.state = worst.status;
+  setText($("dataCopy"), worst.hint ? `${worst.summary}. ${worst.hint}` : worst.summary);
+  banner.hidden = false;
+}
+
+async function pollHealth() {
+  try {
+    const res = await fetch(`api/health?t=${Date.now()}`, { cache: "no-store" });
+    if (!res.ok) return false;          // older serve.py — stop asking
+    renderHealth(await res.json());
+    return true;
+  } catch {
+    return true;                         // transient; keep trying
+  }
+}
+
+function startHealthPolling() {
+  const tick = async () => {
+    const again = await pollHealth();
+    if (again) setTimeout(tick, HEALTH_POLL_MS);
   };
   tick();
 }

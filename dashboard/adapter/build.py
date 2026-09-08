@@ -27,7 +27,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import derive
 import ibkr
+import lots
 import marketdata
+import store
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 OUT_PATH = DATA_DIR / "portfolio.json"
@@ -61,21 +63,29 @@ def build() -> dict:
             ibkr_daily_pnl=raw.daily_pnl,
             ibkr_market_value=raw.market_value,
         )
-        positions.append(derive.make_position(
-            con_id=raw.con_id,
-            symbol=raw.symbol,
-            currency=raw.currency,
-            exchange=raw.exchange,
-            quantity=raw.quantity,
-            price=raw.market_price,
-            market_value=raw.market_value,
-            average_cost=raw.average_cost,
-            unrealized_pnl=raw.unrealized_pnl,
-            day_change_pct=change_pct,
-            day_change_source=change_source,
-            spark=sparks.get(raw.con_id, []),
-            to_gbp=to_gbp,
-        ))
+        try:
+            positions.append(derive.make_position(
+                con_id=raw.con_id,
+                symbol=raw.symbol,
+                currency=raw.currency,
+                exchange=raw.exchange,
+                quantity=raw.quantity,
+                price=raw.market_price,
+                market_value=raw.market_value,
+                average_cost=raw.average_cost,
+                unrealized_pnl=raw.unrealized_pnl,
+                day_change_pct=change_pct,
+                day_change_source=change_source,
+                spark=sparks.get(raw.con_id, []),
+                to_gbp=to_gbp,
+                cost_gbp_tradedate=lots.tradedate_cost(raw.con_id, raw.quantity),
+            ))
+        except derive.MissingRate as exc:
+            log.error("no GBP rate for %s (%s); the row is kept unpriced", raw.symbol, exc)
+            positions.append(derive.unpriced_position(
+                con_id=raw.con_id, symbol=raw.symbol, currency=raw.currency,
+                exchange=raw.exchange, quantity=raw.quantity, price=raw.market_price,
+                spark=sparks.get(raw.con_id, [])))
 
     agg = derive.aggregate(
         positions,
@@ -88,6 +98,8 @@ def build() -> dict:
         "meta": {
             "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "fetched_at": snapshot.fetched_at,
+            "cost_convention": "ibkr-average@spot",
+            "fx_missing": [p["symbol"] for p in positions if p.get("fx_missing")],
             "account_id": account.account_id,
             "base_currency": account.base_currency,
             "fx_source": fx_source,
@@ -109,20 +121,19 @@ def build() -> dict:
 def write_stale_marker(reason: str) -> None:
     """Gateway down: mark the existing snapshot stale, keep the values."""
     if not OUT_PATH.exists():
-        OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-        OUT_PATH.write_text(json.dumps({
+        store.write_json(OUT_PATH, {
             "meta": {"gateway": "unavailable", "error": reason,
                      "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")},
             "kpis": {}, "positions": [], "regions": [], "currencies": [],
             "concentration": {}, "movers": {"gainers": [], "losers": []},
-        }, indent=2))
+        })
         return
     payload = json.loads(OUT_PATH.read_text())
     payload.setdefault("meta", {})
     payload["meta"]["gateway"] = "unavailable"
     payload["meta"]["error"] = reason
     payload["meta"]["stale_since"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    OUT_PATH.write_text(json.dumps(payload, indent=2))
+    store.write_json(OUT_PATH, payload)
 
 
 def main() -> int:
@@ -135,7 +146,7 @@ def main() -> int:
         write_stale_marker(str(exc))
         return 1
 
-    OUT_PATH.write_text(json.dumps(payload, indent=2))
+    store.write_json(OUT_PATH, payload)
 
     kpis, conc = payload["kpis"], payload["concentration"]
     print(f"\nwrote {OUT_PATH.relative_to(OUT_PATH.parent.parent.parent)}")

@@ -103,7 +103,10 @@
   --icon-caret: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237a8490' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
 
   /* ---- layout ---- */
-  --sidebar-w: 260px;
+  /* 186px is the design file's rail. The floor is ~170px — icon, "Performance"
+   * and the item and rail paddings — below which the rail grows a horizontal
+   * scrollbar rather than clipping. */
+  --sidebar-w: 186px;
   --content-pad: 32px;
   --grid-gap: 22px;
   --row-gap: clamp(12px, 2.2vh, 24px);

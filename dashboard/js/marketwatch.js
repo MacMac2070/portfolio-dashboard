@@ -100,11 +100,10 @@ const perfOf = (idx) => (perfMode === "year" ? idx.year_pct : idx.month_pct);
 const PERF_LABEL = { month: "1M", year: "YTD" };
 
 /**
- * The change across the drawn window, which is what colours the line.
- *
- * Deliberately not the selected 1M/YTD figure: the series is always 30 days, and
- * colouring it by a year's return paints a visibly falling line green whenever
- * the year was up. A line's colour has to agree with its own shape.
+ * The change across the drawn window — the aria-label speaks it, so the trend
+ * a screen reader hears is always the line's own. The drawn colour follows the
+ * printed 1M/YTD figure instead (see render): a red line beside "+10.47%" made
+ * the card contradict itself, and the printed figure is the card's story.
  */
 function sparkChange(series) {
   if (!series || series.length < 2 || !series[0]) return null;
@@ -123,9 +122,11 @@ function figure(v, { cls = "" } = {}) {
  * the dashboard uses for a disconnected feed.
  */
 function benchDelta(b) {
-  if (b.stale) {
+  // No usable day figure — stale close, or a close the provider repeated so
+  // "0.00%" would be an artefact, not a reading. Either way: say when.
+  if (b.stale || !Number.isFinite(b.day_pct)) {
     return `<span class="dchip dchip--flat" title="Last close ${esc(b.as_of || "unknown")}">
-      ${b.as_of ? `as of ${esc(b.as_of.slice(5))}` : "stale"}</span>`;
+      ${b.as_of ? `as of ${esc(b.as_of.slice(5))}` : b.stale ? "stale" : DASH}</span>`;
   }
   return chip(b.day_pct);
 }
@@ -291,7 +292,13 @@ function render() {
       const m = byCode.get(svg.dataset.spark);
       const series = m?.benchmark?.spark || [];
       if (series.length >= 2) {
-        sparkline(svg, series, { direction: dirClass(sparkChange(series)) });
+        // Coloured by the figure printed beside it, so one card tells one
+        // story; the spark's own change stays in the aria-label. perfMode is
+        // part of structureKey, so toggling 1M/YTD recolours the lines.
+        const shown = perfOf(m.benchmark);
+        sparkline(svg, series, {
+          direction: dirClass(Number.isFinite(shown) ? shown : sparkChange(series)),
+        });
       }
     }
   }

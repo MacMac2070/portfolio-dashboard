@@ -37,6 +37,9 @@ let retryTimer = null;
 let period = "annual";
 let tab = "income";
 let tabTouched = false;
+/** key -> logo url from the watchlist universe — the financials payload
+ *  carries identity colours but no mark. Fetched once, lazily. */
+let logos = null;
 
 /* ---------------- fetch ---------------- */
 
@@ -85,7 +88,7 @@ function render() {
   const ident = d.instrument || {};
   const rep = d.reporting || {};
   const statements = d.statements || {};
-  const active = statements[tab] || {};
+  const active = pruneDeadPeriods(statements[tab] || {});
 
   /* identity */
   $("finCrumbStock").textContent = key || DASH;
@@ -93,8 +96,20 @@ function render() {
   const tile = $("finTile");
   $("finMono").textContent = ident.mono || "";
   tile.style.background = ident.tint || "#EDF0F3";
-  tile.style.borderColor = ident.edge || "rgba(10,13,18,.16)";
   $("finMono").style.color = ident.ink || "#2E2452";
+  // The issuer's mark, as the stock hero one click earlier draws it. The
+  // financials payload carries no logo, so it comes from the watchlist
+  // universe; until (or unless) that lands, the monogram holds the tile.
+  const img = $("finLogo");
+  const logo = (logos && key && logos[key]) || "";
+  if (img) {
+    if (logo) {
+      if (img.dataset.src !== logo) { img.dataset.src = logo; img.src = logo; }
+      img.hidden = false;
+    } else {
+      img.hidden = true;
+    }
+  }
   $("finName").textContent = ident.name || (key ? `Loading ${key}…` : DASH);
   $("finTicker").textContent = key || DASH;
   $("finSub").textContent = [ident.exchange_name, ident.sector]
@@ -127,6 +142,34 @@ function render() {
   } else {
     renderEmpty(ident, d);
   }
+}
+
+/** Drop statement periods that are effectively dead. yfinance files four
+ *  full annual periods; a fifth arrives carrying three stray interest lines
+ *  against twenty-nine real rows, and drew as an empty year in both the
+ *  chart and the table. A period stays only with at least a quarter of the
+ *  best period's populated rows, so sparse-but-real filers are untouched. */
+function pruneDeadPeriods(active) {
+  const periods = active.periods || [];
+  if (!periods.length) return active;
+  const rows = [
+    ...(active.chart || []),
+    ...(active.sections || []).flatMap((s) => s.rows || []),
+  ];
+  const counts = periods.map((_, i) =>
+    rows.reduce((n, r) => n + (Number.isFinite(r.values?.[i]) ? 1 : 0), 0));
+  const floor = Math.max(1, Math.max(...counts) * 0.25);
+  const alive = counts.map((n) => n >= floor);
+  if (alive.every(Boolean)) return active;
+  const cut = (values) => (values || []).filter((_, i) => alive[i]);
+  return {
+    ...active,
+    periods: periods.filter((_, i) => alive[i]),
+    chart: (active.chart || []).map((s) => ({ ...s, values: cut(s.values) })),
+    sections: (active.sections || []).map((sec) => ({
+      ...sec, rows: (sec.rows || []).map((r) => ({ ...r, values: cut(r.values) })),
+    })),
+  };
 }
 
 function bannerMessage(d, statements) {
@@ -297,6 +340,20 @@ function renderEmpty(ident, d) {
     </td></tr></tbody>`;
 }
 
+async function loadLogos() {
+  if (logos) return;
+  logos = {};
+  try {
+    const res = await fetch("/api/watchlist");
+    if (!res.ok) return;
+    const payload = await res.json();
+    for (const t of Object.values(payload?.universe?.tickers || {})) {
+      logos[t.key] = t.logo || "";
+    }
+    if (!$("view-financials").hidden) render();
+  } catch { /* the monogram holds the tile */ }
+}
+
 /* ---------------- routing ---------------- */
 
 function fromHash() {
@@ -307,6 +364,7 @@ function fromHash() {
 export function route() {
   const next = fromHash();
   if (!next) return;
+  loadLogos();
   if (next !== key) {
     key = next;
     detail = null;

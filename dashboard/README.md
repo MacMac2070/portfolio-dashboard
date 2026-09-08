@@ -73,6 +73,7 @@ runs happily while the feed is connected.
 | `adapter/backfill.py` | one-time Flex history import |
 | `adapter/watchlist.py` | openbb quotes for tickers you don't own (Watchlist) |
 | `adapter/markets.py` | world board: market registry, sessions, index poller |
+| `adapter/marks.py` | issuer marks: vendored SVG set under `assets/logos/`, slug lookup for search-added names |
 
 ## What is live, and what isn't
 
@@ -122,6 +123,126 @@ Optional, and separate from the daily job:
 | `adapter/store.py` | append-only JSONL, merge-by-key so re-runs never duplicate |
 | `adapter/refresh.py` | the scheduled job: build + record the day |
 | `adapter/backfill.py` | one-time Flex history import |
+
+## Pipeline health
+
+Since 2 Sep 2026 the pipeline says how it is doing, instead of leaving you to
+read `logs/refresh.log` to find out a night was missed.
+
+```
+curl -s localhost:5173/api/health | python3 -m json.tool   # one verdict, every check
+/opt/anaconda3/bin/python3 adapter/health.py                # the same, in the terminal
+```
+
+`adapter/health.py` reads the files on disk — the heartbeat the nightly job
+writes to `data/last_run.json`, the NAV and positions stores, the snapshot's
+own meta — plus what the server knows live: the feed's meta and the provider
+breakers. Each check is `ok`, `pending`, `warn` or `fail` with a one-line
+summary and, when it is not ok, a hint that says what to do. The header chip
+("Data ok" / "Data · 2 warnings" / "Data · failing") is that verdict; hover it
+for the list. A banner under the tape repeats the worst check the feed pill
+does not already express — a missed nightly run, a stale NAV series, an
+archive that lost rows.
+
+What the nightly job now guards against, because of the night of 31 Aug 2026
+when a provider call never returned and two nights went unrecorded:
+
+- **A watchdog** ends the run at forty minutes whatever stage it is in, and
+  records which. Every file write is atomic (`store.write_json`, same
+  temp-and-rename as the JSONL stores), so a hard exit costs nothing.
+- **The directory rebuild** runs on its own thread with a ten-minute budget and
+  is abandoned rather than waited for; the previous directory keeps serving.
+- **A twenty-hour gate**: a run that succeeded within twenty hours is not
+  repeated, so the LaunchAgent's `RunAtLoad` (it fires at login as well as at
+  23:30) is safe. `adapter/refresh.py --force` overrides it.
+- **The Flex Trades section is merged nightly.** Until now only the one-time
+  backfill ever wrote the ledger, so it stopped at the last hand run while
+  positions moved on.
+- **A desktop notification** on a failed or degraded run (`adapter/notify.py`;
+  mail too, with an `alerts.smtp` block in `config.local.json`).
+
+Provider outages are handled by one shared circuit breaker
+(`adapter/resilience.py`): after three consecutive failures a provider is left
+alone for two minutes, doubling to thirty, with one probe let through when
+the window lapses. Every poller keeps its last good values meanwhile and says
+so in `meta.error` and `meta.breaker`. Four days of Yahoo's "401 Invalid
+Crumb" used to mean eight hundred retries fifteen seconds apart.
+
+Logs rotate (`logs/serve.log`, `logs/refresh.log`, 5 MB × 5 and 2 MB × 5);
+launchd's own `*.launchd.log` files only catch an interpreter that dies before
+logging starts. Dependencies are pinned in `requirements.txt`.
+
+### Does the data agree with itself?
+
+```
+/opt/anaconda3/bin/python3 adapter/reconcile.py [--live http://localhost:5173/api/snapshot]
+```
+
+`adapter/reconcile.py` is the balance-assertion layer, run by the nightly job
+after the stores are refreshed and written to `data/quality.json`, which
+`/api/health` folds in as `quality.*`. Every check is a pure function over
+rows:
+
+- **positions.replay** — `transactions.jsonl` replayed (with corporate
+  actions) against `positions_eod.json`, to a millionth of a share.
+- **nav.continuity** — duplicates, missing weekdays (IBKR reports every
+  weekday, holidays included), zero rows after inception, a snapshot row Flex
+  never replaced, a snapshot dated on a weekend.
+- **flows.deposits** — the deposits the daily return excludes, checked per
+  period against the Change in NAV's own `depositsWithdrawals`, with a
+  three-day settlement window at the edges. If the Cash Transactions section
+  ever stops carrying Deposits/Withdrawals this is what notices, and the
+  Performance page marks the return "deposits unverified".
+- **nav.composition** — the positions × FX against the statement's own
+  `stock` figure, and stock + cash + accruals against `total`. Needs the
+  Equity Summary's split, which the NAV rows now carry.
+- **positions.unmapped / unmarked**, **actions.unbucketed**,
+  **cash.unbucketed** — a contract the quote tables cannot name, a line Flex
+  marks at nothing, a corporate-action or cash type the tables have not met.
+- **live.positions** — the live feed against the EOD snapshot, with `--live`.
+
+### Two costs on every row
+
+`cost_gbp` is IBKR's cost in the instrument's currency at today's rate: what
+the position would cost to buy now. `cost_gbp_tradedate` is what was actually
+paid in sterling, from FIFO lots built by `adapter/lots.py` out of the ledger,
+each lot carrying `fxRateToBase` from its own fill (older rows take the rate
+from the ConversionRates store) and its commission and taxes. The holdings
+table prints the return on the second under the first — "+£683 paid · FX
++£10" — and the Overview's unrealised tile carries the same in its title.
+`fx_pnl_gbp` is the difference: the currency's own move since purchase, which
+the first convention hid inside "unrealised". The trade-date figure is
+withheld for any position whose ledger quantity disagrees with the broker's;
+the replay check says why.
+
+### Prices are kept
+
+`adapter/quotes.py` is a SQLite table of daily closes (`data/quotes.sqlite3`,
+gitignored, rebuilt from the providers). The world board, the sparklines and
+the sterling crosses write to it and draw from it, so a provider outage
+serves stored closes with their own date, the benchmark line draws before the
+market feed has warmed, and the board asks for eleven indices × seven days a
+minute rather than × 420. A missing day is never filled from a later one.
+
+A non-GBP benchmark is now restated in sterling at daily rates — the return
+a sterling investor would have had — with the local line alongside as
+`points_local`; the legend says "USD · in GBP at daily rates". Beta and
+alpha on the Performance page use the same restated series.
+
+### Corporate actions and providers
+
+Splits, ticker changes, spin-offs, mergers, delistings and transfers are read
+from the Flex Corporate Actions and Transfers sections into
+`data/corporate_actions.jsonl` as signed share quantities, which the replay
+and the lot engine apply beside the fills; the NAV flow gives them their own
+nodes so `drift` is only what the statement does not explain.
+
+`adapter/providers.py` is the one place openbb is imported and the operator's
+keys applied (`"providers"` in `config.local.json`, or the ones already in
+`~/.openbb_platform`). FMP is offered as a second tier for US listings only —
+its free plan refuses venue-suffixed symbols — and the ECB's keyless daily
+reference rates are the second source for FX, ahead of the broker's own
+account rates.
 
 ## The symbol directory
 

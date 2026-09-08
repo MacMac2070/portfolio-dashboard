@@ -27,6 +27,8 @@ import math
 import threading
 from datetime import date, datetime, timedelta, timezone
 
+import quotes
+import resilience
 import universe
 
 QUOTE_SECONDS = 60.0
@@ -34,6 +36,7 @@ QUOTE_SECONDS = 60.0
 MAX_SYMBOLS = 200
 HISTORY_DAYS = 30
 FIRST_RETRY_SECONDS = 15.0
+BREAKER = "yfinance"        # shared with every other module that asks Yahoo
 
 log = logging.getLogger("watchlist")
 
@@ -123,6 +126,7 @@ class WatchlistFeed:
                 "poll_seconds": self.poll_seconds,
                 "polls": self._polls,
                 "error": self._error,
+                "breaker": resilience.get(BREAKER).snapshot(),
                 "served_at": _now(),
             }
         return {"meta": meta, "quotes": quotes, "universe": universe.to_dict()}
@@ -189,13 +193,28 @@ class WatchlistFeed:
 
     def _run(self) -> None:
         self._await_gate()
+        breaker = resilience.get(BREAKER)
         while not self._stop.is_set():
+            if not breaker.allow():
+            # Yahoo known to be down: keep the last good values, say so in meta,
+            # and look again when the breaker's window lapses rather than
+            # asking a dead provider every fifteen seconds for four days.
+                with self._lock:
+                    self._error = breaker.reason()
+                self._sleep(min(breaker.retry_after() + 1.0, self.poll_seconds))
+                continue
             ok = self._refresh_quotes()
-            if self._spark_day != date.today().isoformat():
-                self._refresh_history()
+            if ok:
+                breaker.record_success()
+                if self._spark_day != date.today().isoformat():
+                    self._refresh_history()
+            else:
+                breaker.record_failure(self._error)
             # Back off only until the first success, so a slow start does not
-            # leave the page empty for a full minute.
-            self._sleep(self.poll_seconds if ok else FIRST_RETRY_SECONDS)
+            # leave the page empty for a full minute — unless the breaker has
+            # already decided the provider is down.
+            self._sleep(self.poll_seconds if ok
+                        else max(FIRST_RETRY_SECONDS, breaker.retry_after()))
 
     def _sleep(self, seconds: float) -> None:
         waited = 0.0
@@ -204,9 +223,8 @@ class WatchlistFeed:
             waited += 0.5
 
     def _obb(self):
-        from openbb import obb
-        obb.user.preferences.output_type = "dataframe"
-        return obb
+        import providers  # noqa: PLC0415 — keeps the openbb import deferred
+        return providers.obb()
 
     def _refresh_quotes(self) -> bool:
         try:
@@ -259,26 +277,29 @@ class WatchlistFeed:
 
     def _refresh_history(self) -> None:
         """30d of daily closes for the sparklines. Once a day is plenty."""
-        start = (date.today() - timedelta(days=HISTORY_DAYS * 2 + 10)).isoformat()
+        start = quotes.plan_fetch_all(self.symbols, full_days=HISTORY_DAYS * 2 + 10)
         try:
             obb = self._obb()
             df = obb.equity.price.historical(
                 symbol=",".join(self.symbols), provider="yfinance",
                 start_date=start, interval="1d").reset_index()
+            if "symbol" in df.columns:
+                for symbol, sub in df.groupby("symbol"):
+                    quotes.upsert(str(symbol), zip((str(d)[:10] for d in sub["date"]), sub["close"]),
+                                  source="yfinance")
+            elif len(self.symbols) == 1 and "close" in df:
+                quotes.upsert(self.symbols[0], zip((str(d)[:10] for d in df["date"]), df["close"]),
+                              source="yfinance")
         except Exception as exc:
-            log.warning("watchlist history failed, sparklines omitted: %s", exc)
-            return
+            # The store still has whatever earlier days fetched; draw from it.
+            log.warning("watchlist history failed, sparklines from the store: %s", exc)
 
+        window = (date.today() - timedelta(days=HISTORY_DAYS * 2 + 10)).isoformat()
         series: dict[str, list[float]] = {}
-        if "symbol" in df.columns:
-            for symbol, sub in df.groupby("symbol"):
-                closes = [c for c in (_finite(v) for v in sub["close"].tolist()) if c is not None]
-                if len(closes) >= 2:
-                    series[str(symbol)] = closes[-HISTORY_DAYS:]
-        elif len(self.symbols) == 1 and "close" in df:
-            closes = [c for c in (_finite(v) for v in df["close"].tolist()) if c is not None]
+        for symbol in self.symbols:
+            closes = [c for _, c in quotes.series(symbol, start=window)]
             if len(closes) >= 2:
-                series[self.symbols[0]] = closes[-HISTORY_DAYS:]
+                series[symbol] = closes[-HISTORY_DAYS:]
 
         with self._lock:
             if series:

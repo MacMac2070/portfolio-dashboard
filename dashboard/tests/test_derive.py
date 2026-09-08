@@ -42,8 +42,52 @@ def test_converter_known_rate():
     assert GBP(100, "USD") == pytest.approx(80.0)
 
 
-def test_converter_unknown_currency_treated_as_base():
-    assert GBP(100, "XXX") == pytest.approx(100.0)
+def test_converter_unknown_currency_raises():
+    with pytest.raises(derive.MissingRate):
+        GBP(100, "XXX")
+
+
+def test_make_position_exposes_both_cost_conventions():
+    # $1,000 of stock bought for $900 when the pound bought $1.25 (fx 0.80);
+    # today the rate is 0.75.
+    to_gbp = derive.converter({"USD": 0.75, "GBP": 1.0})
+    row = derive.make_position(
+        con_id=1, symbol="X", currency="USD", exchange="NASDAQ", quantity=10, price=100.0,
+        market_value=1000.0, average_cost=90.0, unrealized_pnl=100.0,
+        day_change_pct=None, day_change_source="none", spark=[], to_gbp=to_gbp,
+        cost_gbp_tradedate=900.0 * 0.80)
+    assert row["cost_gbp"] == pytest.approx(675.0)                 # at today's rate
+    assert row["unrealised_gbp"] == pytest.approx(75.0)            # the market return
+    assert row["cost_gbp_tradedate"] == pytest.approx(720.0)       # what was paid
+    assert row["unrealised_gbp_tradedate"] == pytest.approx(30.0)  # 750 − 720
+    assert row["fx_pnl_gbp"] == pytest.approx(-45.0)               # 900 × (0.75 − 0.80)
+    # Without a ledger figure the second convention is simply absent.
+    bare = derive.make_position(
+        con_id=1, symbol="X", currency="USD", exchange="NASDAQ", quantity=10, price=100.0,
+        market_value=1000.0, average_cost=90.0, unrealized_pnl=100.0,
+        day_change_pct=None, day_change_source="none", spark=[], to_gbp=to_gbp)
+    assert bare["cost_gbp_tradedate"] is None and bare["fx_pnl_gbp"] is None
+
+
+def test_aggregate_skips_unpriced_rows_and_totals_tradedate_only_when_complete():
+    to_gbp = derive.converter({"USD": 0.75, "GBP": 1.0})
+    priced = derive.make_position(
+        con_id=1, symbol="A", currency="USD", exchange="", quantity=10, price=100.0,
+        market_value=1000.0, average_cost=90.0, unrealized_pnl=100.0,
+        day_change_pct=1.0, day_change_source="x", spark=[], to_gbp=to_gbp,
+        cost_gbp_tradedate=720.0)
+    unpriced = derive.unpriced_position(con_id=2, symbol="W", currency="KRW", exchange="",
+                                        quantity=5, price=1.0)
+    agg = derive.aggregate([priced, unpriced], nav=1000.0, cash=250.0, account_daily_pnl=None)
+    assert agg["kpis"]["invested"] == pytest.approx(750.0)
+    assert agg["kpis"]["unpriced"] == 1
+    assert agg["kpis"]["fx_pnl"] == pytest.approx(-45.0)
+    assert agg["concentration"]["positions"] == 2
+    # One priced row without a trade-date cost leaves the convention untotalled.
+    partial = dict(priced, cost_gbp_tradedate=None, unrealised_gbp_tradedate=None, fx_pnl_gbp=None)
+    agg = derive.aggregate([priced, dict(partial, con_id=3, symbol="B")], nav=2000.0, cash=0.0,
+                           account_daily_pnl=None)
+    assert agg["kpis"]["fx_pnl"] is None
 
 
 # ---------------------------------------------------------------- make_position

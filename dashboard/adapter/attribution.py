@@ -153,6 +153,15 @@ def flow(change: dict | None) -> dict | None:
     # and the drift line carried the difference every time.
     dividends = change.get("dividends", 0.0) + change.get("changeInDividendAccruals", 0.0)
 
+    # The fields that used to have no node at all and so landed in `drift`:
+    # a spin-off's cash, a position transferred in, a cost-basis adjustment.
+    # Each is money the statement explains, and the chart should too.
+    actions = change.get("corporateActionProceeds", 0.0)
+    transfers = change.get("assetTransfers", 0.0) + change.get("internalCashTransfers", 0.0)
+    adjustments = (change.get("costAdjustments", 0.0) + change.get("transferredPnlAdjustments", 0.0)
+                   + change.get("cashSettlingMtm", 0.0) + change.get("realizedVm", 0.0)
+                   + change.get("other", 0.0))
+
     # Into the pot.
     sources = [
         ("Starting value", change.get("startingValue", 0.0)),
@@ -163,6 +172,9 @@ def flow(change: dict | None) -> dict | None:
         ("Dividends", _pos(dividends)),
         ("Interest", _pos(interest)),
         ("FX translation", _pos(fx)),
+        ("Corporate actions", _pos(actions)),
+        ("Transfers in", _pos(transfers)),
+        ("Adjustments", _pos(adjustments)),
     ]
     # Off the top. Fee fields arrive negative; take the magnitude.
     costs = [
@@ -183,6 +195,9 @@ def flow(change: dict | None) -> dict | None:
         ("Interest paid", _neg(interest)),
         ("Other fees", _neg(change.get("otherFees", 0.0))),
         ("FX translation loss", _neg(fx)),
+        ("Corporate actions out", _neg(actions)),
+        ("Transfers out", _neg(transfers)),
+        ("Adjustments out", _neg(adjustments)),
     ]
 
     sources = [(name, round(v, 2)) for name, v in sources if v > 0.005]
@@ -282,12 +297,20 @@ def monthly(cash: list[dict], changes: list[dict] | None = None) -> dict:
     # Costs come off the ChangeInNAV sub-periods, not the cash rows above —
     # see COST_FIELDS for why. Same rows the P&L bars read, so a month that has
     # one has the other.
+    fx_by_month: dict[str, float] = {}
     for row in changes or []:
         if (row.get("span_days") or 0) > MONTH_SPAN_DAYS:
             continue                    # the whole-span summary, not a month
         month = (row.get("from_date") or "")[:7]
         if len(month) != 7:
             continue
+        # Flex's own currency-translation line, monthly. For a book quoted in
+        # six currencies this is the broker-audited answer to "how much of the
+        # move was FX", so it ships as its own series rather than being
+        # derivable only from the whole-span Sankey node.
+        fx = row.get("fxTranslation", 0.0)
+        if fx:
+            fx_by_month[month] = fx_by_month.get(month, 0.0) + fx
         for key, fields in COST_FIELDS:
             # Flex reports a charge as a negative; the chart wants magnitudes.
             # Taking only the negative part also keeps interest *received* out
@@ -357,4 +380,6 @@ def monthly(cash: list[dict], changes: list[dict] | None = None) -> dict:
         "cost_detail": series(cost, COST_DETAIL),
         "income_total": round(sum(sum(v.values()) for v in inc.values()), 2),
         "cost_total": round(sum(sum(v.values()) for v in cost.values()), 2),
+        "fx": [round(fx_by_month.get(m, 0.0), 2) for m in ordered],
+        "fx_total": round(sum(fx_by_month.values()), 2),
     }

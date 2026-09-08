@@ -188,6 +188,55 @@
   color: var(--text-2);
 }
 
+/* The pipeline verdict, styled as the venue chip's sibling. Green is the
+ * quiet state; amber and red follow the feed pill's own vocabulary so the two
+ * read as one system. Never colour alone: the label changes with the state. */
+.health-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 5px var(--s-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--text-2);
+  cursor: default;
+}
+.health-chip__dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+.health-chip[data-state="ok"] .health-chip__dot { background: var(--pos); box-shadow: 0 0 0 3px rgba(22, 199, 132, 0.16); }
+.health-chip[data-state="warn"] { color: var(--fin-3); border-color: rgba(190, 131, 23, 0.45); }
+.health-chip[data-state="warn"] .health-chip__dot { background: var(--fin-3); box-shadow: 0 0 0 3px rgba(190, 131, 23, 0.18); }
+.health-chip[data-state="fail"] { color: var(--neg); border-color: rgba(234, 57, 67, 0.45); }
+.health-chip[data-state="fail"] .health-chip__dot { background: var(--neg); box-shadow: 0 0 0 3px var(--neg-bg); }
+
+/* Sits between the tape and the views, so it is on every page. Slim like the
+ * stale banner, and hidden unless a check the feed pill cannot express has
+ * something to say. */
+.data-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: 0 var(--s-6) var(--s-3);
+  padding: 5px var(--s-3);
+  border: 1px solid rgba(190, 131, 23, 0.45);
+  border-radius: var(--r-sm);
+  background: rgba(190, 131, 23, 0.14);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.35;
+}
+.data-banner[hidden] { display: none; }
+.data-banner svg { width: 14px; height: 14px; color: var(--fin-3); flex: none; }
+.data-banner[data-state="fail"] { border-color: rgba(234, 57, 67, 0.35); background: var(--neg-bg); }
+.data-banner[data-state="fail"] svg { color: var(--neg); }
+
 /* ============ performance ============
  *
  * Three charts answering one question. The flow gets its own full-width row
@@ -629,6 +678,16 @@
 .plot { flex: 1; min-height: 0; padding: var(--s-2) var(--s-5) 0; }
 .plot svg { width: 100%; height: 100%; display: block; }
 
+/* Event marks on the equity curve: the shape carries the kind (▲ ▼ ●), the
+   colour only echoes it, and clustered days wear a counted badge. */
+.plot__ev--buy  { fill: var(--pos); }
+.plot__ev--sell { fill: var(--neg); }
+.plot__ev--div  { fill: var(--brand-soft); }
+.plot__evbadge  { fill: var(--surface); stroke: var(--border-strong); }
+.plot__evcount  { font: 600 8px var(--font-figure); fill: var(--text-2); }
+.tip__event { font-size: 10.5px; color: var(--text-2); }
+.benchbar__events { margin-left: var(--s-3); }
+
 .plot__grid { stroke: var(--border); stroke-width: 1; }
 .plot__axis {
   fill: var(--text-3);
@@ -1002,7 +1061,9 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding: 0 var(--s-5) var(--s-3);
+  /* 36px, not --s-3: the Positions cue floats over this card's bottom-right
+     corner, and the last headline needs to clear its 26px pill. */
+  padding: 0 var(--s-5) 36px;
   overflow: hidden;
 }
 .outlet__earnings {
@@ -1293,8 +1354,9 @@
   border-radius: 4px;
 }
 /* 1020px is what the nine tracks need at their minima plus gaps and padding.
-   Overview's content column is 1146px, so the table still fits there without a
-   horizontal scroll; below that this container scrolls sideways. */
+   Overview's content column is 1220px at a 1470px viewport, so the table still
+   fits there without a horizontal scroll; below that this container scrolls
+   sideways. */
 .positions__inner { min-width: 1020px; display: flex; flex-direction: column; }
 
 /* One grid definition shared by the header and every row, held or watched.
@@ -1396,9 +1458,10 @@
 
 .pid { display: flex; align-items: center; gap: 10px; min-width: 0; overflow: hidden; }
 
-/* Light plate: the marks are drawn for light ground, so a dark tile would make
- * half of them invisible. The monogram sits underneath and shows through if the
- * mark fails to load. */
+/* The issuer's mark fills the tile edge to edge — the set is drawn full-bleed
+ * for exactly this (see adapter/marks.py), so every name sits on the card the
+ * same way. The light plate and the monogram sit underneath and show only when
+ * no mark is published, or one fails to load and removes itself. */
 .ptile {
   position: relative;
   display: grid;
@@ -1407,8 +1470,23 @@
   flex: none;
   border-radius: 8px;
   background: #EDF0F3;
-  border: 1px solid rgba(10, 13, 18, 0.16);
   overflow: hidden;
+  /* Fallback ink: a name outside the universe (a sweep pair, a sold
+     position) has no tint payload, and inheriting the row's light text
+     printed an invisible monogram on the light plate. */
+  color: #2E2452;
+}
+/* One hairline ring over whatever the tile holds, taken from the theme rather
+ * than the mark: a black mark keeps an edge on the dark theme and a white one
+ * on the light theme. A pseudo-element paints after the <img>, so the mark can
+ * never cover it. */
+.ptile::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+  pointer-events: none;
 }
 .ptile__mono {
   padding: 0 2px;
@@ -1420,8 +1498,7 @@
   position: absolute;
   inset: 0;
   width: 100%; height: 100%;
-  object-fit: contain;
-  padding: 4px;
+  object-fit: cover;
 }
 
 .pid__text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
@@ -2523,9 +2600,9 @@
 }
 .sprofile__grid {
   margin-top: auto;
-  /* 130px, not the design's 150px: this project's sidebar is 260px against the
-     design's 186px, so at the same viewport the card is ~573px not ~629px and
-     four 150px cells would wrap to 3+1. This keeps the design's single row. */
+  /* 130px, not the design's 150px: at 150px the four cells fit a 1470px
+     viewport with only ~25px to spare, so any narrower window would wrap them
+     to 3+1. The lower floor keeps the design's single row further down. */
   display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
   gap: 1px;
   background: var(--wash-2);
@@ -3129,7 +3206,9 @@ a.prow--pos:active { background: var(--violet-tint-18); }
 .allocpos { padding: var(--s-2) var(--s-5) var(--s-4); }
 .allocpos__row {
   display: grid;
-  grid-template-columns: 64px minmax(0, 1fr) 150px 62px 96px 88px;
+  /* The weight bar shares the slack with the name column — left at a fixed
+     88px the bars huddled at the far right of a ~400px empty gutter. */
+  grid-template-columns: 64px minmax(0, 1.1fr) 150px 62px 96px minmax(88px, 1fr);
   align-items: center;
   gap: var(--s-3);
   padding: 7px var(--s-2);
@@ -3196,12 +3275,35 @@ a.prow--pos:active { background: var(--violet-tint-18); }
 .txhead,
 .txrow {
   display: grid;
+  /* Instrument takes the width the old layout left as a dead gap between
+     Side and Quantity — it now carries a plate, ticker and venue. */
   grid-template-columns:
-    minmax(88px, 0.9fr) minmax(120px, 1.4fr) minmax(64px, 0.6fr)
-    minmax(80px, 0.8fr) minmax(88px, 0.9fr) minmax(112px, 1.1fr) minmax(96px, 0.9fr);
+    minmax(84px, 0.7fr) minmax(200px, 1.9fr) 72px
+    minmax(90px, 0.9fr) minmax(96px, 0.9fr) minmax(130px, 1.2fr) minmax(90px, 0.7fr);
   gap: var(--s-3);
   align-items: center;
 }
+
+.txcontrols {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+  padding: 0 var(--s-4) var(--s-3);
+}
+.txsweeps { margin-left: auto; }
+.txfilter {
+  width: 190px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: transparent;
+  font: 500 12px/1.4 var(--font-ui);
+  color: var(--text);
+}
+.txfilter::placeholder { color: var(--text-3); }
+.txfilter:hover { border-color: var(--border-strong); }
+.txfilter:focus-visible { outline: 2px solid var(--brand-soft); outline-offset: 1px; }
 .txhead {
   padding: 0 var(--s-4) var(--s-2);
   border-bottom: 1px solid var(--border);
@@ -3242,14 +3344,18 @@ a.prow--pos:active { background: var(--violet-tint-18); }
 .txrow__date { color: var(--text-2); font-size: 12.5px; }
 .txrow__sym {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--s-2);
   font-family: var(--font-figure);
   font-weight: 600;
   font-size: 13px;
   color: var(--text);
 }
+.txrow__symtext { display: flex; align-items: baseline; gap: var(--s-2); }
 .txrow__venue { font: 400 10.5px/1 var(--font-ui); color: var(--text-3); }
+/* Holdings' issuer plate, one size down for the denser log rows. */
+.ptile--sm { width: 22px; height: 22px; border-radius: 6px; }
+.ptile--sm .ptile__mono { font-size: 8.5px; }
 .txrow__n {
   text-align: right;
   justify-self: end;
@@ -3274,11 +3380,38 @@ a.prow--pos:active { background: var(--violet-tint-18); }
 .txpill.is-sell  { color: var(--neg); background: var(--neg-bg); border-color: var(--neg-bg); }
 .txpill.is-flat  { color: var(--text-3); border-color: var(--border); }
 
+/* Per-currency totals over whatever the filters leave on screen. */
+.txfoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-2) var(--s-5);
+  padding: var(--s-3) var(--s-4);
+  border-top: 1px solid var(--border);
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+.txfoot:empty { display: none; }
+.txfoot__note {
+  font: 600 9.5px/1 var(--font-ui);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.txfoot__group b { font-family: var(--font-figure); font-size: 11px; color: var(--text); }
+.txfoot .num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: var(--ff-tabular);
+  color: var(--text);
+}
+
+.txnone { padding: var(--s-5) var(--s-4); font-size: 12.5px; color: var(--text-3); }
+
 @media (max-width: 1080px) {
   /* Consideration and venue are the first things to go: the trade is still
      legible from quantity and price without them. */
   .txhead,
-  .txrow { grid-template-columns: minmax(78px, 1fr) minmax(96px, 1.2fr) 56px 1fr 1fr; }
+  .txrow { grid-template-columns: minmax(78px, 1fr) minmax(140px, 1.6fr) 60px 1fr 1fr; }
   .txhead__cell:nth-child(n + 6),
   .txrow > :nth-child(n + 6) { display: none; }
   .txrow__venue { display: none; }
@@ -3383,6 +3516,19 @@ a.prow--pos:active { background: var(--violet-tint-18); }
   text-transform: uppercase;
   color: var(--text-3);
 }
+/* Column key: the five tracks are weekdays, weeks stack down. Printed once,
+   on the first month — eleven repeats would be noise — but present in every
+   month so the day rows stay level across the grid. */
+.dcal__wd {
+  display: grid;
+  grid-template-columns: repeat(5, 14px);
+  gap: 3px;
+  font: 600 8.5px/1 var(--font-ui);
+  color: var(--text-3);
+  text-align: center;
+  font-style: normal;
+}
+.dcal__month:not(:first-child) .dcal__wd { visibility: hidden; }
 .dcal__days {
   display: grid;
   grid-template-columns: repeat(5, 14px);
@@ -3572,30 +3718,46 @@ a.prow--pos:active { background: var(--violet-tint-18); }
   align-items: end;
   height: 150px;
 }
+/* Fixed label rows, not auto: only every third column prints a month and
+ * only bars above £5 print an amount, and an auto row collapses to nothing
+ * where the label is empty — which put the bars in unlabelled columns 12px
+ * lower than their neighbours and ran the small ones through the month
+ * names beside them. Every column now reserves the same rows, so every
+ * baseline is the same baseline and every bar is on the same scale. */
 .irail__col {
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: 22px 1fr 12px;
   gap: 4px;
   height: 100%;
   min-width: 0;
   text-align: center;
 }
 .irail__col.is-now .irail__m { color: var(--brand-soft); font-weight: 700; }
+/* Twenty-five columns leave about 22px each, less than "£140" needs, so
+ * neighbouring amounts are staggered onto two lines: odd columns sit on the
+ * lower line, even on the upper. Each label then has two columns of room. */
 .irail__amt {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  height: 22px;
   font-size: 9.5px;
+  line-height: 11px;
   color: var(--text-3);
-  align-self: end;
+  white-space: nowrap;
   font-variant-numeric: tabular-nums;
   font-feature-settings: var(--ff-tabular);
 }
-.irail__stack { position: relative; display: flex; align-items: flex-end; gap: 2px; justify-content: center; }
+.irail__col:nth-child(even) .irail__amt { align-items: flex-start; }
+.irail__stack { position: relative; display: flex; align-items: flex-end; gap: 2px; justify-content: center; min-height: 0; }
 .irail__seg { width: 100%; max-width: 22px; border-radius: 0; }
 /* Paid: solid teal, a broker fact. Estimated: outline only — a model that
    says so at a glance. */
 .irail__seg--paid { background: var(--fin-1); }
 .irail__seg--est { background: none; border: 1px solid var(--fin-1); opacity: 0.75; }
 .irail__m {
-  font: 500 9.5px/1 var(--font-ui);
+  height: 12px;
+  font: 500 9.5px/12px var(--font-ui);
   letter-spacing: var(--tracking-caps);
   text-transform: uppercase;
   color: var(--text-3);
@@ -3657,12 +3819,12 @@ a.prow--pos:active { background: var(--violet-tint-18); }
 .sdivs__none { font-size: 12.5px; color: var(--text-2); padding: var(--s-2) 0; }
 @media (max-width: 1100px) { .sdivs { grid-template-columns: 1fr; } }
 
-/* ---- desk context ---- */
+/* ---- desk context — below the board, above the digest ---- */
 .desk-row {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(260px, 1fr);
   gap: var(--grid-gap);
-  margin-bottom: var(--grid-gap);
+  margin: var(--grid-gap) 0;
 }
 .onight, .earn { display: grid; gap: 2px; padding: var(--s-2) var(--s-5) var(--s-4); }
 .onight__none { font-size: 12px; color: var(--text-3); padding: var(--s-2) 0; }
@@ -3894,6 +4056,43 @@ a.prow--pos:active { background: var(--violet-tint-18); }
 .pverdict__row b.pos { color: var(--pos); }
 .pverdict__row b.neg { color: var(--neg); }
 
+/* The metric explainer: a quiet ? per ratio row, and the popover naming the
+   formula plus the actual inputs behind the printed figure. */
+.mwhy {
+  display: inline-grid;
+  place-items: center;
+  width: 14px; height: 14px;
+  margin-left: 5px;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  font: 600 9px/1 var(--font-ui);
+  color: var(--text-3);
+  vertical-align: 1px;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-spring),
+              border-color var(--dur-fast) var(--ease-spring),
+              transform var(--dur-fast) var(--ease-spring);
+}
+.mwhy:hover { color: var(--text); border-color: var(--text-3); }
+.mwhy:focus-visible { outline: 2px solid var(--brand-soft); outline-offset: 1px; }
+.mwhy:active { transform: scale(0.92); }
+.mpop {
+  position: fixed;
+  z-index: 60;
+  max-width: 280px;
+  padding: var(--s-3) var(--s-4);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-float);
+}
+.mpop__what { margin: 0 0 6px; font-size: 12px; line-height: 1.55; color: var(--text); }
+.mpop__inputs {
+  margin: 0;
+  font: 500 10.5px/1.5 var(--font-figure);
+  color: var(--text-2);
+}
+
 /* The race: portfolio against its benchmark on the same scale, the +pp edge
    made visible. The .mexpo track/fill idiom, two rows tall. */
 .pverdict__race {
@@ -3960,9 +4159,23 @@ a.prow--pos:active { background: var(--violet-tint-18); }
   background: var(--border); border-radius: 3px;
 }
 .pspread--ledger .mgrid__cell { padding: 4px 5px; font-size: 11px; }
-.pspread--ledger .plot--bars { flex: 1; min-height: 96px; }
-.pspread--ledger .perf-legend { flex: none; }
-.pspread--dd .plot--dd { flex: 1; min-height: 120px; margin-bottom: 2px; }
+/* The row labels ride along when the months scroll: sticky on the pane's own
+   ground so cells slide beneath them, carrying the hairline the first cell's
+   border would otherwise draw. The empty thead corner is included so month
+   heads do not show through it. */
+.pspread--ledger .mgrid__table th:first-child {
+  position: sticky; left: 0; z-index: 1;
+  background: var(--surface);
+  box-shadow: inset -1px 0 0 var(--border);
+  padding-left: 0;
+}
+/* The plots and legend drop .plot's card inset like every other pane child
+   already does, so bars, legend and grid share one left edge — and the
+   drawdown box meets underwater()'s 120px floor instead of being letterboxed
+   inside it. */
+.pspread--ledger .plot--bars { flex: 1; min-height: 96px; padding: 0; }
+.pspread--ledger .perf-legend { flex: none; padding-left: 0; padding-right: 0; }
+.pspread--dd .plot--dd { flex: 1; min-height: 120px; margin-bottom: 2px; padding: 0; }
 .pspread--tables .ddeps,
 .pspread--tables .bwdays { padding: 0; }
 .pspread--tables .ddeps__span,
@@ -4039,6 +4252,9 @@ a.prow--pos:active { background: var(--violet-tint-18); }
   gap: var(--grid-gap);
 }
 .pband .irail { padding: var(--s-2) 0 0; }
+/* As in the spread: plots and legend sit on the band's content edge with the
+   kickers, not a card inset inside it. */
+.pband .plot, .pband .perf-legend { padding-left: 0; padding-right: 0; }
 .pband .plot--bars { min-height: 170px; }
 .pflow__line {
   font-size: 11.5px;

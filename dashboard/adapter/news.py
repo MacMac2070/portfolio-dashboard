@@ -26,6 +26,8 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+import resilience
+import store
 import universe
 
 log = logging.getLogger(__name__)
@@ -37,6 +39,7 @@ PORTFOLIO_PATH = DATA_DIR / "portfolio.json"
 
 POLL_SECONDS = 1200          # headlines cadence; a newsroom, not a ticker
 FIRST_RETRY_SECONDS = 60
+BREAKER = "yfinance"         # shared with every other module that asks Yahoo
 FETCH_PAUSE = 0.4            # same pacing courtesy desk.py pays Yahoo
 EARNINGS_STALE_HOURS = 20    # earnings figures move once a day at most
 KEEP_ITEMS = 40
@@ -95,8 +98,12 @@ def interest_weights() -> tuple[dict[str, float], dict[str, float], dict[str, fl
         for p in positions:
             share = (p.get("value_gbp") or 0.0) / invested
             regions[p.get("region") or ""] = regions.get(p.get("region") or "", 0.0) + share
-            sectors[p.get("sector") or ""] = sectors.get(p.get("sector") or "", 0.0) + share
-            holdings[p.get("symbol") or ""] = share
+            sym = p.get("symbol") or ""
+            if sym:
+                holdings[sym] = share
+            canon = universe.key_for(p.get("con_id"), sym)
+            if canon:
+                holdings[canon] = share
     else:
         regions = {name: 1.0 / len(REGION_NEWS) for name in REGION_NEWS}
         sectors = {name: 1.0 / len(SECTOR_NEWS) for name in SECTOR_NEWS}
@@ -303,10 +310,11 @@ class NewsFeed:
         with self._lock:
             payload = self._payload
             error = self._error
+        breaker = resilience.get(BREAKER).snapshot()
         if not payload:
-            return {"meta": {"fetched_at": None, "items": 0, "error": error},
+            return {"meta": {"fetched_at": None, "items": 0, "error": error, "breaker": breaker},
                     "items": [], "earnings": {"upcoming": [], "reported": []}}
-        return {**payload, "meta": {**payload.get("meta", {}), "error": error}}
+        return {**payload, "meta": {**payload.get("meta", {}), "error": error, "breaker": breaker}}
 
     # ---------- worker ----------
 
@@ -323,9 +331,23 @@ class NewsFeed:
 
     def _run(self) -> None:
         self._await_gate()
+        breaker = resilience.get(BREAKER)
         while not self._stop.is_set():
+            if not breaker.allow():
+            # Yahoo known to be down: keep the last good values, say so in meta,
+            # and look again when the breaker's window lapses rather than
+            # asking a dead provider every fifteen seconds for four days.
+                with self._lock:
+                    self._error = breaker.reason()
+                self._sleep(min(breaker.retry_after() + 1.0, self.poll_seconds))
+                continue
             ok = self._refresh()
-            self._sleep(self.poll_seconds if ok else FIRST_RETRY_SECONDS)
+            if ok:
+                breaker.record_success()
+            else:
+                breaker.record_failure(self._error)
+            self._sleep(self.poll_seconds if ok
+                        else max(FIRST_RETRY_SECONDS, breaker.retry_after()))
 
     def _sleep(self, seconds: float) -> None:
         waited = 0.0
@@ -370,8 +392,7 @@ class NewsFeed:
             self._payload = payload
             self._error = None
         try:
-            NEWS_PATH.parent.mkdir(parents=True, exist_ok=True)
-            NEWS_PATH.write_text(json.dumps(payload, indent=1))
+            store.write_json(NEWS_PATH, payload, indent=1)
         except OSError as exc:
             log.warning("outlet: could not cache news.json: %s", exc)
         log.info("outlet: %d headlines, %d upcoming / %d reported earnings",

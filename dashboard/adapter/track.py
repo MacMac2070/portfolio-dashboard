@@ -116,10 +116,17 @@ def drawdown(series: list[dict]) -> dict:
         ep["days_total"] = days(ep["peak_date"], ep["recovered"] or series[-1]["date"])
 
     episodes.sort(key=lambda e: e["depth"])
+    current = curve[-1]["dd"] if curve else 0.0
     return {
         "curve": curve,
         "episodes": episodes[:6],
-        "current": curve[-1]["dd"] if curve else 0.0,
+        "current": current,
+        # The live all-time-high reading: when the last new high was set, and
+        # how long the account has been under it. peak_date already tracks the
+        # last new high, so this is bookkeeping, not new arithmetic.
+        "ath_date": peak_date,
+        "days_underwater": days(peak_date, series[-1]["date"])
+                           if curve and current < 0 else 0,
     }
 
 
@@ -198,6 +205,43 @@ def _compound(rows) -> float:
     return p - 1.0
 
 
+def _xirr(flows: list[tuple[str, float]]) -> float | None:
+    """Annualized money-weighted return from dated GBP flows.
+
+    Investor's sign convention: capital in is negative, capital out positive,
+    and the final entry is the closing NAV closing the position. Bisection on
+    [-99.99%, +10,000%] rather than Newton: it cannot diverge, and 200 halvings
+    resolve far past the two decimals anyone prints. None when the flows do not
+    bracket a root (all-in or all-out histories have no rate to find).
+    """
+    if len(flows) < 2:
+        return None
+    t0 = date.fromisoformat(flows[0][0])
+    times = [(date.fromisoformat(d) - t0).days / 365.25 for d, _ in flows]
+    amounts = [a for _, a in flows]
+    if not (any(a < 0 for a in amounts) and any(a > 0 for a in amounts)):
+        return None
+
+    def npv(rate: float) -> float:
+        return sum(a / (1.0 + rate) ** t for a, t in zip(amounts, times))
+
+    lo, hi = -0.9999, 100.0
+    f_lo = npv(lo)
+    if f_lo * npv(hi) > 0:
+        return None
+    mid = 0.0
+    for _ in range(200):
+        mid = (lo + hi) / 2
+        f_mid = npv(mid)
+        if abs(f_mid) < 1e-9:
+            break
+        if f_lo * f_mid < 0:
+            hi = mid
+        else:
+            lo, f_lo = mid, f_mid
+    return mid
+
+
 def stats(series: list[dict], index_history=None,
           benchmark_symbol: str | None = None) -> dict | None:
     """The verdict block: period returns and benchmark-relative ratios.
@@ -222,7 +266,54 @@ def stats(series: list[dict], index_history=None,
         "benchmark_symbol": benchmark_symbol,
         "bench": None,
         "ratios": None,
+        "mwr": None,
+        "risk": None,
     }
+
+    # Money-weighted return: what the money actually in the account earned,
+    # deposits timed and weighted — TWR's complement, not its competitor. The
+    # opening base of the first series row recovers the pre-series NAV, so the
+    # starting capital is the first "deposit".
+    span_years = max((date.fromisoformat(series[-1]["date"])
+                      - date.fromisoformat(series[0]["date"])).days, 1) / 365.25
+    first = series[0]
+    # daily_series() rows carry nav/flow; a caller handing bare returns (the
+    # tests do) simply gets no money-weighted figure rather than a KeyError.
+    if all(k in first for k in ("nav", "pnl", "flow")) and "nav" in series[-1]:
+        nav_start = first["nav"] - first["pnl"] - first["flow"]
+        flows: list[tuple[str, float]] = [(first["date"], -nav_start)]
+        flows += [(r["date"], -r["flow"]) for r in series if r["flow"]]
+        flows.append((series[-1]["date"], series[-1]["nav"]))
+        rate = _xirr(flows)
+        if rate is not None:
+            out["mwr"] = {
+                # The period figure sits beside the since-inception TWR; the
+                # annualized one belongs in the explainer with its short-window
+                # caveat, not on the rail.
+                "period": round((1.0 + rate) ** span_years - 1.0, 5),
+                "ann": round(rate, 5),
+                "flows": len(flows),
+            }
+
+    # Sortino, Calmar and max drawdown need only the portfolio's own series —
+    # unlike alpha/beta they never wait for a benchmark, only for the same 60
+    # observations that make any of these ratios worth two decimals.
+    if len(series) >= 60:
+        rs = [r["r"] for r in series]
+        mean_r = sum(rs) / len(rs)
+        downside = (sum(min(r, 0.0) ** 2 for r in rs) / len(rs)) ** 0.5
+        idx = peak = 1.0
+        maxdd = 0.0
+        for r in rs:
+            idx *= 1.0 + r
+            peak = max(peak, idx)
+            maxdd = min(maxdd, idx / peak - 1.0)
+        ann_return = (1.0 + _compound(series)) ** (1.0 / span_years) - 1.0
+        out["risk"] = {
+            "sortino": round((mean_r / downside) * (252 ** 0.5), 2) if downside > 0 else None,
+            "calmar": round(ann_return / -maxdd, 2) if maxdd < 0 else None,
+            "max_dd": round(maxdd, 4),
+        }
 
     if index_history is None or not benchmark_symbol:
         return out
@@ -281,6 +372,11 @@ def build(index_history=None, benchmark_symbol: str | None = None) -> dict:
     ready = len(series) >= 5
     return {
         "ready": ready,
+        # Where the flows that make the return time-weighted came from. "none"
+        # with deposits on the books means every deposit counts as return —
+        # reconcile.py's flows.deposits check is what catches that, and
+        # serve.py lowers `ready` on its verdict.
+        "flows_source": "cash_transactions" if any(r["flow"] for r in series) else "none",
         "inception": series[0]["date"] if series else None,
         "daily": [{"date": r["date"], "r": round(r["r"], 5), "pnl": r["pnl"]}
                   for r in series],

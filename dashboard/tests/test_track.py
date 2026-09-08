@@ -100,3 +100,66 @@ def test_day_stats_win_rate_and_streaks():
     assert d["worst_streak"] == -3
     assert d["best"][0]["r"] == pytest.approx(0.03)      # ranked, best first
     assert d["worst"][0]["r"] == pytest.approx(-0.02)
+
+
+# ---------------------------------------------------------------- xirr & mwr
+
+def test_xirr_recovers_a_known_annual_rate():
+    rate = track._xirr([("2025-01-01", -1000.0), ("2026-01-01", 1100.0)])
+    assert rate == pytest.approx(0.10, abs=2e-3)
+
+
+def test_xirr_needs_both_directions():
+    assert track._xirr([("2025-01-01", -1000.0), ("2026-01-01", -100.0)]) is None
+
+
+def test_stats_mwr_equals_twr_when_nothing_flows():
+    # With no external flows the money-weighted and time-weighted period
+    # returns are the same number — the identity that keeps both honest.
+    nav = 1000.0
+    rows = []
+    for d in ("2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08", "2026-01-09"):
+        pnl = round(nav * 0.01, 6)
+        nav = nav + pnl
+        rows.append({"date": d, "nav": nav, "flow": 0.0, "pnl": pnl, "r": 0.01})
+    st = track.stats(rows)
+    assert st["mwr"] is not None
+    assert st["mwr"]["period"] == pytest.approx(st["si"], abs=1e-3)
+
+
+def test_stats_without_nav_fields_skips_mwr():
+    st = track.stats(S(*[(f"2026-01-{d:02}", 0.001) for d in range(1, 8)]))
+    assert st["mwr"] is None                   # bare returns: no flows to weigh
+
+
+# ---------------------------------------------------------------- risk & ath
+
+def test_stats_risk_maxdd_sortino_calmar():
+    rows = S(
+        *[(f"2026-{1 + d // 28:02}-{1 + d % 28:02}", 0.005) for d in range(30)],
+        ("2026-03-01", -0.05),
+        *[(f"2026-{4 + d // 28:02}-{1 + d % 28:02}", 0.0) for d in range(29)],
+    )
+    st = track.stats(rows)
+    assert st["risk"] is not None
+    assert st["risk"]["max_dd"] == pytest.approx(-0.05, abs=1e-4)
+    assert st["risk"]["sortino"] > 0
+    assert st["risk"]["calmar"] > 0
+
+
+def test_stats_risk_gate_below_sixty_days():
+    st = track.stats(S(*[(f"2026-01-{d:02}", 0.001) for d in range(1, 8)]))
+    assert st["risk"] is None
+
+
+def test_drawdown_ath_fields():
+    dd = track.drawdown(S(
+        ("2026-01-05", 0.05), ("2026-01-06", -0.10), ("2026-01-16", 0.01),
+    ))
+    assert dd["ath_date"] == "2026-01-05"
+    assert dd["days_underwater"] == 11
+
+
+def test_drawdown_at_peak_is_not_underwater():
+    dd = track.drawdown(S(("2026-01-05", 0.01), ("2026-01-06", 0.02)))
+    assert dd["days_underwater"] == 0

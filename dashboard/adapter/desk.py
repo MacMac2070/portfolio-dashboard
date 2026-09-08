@@ -32,10 +32,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import resilience
+import store
 import universe
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 DESK_PATH = DATA_DIR / "desk.json"
+BREAKER = "yfinance"       # shared with every other module that asks Yahoo
 
 NEWS_PER_SYMBOL = 8
 FETCH_PAUSE = 0.4          # be a polite Yahoo citizen across ~15 symbols
@@ -122,6 +125,14 @@ def fetch() -> dict:
 
     holdings: dict[str, dict] = {}
     errors: dict[str, str] = {}
+    breaker = resilience.get(BREAKER)
+    if not breaker.allow():
+        # Yahoo is known to be down: fifteen more failures would teach nothing,
+        # and an empty result keeps the previous file (see refresh_if_stale).
+        log.warning("desk: %s; keeping the previous file", breaker.reason())
+        errors["yfinance"] = breaker.reason()
+        return {"meta": {"fetched_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                         "holdings": 0, "errors": errors}, "holdings": holdings}
     for ticker in universe.TICKERS.values():
         if not ticker.owned:
             continue                      # desk context covers the book, not the watchlist
@@ -132,6 +143,10 @@ def fetch() -> dict:
             log.warning("desk fetch failed for %s: %s", ticker.key, exc)
         time.sleep(FETCH_PAUSE)
 
+    if holdings:
+        breaker.record_success()
+    else:
+        breaker.record_failure(next(iter(errors.values()), "no holdings fetched"))
     return {
         "meta": {
             "fetched_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -153,8 +168,7 @@ def refresh_if_stale(hours: float = 20) -> bool:
         # empty one — stale beats blank.
         log.warning("desk: fetch returned nothing; keeping the previous file")
         return False
-    DESK_PATH.parent.mkdir(parents=True, exist_ok=True)
-    DESK_PATH.write_text(json.dumps(payload, indent=1))
+    store.write_json(DESK_PATH, payload, indent=1)
     log.info("desk: %d holdings, %d errors", len(payload["holdings"]),
              len(payload["meta"]["errors"]))
     return True
@@ -178,7 +192,7 @@ def write_close_snapshot(payload: dict) -> None:
             for p in payload.get("positions") or []
         ],
     }
-    CLOSE_PATH.write_text(json.dumps(slim, indent=1))
+    store.write_json(CLOSE_PATH, slim, indent=1)
 
 
 def overnight(live: dict | None, cash_rows: list[dict]) -> dict | None:

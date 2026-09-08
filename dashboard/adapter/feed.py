@@ -37,6 +37,7 @@ import threading
 from datetime import datetime, timezone
 
 import derive
+import lots
 
 HOST = "127.0.0.1"
 PORT = 4001
@@ -523,21 +524,30 @@ class LiveFeed:
                 if repriced:
                     market_value = repriced
 
-            row = derive.make_position(
-                con_id=contract.conId,
-                symbol=contract.symbol,
-                currency=contract.currency,
-                exchange=contract.primaryExchange or contract.exchange or "",
-                quantity=float(item.position),
-                price=price if price is not None else 0.0,
-                market_value=market_value,
-                average_cost=_finite(item.averageCost) or 0.0,
-                unrealized_pnl=_finite(item.unrealizedPNL) or 0.0,
-                day_change_pct=change_pct,
-                day_change_source=source,
-                spark=[],          # historical series is not IB market data
-                to_gbp=to_gbp,
-            )
+            try:
+                row = derive.make_position(
+                    con_id=contract.conId,
+                    symbol=contract.symbol,
+                    currency=contract.currency,
+                    exchange=contract.primaryExchange or contract.exchange or "",
+                    quantity=float(item.position),
+                    price=price if price is not None else 0.0,
+                    market_value=market_value,
+                    average_cost=_finite(item.averageCost) or 0.0,
+                    unrealized_pnl=_finite(item.unrealizedPNL) or 0.0,
+                    day_change_pct=change_pct,
+                    day_change_source=source,
+                    spark=[],          # historical series is not IB market data
+                    to_gbp=to_gbp,
+                    cost_gbp_tradedate=lots.tradedate_cost(contract.conId, float(item.position)),
+                )
+            except derive.MissingRate as exc:
+                log.error("no GBP rate for %s (%s); the row is kept unpriced", contract.symbol, exc)
+                positions.append(derive.unpriced_position(
+                    con_id=contract.conId, symbol=contract.symbol, currency=contract.currency,
+                    exchange=contract.primaryExchange or contract.exchange or "",
+                    quantity=float(item.position), price=price if price is not None else 0.0))
+                continue
             # Kept only so the GrossPositionValue check below can rebuild the
             # row from IBKR's own figures; stripped before the payload leaves.
             row["_account_price"] = account_price if account_price is not None else 0.0
@@ -557,7 +567,7 @@ class LiveFeed:
         # broker's own figure and costs nothing to compare, so when the two
         # disagree we drop the repricing rather than publish a wrong number.
         gross = totals.get("GrossPositionValue")
-        invested = sum(p["value_gbp"] for p in positions)
+        invested = sum(p["value_gbp"] for p in positions if p.get("value_gbp") is not None)
         check = "ok"
         if gross and invested and abs(invested - gross) / gross > 0.02:
             log.error("invested %.2f disagrees with IBKR GrossPositionValue %.2f "
@@ -572,7 +582,9 @@ class LiveFeed:
                     average_cost=p["_average_cost"], unrealized_pnl=p["_unrealised_native"],
                     day_change_pct=p["day_change_pct"],
                     day_change_source=p["day_change_source"],
-                    spark=[], to_gbp=to_gbp)
+                    spark=[], to_gbp=to_gbp,
+                    cost_gbp_tradedate=p.get("cost_gbp_tradedate"))
+                if not p.get("fx_missing") else p
                 for p in positions
             ]
 
@@ -590,6 +602,10 @@ class LiveFeed:
                 "fx_source": "ibkr",
                 "daily_pnl_source": agg["daily_pnl_source"],
                 "invested_check": check,
+                # Which cost `cost_gbp` is: IBKR's average cost per share, at
+                # today's rate. The trade-date fields are FIFO from the ledger.
+                "cost_convention": "ibkr-average@spot",
+                "fx_missing": [p["symbol"] for p in positions if p.get("fx_missing")],
                 "gross_position_value": gross,
                 "gateway": "ok",
             },

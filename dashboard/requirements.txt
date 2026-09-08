@@ -1,0 +1,21 @@
+# The interpreter is /opt/anaconda3/bin/python3 (see README). Pinned to the
+# versions the dashboard was last verified against, on 2 Sep 2026.
+#
+#     /opt/anaconda3/bin/python3 -m pip install -r requirements.txt
+
+ib_async==2.1.0
+openbb==4.7.2
+openbb-core==1.6.13
+openbb-yfinance==1.6.3
+openbb-fmp==1.6.1
+openbb-ecb==1.6.1
+openbb-equity==1.6.2
+openbb-currency==1.6.2
+openbb-index==1.6.2
+openbb-nasdaq==1.6.3
+openbb-sec==1.6.7
+yfinance==1.5.1
+curl_cffi==0.15.0
+pandas==2.3.3
+numpy==2.3.5
+pytest==8.4.2

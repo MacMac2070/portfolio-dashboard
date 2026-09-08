@@ -47,23 +47,61 @@ def pct(numerator: float | None, denominator: float | None) -> float | None:
     return numerator / denominator * 100.0
 
 
+class MissingRate(LookupError):
+    """No rate into GBP for a currency the book holds.
+
+    Raised rather than assumed: the old converter treated an unknown currency
+    as sterling with a log line nobody read, which would have valued a won
+    position at a thousand times its worth. A caller keeps the row, marks it
+    `fx_missing`, and the health chip says so.
+    """
+
+
 def converter(fx: dict[str, float]):
     """Build an amount -> GBP converter from a {currency: rate} table."""
     def to_gbp(amount: float, currency: str) -> float:
         rate = fx.get(currency)
         if rate is None:
-            log.warning("no FX rate for %s; treating as base", currency)
-            rate = 1.0
+            raise MissingRate(currency)
         return amount * rate
     return to_gbp
+
+
+def unpriced_position(*, con_id: int, symbol: str, currency: str, exchange: str,
+                      quantity: float, price: float, spark: list[float] | None = None) -> dict:
+    """The row a caller keeps for a position it could not convert. Every
+    money field is None, so nothing downstream mistakes it for a value; the
+    UI prints dashes and the reason."""
+    name, region = regions_mod.lookup(con_id, symbol)
+    return {
+        "con_id": con_id, "symbol": symbol, "name": name, "region": region,
+        "sector": universe_mod.sector_for(con_id, symbol),
+        "currency": currency, "exchange": exchange,
+        "quantity": quantity, "price": price,
+        "value_gbp": None, "cost_gbp": None, "unrealised_gbp": None, "unrealised_pct": None,
+        "cost_gbp_tradedate": None, "unrealised_gbp_tradedate": None, "fx_pnl_gbp": None,
+        "day_change_pct": None, "day_pnl_gbp": None, "day_change_source": "none",
+        "spark": spark or [], "fx_missing": True,
+    }
 
 
 def make_position(*, con_id: int, symbol: str, currency: str, exchange: str,
                   quantity: float, price: float, market_value: float,
                   average_cost: float, unrealized_pnl: float,
                   day_change_pct: float | None, day_change_source: str,
-                  spark: list[float], to_gbp) -> dict:
-    """One position row, with everything converted to GBP."""
+                  spark: list[float], to_gbp,
+                  cost_gbp_tradedate: float | None = None) -> dict:
+    """One position row, with everything converted to GBP.
+
+    Two cost conventions ride every row. `cost_gbp` is the broker's cost in
+    the instrument's currency converted at today's rate — what the position
+    would cost to buy now — and `unrealised_gbp` is the market return on it.
+    `cost_gbp_tradedate`, when the ledger can supply it, is what was actually
+    paid in sterling on the trade dates; `unrealised_gbp_tradedate` is the
+    return against that, and `fx_pnl_gbp` is the difference between the two —
+    the currency's own move since purchase, which the first convention hides
+    inside "unrealised".
+    """
     name, region = regions_mod.lookup(con_id, symbol)
     # Carried per position, not only rolled up, so the Allocation view can
     # group on any of the three axes with the same code and show which slice a
@@ -84,6 +122,11 @@ def make_position(*, con_id: int, symbol: str, currency: str, exchange: str,
         opening = value_gbp / (1.0 + day_change_pct / 100.0)
         day_pnl_gbp = value_gbp - opening
 
+    unrealised_tradedate = fx_pnl = None
+    if cost_gbp_tradedate is not None:
+        unrealised_tradedate = value_gbp - cost_gbp_tradedate
+        fx_pnl = unrealised_tradedate - unrealised_gbp
+
     return {
         "con_id": con_id,
         "symbol": symbol,
@@ -98,6 +141,10 @@ def make_position(*, con_id: int, symbol: str, currency: str, exchange: str,
         "cost_gbp": cost_gbp,
         "unrealised_gbp": unrealised_gbp,
         "unrealised_pct": pct(unrealised_gbp, cost_gbp),
+        "cost_gbp_tradedate": cost_gbp_tradedate,
+        "unrealised_gbp_tradedate": unrealised_tradedate,
+        "unrealised_pct_tradedate": pct(unrealised_tradedate, cost_gbp_tradedate),
+        "fx_pnl_gbp": fx_pnl,
         "day_change_pct": day_change_pct,
         "day_pnl_gbp": day_pnl_gbp,
         "day_change_source": day_change_source,
@@ -130,11 +177,27 @@ def daily_pnl(positions: list[dict], account_daily_pnl: float | None) -> tuple[f
 
 def aggregate(positions: list[dict], *, nav: float, cash: float,
               account_daily_pnl: float | None) -> dict:
-    """KPIs, region/sector/currency splits, concentration and movers."""
+    """KPIs, region/sector/currency splits, concentration and movers.
+
+    A row with no sterling value (`fx_missing`) is left out of every sum and
+    counted in `kpis.unpriced`, so a missing rate shows as a gap rather than
+    as a wrong total.
+    """
+    unpriced = [p for p in positions if p.get("value_gbp") is None]
+    positions = [p for p in positions if p.get("value_gbp") is not None]
     invested = sum(p["value_gbp"] for p in positions)
     unrealised = sum(p["unrealised_gbp"] for p in positions)
     cost_basis = invested - unrealised
     day_pnl, day_source = daily_pnl(positions, account_daily_pnl)
+    # The trade-date convention only totals when every row can supply it;
+    # a partial sum would compare a full value against a partial cost.
+    tradedate_rows = [p for p in positions if p.get("cost_gbp_tradedate") is not None]
+    if positions and len(tradedate_rows) == len(positions):
+        cost_tradedate = sum(p["cost_gbp_tradedate"] for p in positions)
+        unrealised_tradedate = invested - cost_tradedate
+        fx_pnl = unrealised_tradedate - unrealised
+    else:
+        cost_tradedate = unrealised_tradedate = fx_pnl = None
 
     by_region: dict[str, float] = {}
     for p in positions:
@@ -192,8 +255,12 @@ def aggregate(positions: list[dict], *, nav: float, cash: float,
             "daily_pnl_pct": pct(day_pnl, nav - day_pnl),
             "unrealised_pnl": unrealised,
             "unrealised_pnl_pct": pct(unrealised, cost_basis),
+            "unrealised_pnl_tradedate": unrealised_tradedate,
+            "unrealised_pnl_pct_tradedate": pct(unrealised_tradedate, cost_tradedate),
+            "fx_pnl": fx_pnl,
             "invested": invested,
             "cash_available": cash,
+            "unpriced": len(unpriced),
         },
         "regions": region_rows,
         "sectors": sector_rows,
@@ -202,7 +269,7 @@ def aggregate(positions: list[dict], *, nav: float, cash: float,
             "largest_symbol": largest["symbol"] if largest else None,
             "largest_weight_pct": pct(largest["value_gbp"], invested) if largest else None,
             "top3_weight_pct": pct(sum(p["value_gbp"] for p in ranked[:3]), invested),
-            "positions": len(positions),
+            "positions": len(positions) + len(unpriced),
             "markets": len({p["region"] for p in positions}),
             "cash_weight_pct": pct(cash, nav),
         },

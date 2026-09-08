@@ -64,6 +64,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable
 
 import directory
+import resilience
 import universe
 
 log = logging.getLogger("financials")
@@ -78,6 +79,8 @@ TTL = {
     "metrics": 6 * 3600.0,
 }
 MAX_ENTRIES = 512
+NEG_TTL = 15 * 60.0       # an empty statement is remembered this long, not 12 h and not 0
+BREAKER = "yfinance"      # shared with every other module that asks Yahoo
 FOLLOWER_WAIT = 8.0
 REQUEST_BUDGET = 12.0     # statements are slower than quotes; three calls deep
 GATE_TIMEOUT = 90.0
@@ -397,7 +400,11 @@ class FinancialsService:
 
         try:
             value, provider, errors = producer()
-            entry = _Entry(value, time.monotonic(), ttl, provider, errors)
+            # Funds file no statements; Yahoo says so with a 404 every time.
+            # Remember the empty answer for NEG_TTL rather than re-asking on
+            # every click, but not for the full TTL in case it was an outage.
+            empty = value is None or (hasattr(value, "__len__") and len(value) == 0)
+            entry = _Entry(value, time.monotonic(), NEG_TTL if empty else ttl, provider, errors)
             with self._lock:
                 self._cache[key] = entry
                 self._evict()
@@ -429,10 +436,15 @@ class FinancialsService:
         call = {"income": obb.equity.fundamental.income,
                 "balance": obb.equity.fundamental.balance,
                 "cash": obb.equity.fundamental.cash}[which]
+        breaker = resilience.get(BREAKER)
+        if not breaker.allow():
+            return None, "none", [("yfinance", breaker.reason())]
         try:
             df = call(symbol=symbol, provider="yfinance", period=period, limit=LIMIT)
         except Exception as exc:
+            breaker.record_failure(exc)
             return None, "none", [("yfinance", f"{type(exc).__name__}: {exc}"[:160])]
+        breaker.record_success()
         if df is None or not len(df):
             return None, "none", [("yfinance", "empty")]
         return self._records(df), "yfinance", []
@@ -441,14 +453,22 @@ class FinancialsService:
         """Only for the reporting currency. Two-tier, since its names are standard."""
         obb = self._obb()
         errors = []
+        breaker = resilience.get(BREAKER)
         for tag, kwargs in (("yfinance", {"provider": "yfinance"}), ("default", {})):
+            if tag == "yfinance" and not breaker.allow():
+                errors.append((tag, breaker.reason()))
+                continue
             try:
                 df = obb.equity.fundamental.metrics(symbol=symbol, **kwargs)
+                if tag == "yfinance":
+                    breaker.record_success()
                 recs = self._records(df)
                 if recs and recs[0].get("currency"):
                     return recs, tag, errors
                 errors.append((tag, "no currency"))
             except Exception as exc:
+                if tag == "yfinance":
+                    breaker.record_failure(exc)
                 errors.append((tag, f"{type(exc).__name__}: {exc}"[:160]))
         return None, "none", errors
 

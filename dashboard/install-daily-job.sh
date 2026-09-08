@@ -57,14 +57,20 @@ cat > "$PLIST" <<PLIST_EOF
     <key>Minute</key><integer>$MINUTE</integer>
   </dict>
 
-  <!-- If the Mac was asleep at the scheduled time, run once on wake. -->
+  <!-- launchd runs a missed StartCalendarInterval on wake, but not after a
+       power-off or a logout. RunAtLoad covers those: the job also fires at
+       login, and refresh.py's own gate makes that a no-op when the last run
+       succeeded within twenty hours (pass --force by hand to override). -->
   <key>RunAtLoad</key>
-  <false/>
+  <true/>
 
+  <!-- refresh.py keeps its own rotated log at logs/refresh.log; this file
+       only catches what happens before logging starts (an interpreter that
+       fails to import) and anything printed rather than logged. -->
   <key>StandardOutPath</key>
-  <string>$DIR/logs/refresh.log</string>
+  <string>$DIR/logs/refresh.launchd.log</string>
   <key>StandardErrorPath</key>
-  <string>$DIR/logs/refresh.log</string>
+  <string>$DIR/logs/refresh.launchd.log</string>
 
   <key>ProcessType</key>
   <string>Background</string>
@@ -78,7 +84,7 @@ launchctl bootstrap "gui/$UID" "$PLIST"
 echo "Installed $LABEL"
 echo "  runs      : daily at $(printf '%02d:%02d' $HOUR $MINUTE) local"
 echo "  script    : $DIR/adapter/refresh.py"
-echo "  log       : $DIR/logs/refresh.log"
+echo "  log       : $DIR/logs/refresh.log (rotated; launchd's own in refresh.launchd.log)"
 echo
 echo "Run it now to check:   launchctl kickstart -p gui/$UID/$LABEL"
 echo "Status:                launchctl print gui/$UID/$LABEL | head -20"

@@ -26,6 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from flex import MONTH_SPAN_DAYS
 from store import CASH_PATH, NAV_CHANGE_PATH, _read
+import universe
 
 # Payment-gap medians map to a cadence; anything slower than ~13 months means
 # the history is too irregular to project and the holding is left out of the
@@ -110,7 +111,17 @@ def build(stored: dict, live: dict | None) -> dict:
     today = date.today()
     holdings = stored.get("holdings") or {}
 
-    positions = {p.get("symbol"): p for p in (live or {}).get("positions") or []}
+    # Map positions by raw symbol and canonical universe key so venue variants
+    # (such as HSBAl on LSE) match their holding model key (HSBA).
+    positions: dict[str, dict] = {}
+    for p in (live or {}).get("positions") or []:
+        sym = p.get("symbol")
+        if sym:
+            positions[sym] = p
+        canon = universe.key_for(p.get("con_id"), sym or "")
+        if canon:
+            positions[canon] = p
+
     fx = (live or {}).get("fx") or {}
     ready_gbp = bool(positions and fx)
 

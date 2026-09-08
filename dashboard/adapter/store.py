@@ -9,6 +9,7 @@ import json
 import os
 import tempfile
 import time
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
@@ -23,6 +24,15 @@ CASH_PATH = DATA_DIR / "cash_transactions.jsonl"
 # The EOD open-positions snapshot from Flex. A snapshot, not a ledger: each
 # write replaces the file, so the no-shrink guard does not apply here.
 POSITIONS_PATH = DATA_DIR / "positions_eod.json"
+# The nightly job's heartbeat and the reconciliation verdicts. Documents, not
+# ledgers: rewritten whole each run. /api/health reads both.
+LAST_RUN_PATH = DATA_DIR / "last_run.json"
+QUALITY_PATH = DATA_DIR / "quality.json"
+# Daily FX into GBP from the Flex ConversionRates section, keyed date|currency.
+FX_PATH = DATA_DIR / "fx_rates.jsonl"
+# Splits, ticker changes, spin-offs, transfers: signed share quantities the
+# position replay and the lot engine apply beside the fills.
+ACTIONS_PATH = DATA_DIR / "corporate_actions.jsonl"
 
 
 def _read(path: Path) -> list[dict]:
@@ -72,6 +82,8 @@ def _atomic_write(path: Path, text: str) -> None:
     try:
         with os.fdopen(fd, "w") as handle:
             handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
         os.replace(tmp, path)
     except BaseException:
         try:
@@ -81,11 +93,73 @@ def _atomic_write(path: Path, text: str) -> None:
         raise
 
 
+def write_json(path: Path, payload, *, indent: int = 2) -> None:
+    """Write a JSON document atomically — the document twin of `_write`.
+
+    portfolio.json is read straight off disk by the browser and desk.json by
+    three services, and a bare write_text interrupted mid-way leaves a
+    truncated file that takes the Overview down until the next run. The
+    payload is serialised first, so one that cannot be encoded fails before
+    the old file is touched.
+    """
+    text = json.dumps(payload, indent=indent)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _atomic_write(path, text)
+
+
+def read_json(path: Path):
+    """A JSON document, or None when absent or unreadable. Never raises."""
+    try:
+        return json.loads(path.read_text())
+    except (OSError, ValueError):
+        return None
+
+
+# IBKR has today's Activity Statement ready by about this hour, local time;
+# before it, "current" means yesterday's weekday. Observed: the 23:30 job
+# fetches positions dated the same day.
+STATEMENT_CUTOFF_HOUR = 22
+
+
+def expected_report_date(today: date | None = None, *, now: datetime | None = None) -> str:
+    """The newest date a store can be current through.
+
+    The last weekday on or before today — or before yesterday when it is
+    still earlier than STATEMENT_CUTOFF_HOUR, because today's statement does
+    not exist yet and a store cannot be behind it. Pass `today` to pin the
+    day and skip the cutoff (the tests do); leave it out for the live rule.
+
+    IBKR generates Activity Statements after close of business, so a store
+    whose newest row carries this date is current and one a weekday behind it
+    is a day late. Judged on content, not file mtime — a run that merged
+    nothing still touches the file, which is how nav_history sat five days
+    stale in Sep 2026 while every mtime gate said "fresh".
+    """
+    if today is None:
+        now = now or datetime.now()
+        day = now.date()
+        if now.hour < STATEMENT_CUTOFF_HOUR:
+            day -= timedelta(days=1)
+    else:
+        day = today
+    while day.weekday() >= 5:
+        day -= timedelta(days=1)
+    return day.isoformat()
+
+
+def stores_current() -> bool:
+    """Whether both Flex stores already carry the newest statement there is."""
+    return not positions_eod_stale() and not nav_change_stale()
+
+
 def merge_nav(new_rows: list[dict]) -> tuple[int, int]:
     """Upsert NAV rows keyed on date. Returns (added, total).
 
     Flex wins over a local snapshot for the same date: it is the broker's
     end-of-day figure, whereas a snapshot is whenever the job happened to run.
+    A Flex row also replaces an earlier Flex row — the newer statement is the
+    restated one, and it is how rows gain fields (the cash/stock split) the
+    query did not carry when they were first stored.
     """
     by_date = {}
     for row in _read(NAV_PATH):
@@ -101,7 +175,7 @@ def merge_nav(new_rows: list[dict]) -> tuple[int, int]:
         if existing is None:
             added += 1
             by_date[date] = row
-        elif row.get("source") == "flex" and existing.get("source") != "flex":
+        elif row.get("source") == "flex":
             by_date[date] = row
 
     merged = [by_date[d] for d in sorted(by_date)]
@@ -184,6 +258,55 @@ def merge_cash(new_rows: list[dict]) -> tuple[int, int]:
     return added, len(merged)
 
 
+def merge_fx(new_rows: list[dict]) -> tuple[int, int]:
+    """Upsert daily FX rates keyed on date and currency. Later wins."""
+    def key(row: dict) -> str:
+        return f"{row.get('date')}|{row.get('currency')}"
+
+    by_key = {key(row): row for row in _read(FX_PATH) if row.get("date") and row.get("currency")}
+    added = 0
+    for row in new_rows:
+        if not row.get("date") or not row.get("currency"):
+            continue
+        k = key(row)
+        if k not in by_key:
+            added += 1
+        by_key[k] = row
+    merged = [by_key[k] for k in sorted(by_key)]
+    _write(FX_PATH, merged)
+    return added, len(merged)
+
+
+def merge_corporate_actions(new_rows: list[dict]) -> tuple[int, int]:
+    """Upsert corporate actions and transfers keyed on their id and contract."""
+    def key(row: dict) -> str:
+        return f"{row.get('action_id') or row.get('date')}|{row.get('con_id')}|{row.get('kind')}"
+
+    by_key = {key(row): row for row in _read(ACTIONS_PATH) if row.get("con_id")}
+    added = 0
+    for row in new_rows:
+        if not row.get("con_id") or not row.get("date"):
+            continue
+        k = key(row)
+        if k not in by_key:
+            added += 1
+        by_key[k] = row
+    merged = sorted(by_key.values(), key=lambda r: (r.get("date") or "", key(r)))
+    _write(ACTIONS_PATH, merged)
+    return added, len(merged)
+
+
+def corporate_actions() -> list[dict]:
+    return _read(ACTIONS_PATH)
+
+
+def fx_history() -> dict[tuple[str, str], float]:
+    """{(date, currency): rate into GBP} from the FX store. Empty when absent."""
+    return {(r["date"], r["currency"]): float(r["rate"])
+            for r in _read(FX_PATH)
+            if r.get("date") and r.get("currency") and r.get("rate")}
+
+
 def nav_count() -> int:
     return len(_read(NAV_PATH))
 
@@ -210,17 +333,30 @@ def nav_dates() -> list[str]:
     return sorted({r["date"] for r in _read(NAV_PATH) if r.get("date") and r.get("nav_gbp")})
 
 
-def nav_change_stale(hours: float = 20) -> bool:
-    """Whether the Change in NAV store is old enough to be worth re-pulling.
+RETRY_BEHIND_HOURS = 2
 
-    Activity Statement data only changes once a day, at IBKR's close of
-    business. Pulling twice in one day spends paced Flex requests to be handed
-    back what is already stored, so the daily job checks this first and a
-    manual midday re-run costs nothing.
+
+def _stale(path: Path, asof: str | None, hours: float) -> bool:
+    """The staleness rule both Flex stores share: judged on content first.
+
+    A store whose newest date is the last weekday is current, however old the
+    file. One that is behind is re-pulled, but not more often than every
+    RETRY_BEHIND_HOURS — a midday re-run within that window still costs
+    nothing, and a statement that is simply not out yet is not asked for on
+    every run. The plain mtime rule this replaces called a file fresh because
+    a run had touched it, while its newest row sat five days old.
     """
-    if not NAV_CHANGE_PATH.exists():
+    if not path.exists():
         return True
-    return (time.time() - NAV_CHANGE_PATH.stat().st_mtime) >= hours * 3600
+    if asof and asof >= expected_report_date():
+        return False
+    return (time.time() - path.stat().st_mtime) >= min(hours, RETRY_BEHIND_HOURS) * 3600
+
+
+def nav_change_stale(hours: float = 20) -> bool:
+    """Whether the Change in NAV store is worth re-pulling — see `_stale`."""
+    latest = max((r.get("to_date") or "" for r in _read(NAV_CHANGE_PATH)), default="")
+    return _stale(NAV_CHANGE_PATH, latest or None, hours)
 
 
 def write_positions_eod(rows: list[dict]) -> dict:
@@ -249,24 +385,28 @@ def read_positions_eod() -> dict | None:
 
 
 def positions_eod_stale(hours: float = 20) -> bool:
-    """Same once-a-day economics as nav_change_stale — Flex data moves at
-    close of business, so a second pull the same day buys nothing."""
-    if not POSITIONS_PATH.exists():
-        return True
-    return (time.time() - POSITIONS_PATH.stat().st_mtime) >= hours * 3600
+    """Whether the EOD positions snapshot is worth re-pulling — see `_stale`."""
+    eod = read_positions_eod()
+    return _stale(POSITIONS_PATH, (eod or {}).get("asof"), hours)
 
 
-def nav_on_or_before(day: str | None) -> float | None:
-    """The NAV figure for `day`, or the nearest earlier reported day."""
+def nav_row_on_or_before(day: str | None) -> dict | None:
+    """The NAV row for `day`, or the nearest earlier reported day."""
     best = None
     for row in _read(NAV_PATH):
         d = row.get("date")
         if not d or not row.get("nav_gbp"):
             continue
         if day is None or d <= day:
-            if best is None or d > best[0]:
-                best = (d, row["nav_gbp"])
-    return best[1] if best else None
+            if best is None or d > best["date"]:
+                best = row
+    return best
+
+
+def nav_on_or_before(day: str | None) -> float | None:
+    """The NAV figure for `day`, or the nearest earlier reported day."""
+    row = nav_row_on_or_before(day)
+    return row["nav_gbp"] if row else None
 
 
 def nav_inception() -> str | None:
