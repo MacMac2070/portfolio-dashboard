@@ -35,6 +35,10 @@ def point(monkeypatch, out: Path) -> None:
     monkeypatch.setattr(store, "DATA_DIR", out)
     for attr, name in STORE_FILES:
         monkeypatch.setattr(store, attr, out / name)
+    # track binds these at import (`from store import NAV_PATH, ...`), so the
+    # store patch alone leaves it reading the real data folder.
+    for attr in ("NAV_PATH", "CASH_PATH", "NAV_CHANGE_PATH"):
+        monkeypatch.setattr(track, attr, getattr(store, attr))
 
 
 @pytest.fixture(scope="module")
