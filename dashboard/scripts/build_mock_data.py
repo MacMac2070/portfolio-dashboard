@@ -48,8 +48,8 @@ CSV_DIR = DASHBOARD / "data" / "mock"
 DATA_DIR = DASHBOARD / "data"
 ACCOUNT_ID = "DU0000000"          # a paper-account shape, deliberately not a real one
 SOURCE = "flex"
-DEFAULT_SEED = 20260904
-DEFAULT_END = "2026-09-04"
+DEFAULT_SEED = 20260911
+DEFAULT_END = "2026-09-11"
 DEFAULT_WEEKDAYS = 90
 INTEREST_RATE = 0.0325
 WHT_RATE = 0.15
@@ -67,34 +67,38 @@ class Line:
     symbol: str
     exchange: str
     currency: str
-    base: float        # starting price in the reporting currency
+    anchor: float      # price on the last day of the window, in the reporting currency
     drift: float       # daily log drift
     vol: float         # daily log volatility
     dp: int            # price decimals the venue quotes in
 
 
 # The held universe of adapter/universe.py, so sectors, regions, venues and
-# logos resolve. Prices, quantities and dates below are invented.
+# logos resolve. Quantities and dates are invented; each anchor is a real
+# quote from around the window's end, because the app reprices EOD marks off
+# today's delayed quotes and a mark far from the market would read as a
+# day's move of tens of percent. Refresh the anchors when the window moves.
 LINES = (
-    Line("293", 1616420, "293", "SEHK", "HKD", 9.60, 0.0004, 0.018, 2),
-    Line("C6L", 92216536, "C6L", "SGX", "SGD", 6.85, 0.0002, 0.012, 3),
-    Line("700", 152791428, "700", "SEHK", "HKD", 545.0, 0.0006, 0.019, 1),
-    Line("AAPL", 265598, "AAPL", "NASDAQ", "USD", 232.0, 0.0005, 0.016, 2),
-    Line("AMZN", 3691937, "AMZN", "NASDAQ", "USD", 218.0, 0.0004, 0.019, 2),
-    Line("GOOGL", 208813719, "GOOGL", "NASDAQ", "USD", 196.0, 0.0007, 0.018, 2),
-    Line("META", 107113386, "META", "NASDAQ", "USD", 715.0, -0.0003, 0.021, 2),
-    Line("HY9H", 517397504, "HY9H", "FWB", "EUR", 25.5, 0.0012, 0.024, 2),
-    Line("INTC", 270639, "INTC", "NASDAQ", "USD", 24.5, -0.0009, 0.026, 2),
-    Line("SMSN", 16520545, "SMSN", "LSEIOB1", "USD", 1420.0, 0.0008, 0.020, 1),
-    Line("3115", 256718140, "3115", "SEHK", "HKD", 26.5, 0.0003, 0.013, 2),
-    Line("ES3", 92214874, "ES3", "SGX", "SGD", 3.95, 0.0002, 0.008, 3),
-    Line("IUCS", 270617971, "IUCS", "LSEETF", "USD", 7.90, 0.0001, 0.009, 3),
-    Line("XDJP", 123279007, "XDJP", "LSEETF", "GBP", 28.7, 0.0003, 0.011, 2),
-    Line("HSBA", 909083, "HSBA", "LSE", "GBP", 9.30, 0.0004, 0.012, 3),
+    Line("293", 1616420, "293", "SEHK", "HKD", 8.42, 0.0004, 0.018, 2),
+    Line("C6L", 92216536, "C6L", "SGX", "SGD", 6.66, 0.0002, 0.012, 3),
+    Line("700", 152791428, "700", "SEHK", "HKD", 428.4, 0.0006, 0.019, 1),
+    Line("AAPL", 265598, "AAPL", "NASDAQ", "USD", 332.27, 0.0005, 0.016, 2),
+    Line("AMZN", 3691937, "AMZN", "NASDAQ", "USD", 256.78, 0.0004, 0.019, 2),
+    Line("GOOGL", 208813719, "GOOGL", "NASDAQ", "USD", 195.39, 0.0007, 0.018, 2),
+    Line("META", 107113386, "META", "NASDAQ", "USD", 648.03, -0.0003, 0.021, 2),
+    Line("HY9H", 517397504, "HY9H", "FWB", "EUR", 23.62, 0.0012, 0.024, 2),
+    Line("INTC", 270639, "INTC", "NASDAQ", "USD", 102.94, -0.0009, 0.026, 2),
+    Line("SMSN", 16520545, "SMSN", "LSEIOB1", "USD", 1364.0, 0.0008, 0.020, 1),
+    Line("3115", 256718140, "3115", "SEHK", "HKD", 19.51, 0.0003, 0.013, 2),
+    Line("ES3", 92214874, "ES3", "SGX", "SGD", 3.646, 0.0002, 0.008, 3),
+    Line("IUCS", 270617971, "IUCS", "LSEETF", "USD", 7.649, 0.0001, 0.009, 3),
+    Line("XDJP", 123279007, "XDJP", "LSEETF", "GBP", 26.86, 0.0003, 0.011, 2),
+    Line("HSBA", 909083, "HSBA", "LSE", "GBP", 15.526, 0.0004, 0.012, 3),
 )
 BY_KEY = {line.key: line for line in LINES}
 
-FX_BASE = {"USD": 0.78, "HKD": 0.100, "SGD": 0.58, "EUR": 0.85}
+# Rates into GBP on the last day of the window, again from the real market.
+FX_ANCHOR = {"USD": 0.73916, "HKD": 0.09434, "SGD": 0.584249, "EUR": 0.858295}
 FX_VOL = 0.003
 
 # One 2-for-1 split, so the replay and the lot engine exercise an action.
@@ -112,7 +116,7 @@ TRADES = (
     (("deposit", 1, 2), "INTC", "BUY", 60), (("deposit", 1, 2), "SMSN", "BUY", 2),
     (("deposit", 2, 1), "HY9H", "BUY", 80), (("deposit", 2, 2), "IUCS", "BUY", 250),
     (("deposit", 3, 1), "AAPL", "BUY", 3),
-    (32, "293", "SELL", 300), (55, "INTC", "SELL", 60), (72, "AMZN", "SELL", 2.5),
+    (32, "293", "SELL", 300), (55, "INTC", "SELL", 40), (72, "AMZN", "SELL", 2.5),
 )
 
 # (key, ex-date index, pay-date index, gross rate per share, withholding rate)
@@ -139,13 +143,15 @@ def weekdays_ending(end: date, count: int) -> list[date]:
     return list(reversed(days))
 
 
-def walk(seed: int, name: str, start: float, drift: float, vol: float, count: int) -> list[float]:
+def walk(seed: int, name: str, anchor: float, drift: float, vol: float, count: int) -> list[float]:
+    """A seeded log-normal path that ends exactly at `anchor`: the steps are
+    drawn forwards and the path is unrolled backwards from the last day."""
     rng = random.Random(f"{seed}:{name}")
-    out, level = [], start
-    for _ in range(count):
-        out.append(level)
-        level *= math.exp(drift + vol * rng.gauss(0.0, 1.0))
-    return out
+    steps = [drift + vol * rng.gauss(0.0, 1.0) for _ in range(count - 1)]
+    out = [anchor]
+    for step in reversed(steps):
+        out.append(out[-1] / math.exp(step))
+    return list(reversed(out))
 
 
 def nth_weekday_of_month(days: list[date], n: int) -> dict[str, int]:
@@ -201,12 +207,12 @@ def synthesise(seed: int, end: date, count: int) -> dict[str, list[dict]]:
     n = len(days)
 
     fx: dict[str, list[float]] = {"GBP": [1.0] * n}
-    for ccy, base in FX_BASE.items():
-        fx[ccy] = [round(v, 6) for v in walk(seed, f"fx:{ccy}", base, 0.0, FX_VOL, n)]
+    for ccy, anchor in FX_ANCHOR.items():
+        fx[ccy] = [round(v, 6) for v in walk(seed, f"fx:{ccy}", anchor, 0.0, FX_VOL, n)]
 
     prices: dict[str, list[float]] = {}
     for line in LINES:
-        path = walk(seed, line.symbol, line.base, line.drift, line.vol, n)
+        path = walk(seed, line.symbol, line.anchor, line.drift, line.vol, n)
         if line.key == SPLIT_KEY:
             path = [p * SPLIT_RATIO if i < SPLIT_INDEX else p for i, p in enumerate(path)]
         prices[line.key] = [round(p, line.dp) for p in path]
@@ -350,7 +356,7 @@ def synthesise(seed: int, end: date, count: int) -> dict[str, list[dict]]:
 
     change_rows = change_in_nav(days, nav_rows, cash_rows, tx_rows, deposit_days, months)
     fx_rows = [{"date": iso[i], "currency": ccy, "rate": fx[ccy][i]}
-               for i in range(n) for ccy in sorted(FX_BASE)]
+               for i in range(n) for ccy in sorted(FX_ANCHOR)]
     return {
         "positions": position_rows, "transactions": tx_rows, "cash_transactions": cash_rows,
         "nav_history": nav_rows, "nav_change": change_rows, "fx_rates": fx_rows,
@@ -534,6 +540,21 @@ def build(csv_dir: Path, out: Path) -> dict[str, int]:
 
     store.write_json(out / "watchlist_extra.json", {"entries": []})
     census["watchlist_extra.json"] = 0
+
+    # The health gate asks when the nightly job last ran; a demo has no job,
+    # so record one successful run on the evening of the window's last day.
+    # It ages honestly from there: a day later the chip warns, later it fails,
+    # exactly as it would for a real account whose job had stopped.
+    asof = payload["asof"]
+    store.write_json(store.LAST_RUN_PATH, {
+        "schema_version": 1,
+        "started_at": f"{asof}T22:35:00+00:00", "finished_at": f"{asof}T22:41:00+00:00",
+        "pid": 0, "ok": True, "exit_code": 0, "stage": "done", "stages": {},
+        "forced": False, "payload_source": "flex-eod", "reason": None,
+        "archive": {"nav": census["nav_history.jsonl"], "cash": census["cash_transactions.jsonl"],
+                    "nav_change": census["nav_change.jsonl"], "tx": census["transactions.jsonl"]},
+    })
+    census["last_run.json"] = 0
 
     last_rates = {r["currency"]: r["rate"] for r in fx_rows if r["date"] == payload["asof"]}
     try:

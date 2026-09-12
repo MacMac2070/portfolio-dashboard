@@ -27,6 +27,10 @@ Install them as the app's data (refuses if a real ledger is already there):
     python3 dashboard/scripts/build_mock_data.py --install --check
 
 The `--check` step pins "today" to the data's own last day, so the lag check
-reflects the data rather than the calendar. To move the demo to a newer date,
-regenerate the CSVs with `--write-csv --end YYYY-MM-DD` (a weekday) and
-commit them; a test asserts the committed CSVs and the synthesis agree.
+reflects the data rather than the calendar. The running app does not: its
+health chip judges the demo against the real calendar, so a day after the
+window ends it warns and a few days later it fails, exactly as it would for
+a real account whose nightly job had stopped. To move the demo to a newer
+date, regenerate the CSVs with `--write-csv --end YYYY-MM-DD` (a weekday),
+refresh the price anchors in the script to recent quotes, and commit; a test
+asserts the committed CSVs and the synthesis agree.
