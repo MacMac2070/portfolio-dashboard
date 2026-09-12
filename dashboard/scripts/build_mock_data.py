@@ -113,10 +113,10 @@ TRADES = (
     (3, "HSBA", "BUY", 250), (3, "XDJP", "BUY", 60),
     (4, "700", "BUY", 20), (4, "293", "BUY", 1000), (4, "C6L", "BUY", 300),
     (("deposit", 1, 1), "3115", "BUY", 400), (("deposit", 1, 1), "ES3", "BUY", 800),
-    (("deposit", 1, 2), "INTC", "BUY", 60), (("deposit", 1, 2), "SMSN", "BUY", 2),
+    (("deposit", 1, 2), "INTC", "BUY", 25), (("deposit", 1, 2), "SMSN", "BUY", 1),
     (("deposit", 2, 1), "HY9H", "BUY", 80), (("deposit", 2, 2), "IUCS", "BUY", 250),
     (("deposit", 3, 1), "AAPL", "BUY", 3),
-    (32, "293", "SELL", 300), (55, "INTC", "SELL", 40), (72, "AMZN", "SELL", 2.5),
+    (32, "293", "SELL", 300), (55, "INTC", "SELL", 10), (72, "AMZN", "SELL", 2.5),
 )
 
 # (key, ex-date index, pay-date index, gross rate per share, withholding rate)
