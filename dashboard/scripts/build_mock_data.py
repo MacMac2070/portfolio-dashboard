@@ -75,9 +75,13 @@ class Line:
 
 # The held universe of adapter/universe.py, so sectors, regions, venues and
 # logos resolve. Quantities and dates are invented; each anchor is a real
-# quote from around the window's end, because the app reprices EOD marks off
+# price from around the window's end, because the app reprices EOD marks off
 # today's delayed quotes and a mark far from the market would read as a
-# day's move of tens of percent. Refresh the anchors when the window moves.
+# day's move of tens of percent. The four ETFs are anchored at the broker's
+# own marks rather than the delayed quote: their quote feed and the broker
+# disagree by a large ratio, and the app's repricing guard keeps the mark in
+# that case, exactly as it does on a real account. Refresh the anchors when
+# the window moves.
 LINES = (
     Line("293", 1616420, "293", "SEHK", "HKD", 8.42, 0.0004, 0.018, 2),
     Line("C6L", 92216536, "C6L", "SGX", "SGD", 6.66, 0.0002, 0.012, 3),
@@ -89,10 +93,10 @@ LINES = (
     Line("HY9H", 517397504, "HY9H", "FWB", "EUR", 23.62, 0.0012, 0.024, 2),
     Line("INTC", 270639, "INTC", "NASDAQ", "USD", 102.94, -0.0009, 0.026, 2),
     Line("SMSN", 16520545, "SMSN", "LSEIOB1", "USD", 1364.0, 0.0008, 0.020, 1),
-    Line("3115", 256718140, "3115", "SEHK", "HKD", 19.51, 0.0003, 0.013, 2),
-    Line("ES3", 92214874, "ES3", "SGX", "SGD", 3.646, 0.0002, 0.008, 3),
-    Line("IUCS", 270617971, "IUCS", "LSEETF", "USD", 7.649, 0.0001, 0.009, 3),
-    Line("XDJP", 123279007, "XDJP", "LSEETF", "GBP", 26.86, 0.0003, 0.011, 2),
+    Line("3115", 256718140, "3115", "SEHK", "HKD", 94.76, 0.0003, 0.013, 2),
+    Line("ES3", 92214874, "ES3", "SGX", "SGD", 5.886, 0.0002, 0.008, 3),
+    Line("IUCS", 270617971, "IUCS", "LSEETF", "USD", 10.10, 0.0001, 0.009, 3),
+    Line("XDJP", 123279007, "XDJP", "LSEETF", "GBP", 32.11, 0.0003, 0.011, 2),
     Line("HSBA", 909083, "HSBA", "LSE", "GBP", 15.526, 0.0004, 0.012, 3),
 )
 BY_KEY = {line.key: line for line in LINES}
@@ -112,7 +116,7 @@ TRADES = (
     (2, "GOOGL", "BUY", 10), (2, "META", "BUY", 3),
     (3, "HSBA", "BUY", 250), (3, "XDJP", "BUY", 60),
     (4, "700", "BUY", 20), (4, "293", "BUY", 1000), (4, "C6L", "BUY", 300),
-    (("deposit", 1, 1), "3115", "BUY", 400), (("deposit", 1, 1), "ES3", "BUY", 800),
+    (("deposit", 1, 1), "3115", "BUY", 150), (("deposit", 1, 1), "ES3", "BUY", 400),
     (("deposit", 1, 2), "INTC", "BUY", 25), (("deposit", 1, 2), "SMSN", "BUY", 1),
     (("deposit", 2, 1), "HY9H", "BUY", 80), (("deposit", 2, 2), "IUCS", "BUY", 250),
     (("deposit", 3, 1), "AAPL", "BUY", 3),
