@@ -19,6 +19,10 @@ dashboard/data/*
 screenshots/
 dashboard/screenshots/
 
+# Earnings reports and factsheets gathered for the held names are third-party
+# documents. They stay local and never enter this repository.
+Stock research/
+
 # graphify knowledge graph: regenerable with `graphify update .`, and its
 # sidecars carry absolute local paths.
 graphify-out/
