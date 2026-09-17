@@ -8,6 +8,7 @@ below and is kept here as a visual and code reference only.
 
 - Source: https://github.com/Kalwaleed/live-portfolio-tracker
 - Licence: MIT
+- Notice: Copyright (c) 2026 Kalwaleed
 - Here: `notes.md` (ours) and `screenshots/holdings-terminal.png`, a
   screenshot of the demo running locally on 14 Aug 2026. The notes quote a
   few lines of the repository's `index.css`.
@@ -16,6 +17,7 @@ below and is kept here as a visual and code reference only.
 
 - Source: https://github.com/abderrahimghazali/shadcn-fintech
 - Licence: MIT
+- Notice: Copyright (c) 2026 Abderrahim Ghazali
 - Here: `notes.md` (ours), two screenshots of the live demo's investments
   page, and three files under `source/` copied verbatim from the repository:
   `holdings-table.tsx`, `performance-chart.tsx` and
