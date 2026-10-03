@@ -173,6 +173,9 @@ def test_aggregate_kpis_and_concentration():
     assert k["unrealised_pnl"] == pytest.approx(250.0)
     assert agg["concentration"]["largest_symbol"] == "BIG"
     assert agg["concentration"]["largest_weight_pct"] == pytest.approx(75.0)
+    # 75^2 + 25^2 = 6250
+    assert agg["concentration"]["hhi"] == pytest.approx(6250.0)
+    assert agg["concentration"]["effective_n"] == pytest.approx(10000 / 6250)
     assert agg["daily_pnl_source"] == "positions-complete"
     # Every currency row's value adds back to invested.
     assert sum(c["value_gbp"] for c in agg["currencies"]) == pytest.approx(4000.0)

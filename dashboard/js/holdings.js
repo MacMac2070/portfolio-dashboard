@@ -60,6 +60,9 @@ function rowFor(key) {
       key, owned: true, con_id: t.con_id,
       symbol: t.key, name: t.name, currency: live.currency,
       price: live.price, dayPct: live.day_change_pct,
+      // "statement" means the Flex feed kept the broker's EOD mark for this
+      // row — no delayed quote, or one refused as a units slip.
+      priceSource: live.price_source,
       quantity: live.quantity, avgCost: live.quantity ? costLocal / live.quantity : null,
       value: live.value_gbp, cost: costLocal,
       pl: live.unrealised_gbp, retPct: live.unrealised_pct,
@@ -224,6 +227,13 @@ export function tile(r) {
     </span>`;
 }
 
+// A price the Flex feed could not reprice wears the fact: muted ink, and the
+// reason on hover. Everything else has no attribute at all, so the gateway
+// feed's rows are untouched.
+const STATEMENT_TITLE = "Statement mark — no delayed quote, or one refused as a units slip";
+const statementAttrs = (r) => (r.priceSource === "statement"
+  ? ` data-price-source="statement" title="${STATEMENT_TITLE}"` : "");
+
 export function positionRow(r, isLastHeld) {
   // The boundary between held and watched is a slightly stronger hairline —
   // enough to feel the change of register without splitting the table.
@@ -295,7 +305,7 @@ export function positionRow(r, isLastHeld) {
         </span>
       </span>
       <span class="pstack" style="grid-column:2">
-        <span class="pstack__main num">${price(r.price)}</span>
+        <span class="pstack__main num"${statementAttrs(r)}>${price(r.price)}</span>
         <span class="pstack__ccy">${r.currency || ""}</span>
       </span>
       <span class="pdelta" style="grid-column:3">${chip(r.dayPct)}</span>
@@ -444,7 +454,14 @@ function patchRows(all) {
     const row = host.children[i];
     if (!row || r.pending) return;
 
-    setLive(row.querySelector(".pstack__main"), price(r.price));
+    const priceCell = row.querySelector(".pstack__main");
+    setLive(priceCell, price(r.price));
+    if (priceCell) {
+      const held = r.priceSource === "statement";
+      priceCell.toggleAttribute("data-price-source", held);
+      if (held) { priceCell.dataset.priceSource = "statement"; priceCell.title = STATEMENT_TITLE; }
+      else priceCell.removeAttribute("title");
+    }
 
     const dchip = row.querySelector(".dchip");
     if (dchip) {

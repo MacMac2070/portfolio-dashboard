@@ -108,6 +108,20 @@ EMPTY = {"kpis": {}, "positions": [], "regions": [], "currencies": [],
          "concentration": {}, "movers": {"gainers": [], "losers": []}}
 
 
+class DashboardServer(ThreadingHTTPServer):
+    """ThreadingHTTPServer with a listen backlog sized for a page load.
+
+    socketserver's default backlog is 5. One page load asks for about twenty
+    files at once (the stylesheets and every JS module), so the queue
+    overflowed and the OS reset the excess connections. One reset module
+    fails the whole import graph, main.js never runs, and the page sits on its
+    skeletons until a reload happens to win the race. Seen on 30 Sep and
+    reproduced on 2 Oct with headless Chrome: 3 loads in 6 lost a module.
+    128 is macOS's kern.ipc.somaxconn ceiling.
+    """
+    request_queue_size = 128
+
+
 class DashboardHandler(SimpleHTTPRequestHandler):
     feed = None          # IB Gateway live feed; None means static-only
     watchlist = None     # openbb quotes for tickers the IB feed does not cover
@@ -145,6 +159,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             return self._intent()
         if route == "/api/health":
             return self._health()
+        if route == "/api/research":
+            return self._research()
         # Prefix rather than equality — this is the one endpoint with the
         # instrument key in the path.
         if route.startswith("/api/instrument/"):
@@ -327,6 +343,23 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             log.exception("health build failed")
             return self._json({"meta": {"error": str(exc), "served_at": None},
                                "status": "fail", "checks": []})
+
+    def _research(self):
+        """The Research briefing, read from what the co-pilot last wrote.
+
+        Read-only: the agents replace data/research_findings.json atomically
+        and this handler never writes it. Always 200, a failed run is a
+        payload with status "failed", same as every other endpoint here.
+        """
+        import research  # noqa: PLC0415 (adapter/ is on sys.path)
+
+        try:
+            return self._json(research.build(urgency=self._query("urgency"),
+                                             tier=self._query("tier"),
+                                             ticker=self._query("ticker")))
+        except Exception as exc:
+            log.exception("research build failed")
+            return self._json(research.failed(f"research payload could not be built: {exc}"))
 
     def _news(self):
         """The Outlet feed, or its disk cache when the service isn't running."""
@@ -598,7 +631,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 "source": "none", "connected": False,
                 "error": "server started with --no-live"}})
         try:
-            return self._json(DashboardHandler.feed.snapshot())
+            import derive  # noqa: PLC0415
+            return self._json(derive.enrich_snapshot(DashboardHandler.feed.snapshot()))
         except Exception as exc:
             log.exception("snapshot failed")
             return self._json({**EMPTY, "meta": {
@@ -792,7 +826,7 @@ def main():
     handler = partial(DashboardHandler, directory=str(ROOT))
 
     try:
-        with ThreadingHTTPServer(("127.0.0.1", port), handler) as httpd:
+        with DashboardServer(("127.0.0.1", port), handler) as httpd:
             log.info("serving %s on http://localhost:%d", ROOT.name, port)
             if feed:
                 log.info("snapshot endpoint http://localhost:%d/api/snapshot", port)

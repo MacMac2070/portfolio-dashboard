@@ -15,36 +15,97 @@ functions the gateway paths use, so the payload cannot drift in shape.
 from __future__ import annotations
 
 import logging
+import math
 import threading
 import time
 from datetime import datetime, timezone
 
 import derive
 import lots
+import resilience
 import store
 
 log = logging.getLogger(__name__)
 
 POLL_SECONDS = 60
-# Sparklines and FX move slowly; quotes carry the cycle.
+# Sparklines and the day's reference FX move slowly; quotes and the intraday
+# FX overlay carry the cycle.
 SLOW_REFRESH_SECONDS = 3600
-# A repriced quote this far from the EOD mark is a units or mapping bug, not
-# a market move — keep the broker's own figure instead (the same caution the
-# live feed applies before trusting a repriced value).
+# Two rules decide whether a delayed quote replaces the statement mark.
+# A quote ~100x the mark either way is a units or mapping slip (pence for
+# pounds, a magnifier) — the mark stands and the row says so. Anything else is
+# a price: a real 60% gap must not sit frozen at yesterday's figure all day,
+# so it is applied and listed under `large_moves` where it can be seen.
+UNITS_RATIO = (50.0, 200.0)
 REPRICE_SANITY = 0.5
+# A units reject is logged once an hour per symbol, not once a minute.
+_UNITS_LOG_SECONDS = 3600
+_units_logged: dict[str, float] = {}
+_units_lock = threading.Lock()
+
+
+def _is_units_error(last: float | None, ref: float | None) -> bool:
+    """True when `last` is ~100x `ref` either way. Nothing to compare — a
+    missing, zero or negative figure on either side — is not a units error;
+    those rows are handled by the quote and value checks around this."""
+    if not last or not ref or last <= 0 or ref <= 0:
+        return False
+    ratio = last / ref
+    lo, hi = UNITS_RATIO
+    return lo <= ratio <= hi or (1.0 / hi) <= ratio <= (1.0 / lo)
+
+
+def _log_units_reject(symbol: str, last: float, ref: float) -> None:
+    now = time.monotonic()
+    with _units_lock:
+        if now - _units_logged.get(symbol, -_UNITS_LOG_SECONDS) < _UNITS_LOG_SECONDS:
+            return
+        _units_logged[symbol] = now
+    log.warning("%s: quote %.4f is ~%.0fx the statement mark %.4f; units slip, mark kept",
+                symbol, last, max(last, ref) / min(last, ref), ref)
 
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def overlay_intraday_fx(base: dict, intraday: dict,
+                        tolerance: float | None = None) -> tuple[dict, list[str]]:
+    """Lay delayed intraday rates over the day's reference rates.
+
+    A currency takes the intraday print only when it is a finite positive
+    number within `tolerance` of its reference rate; anything else keeps the
+    reference and is returned in the skipped list, so the meta can say which
+    currencies did not move and the pill never claims an overlay it did not
+    make. Currencies the base does not know are never introduced here —
+    without a reference there is nothing to check the print against.
+    """
+    import marketdata
+    tol = marketdata.FX_INTRADAY_TOLERANCE if tolerance is None else tolerance
+    fx = dict(base)
+    skipped: list[str] = []
+    for currency, rate in intraday.items():
+        ref = base.get(currency)
+        if ref is None or not ref > 0:
+            skipped.append(currency)
+            continue
+        if isinstance(rate, bool) or not isinstance(rate, (int, float)) \
+                or not math.isfinite(rate) or rate <= 0 or abs(rate / ref - 1.0) > tol:
+            skipped.append(currency)
+            continue
+        fx[currency] = float(rate)
+    return fx, skipped
+
+
 def compose_payload(*, quotes: dict | None = None, fx: dict | None = None,
-                    fx_source: str = "flex", sparks: dict | None = None) -> dict | None:
+                    fx_source: str = "flex", sparks: dict | None = None,
+                    fx_skipped: list[str] | None = None) -> dict | None:
     """One snapshot payload from the stores, or None without an EOD file.
 
     Callers may hand in already-fetched quotes/fx/sparks (the feed thread
     caches the slow ones); left as None they are fetched here, which is what
-    refresh.py's gateway fallback wants.
+    refresh.py's gateway fallback wants. `fx_skipped` is the feed's list of
+    currencies whose intraday print was refused; it only travels into meta.
     """
     eod = store.read_positions_eod()
     if not eod:
@@ -67,6 +128,7 @@ def compose_payload(*, quotes: dict | None = None, fx: dict | None = None,
     to_gbp = derive.converter(fx)
 
     positions = []
+    repricing = {"quoted": 0, "rejected_units": [], "large_moves": [], "unquoted": []}
     for raw in rows:
         quote = quotes.get(raw["con_id"], {})
         last, prev = quote.get("last"), quote.get("prev")
@@ -81,19 +143,37 @@ def compose_payload(*, quotes: dict | None = None, fx: dict | None = None,
         # Reprice off the delayed quote so the page moves between Flex days.
         # prior_closes already normalises pence to pounds, the unit Flex marks
         # share, so this is plain multiplication — guarded, because a mapping
-        # slip here is how a position inflates a hundredfold.
+        # slip here is how a position inflates a hundredfold. Every outcome is
+        # recorded: the row carries whose price it shows, the meta lists what
+        # was kept at the mark and why.
         price = mark if mark is not None else (value / raw["quantity"] if raw["quantity"] else 0.0)
-        if last is not None and mark and abs(last / mark - 1.0) <= REPRICE_SANITY:
+        # The statement's own figure the quote is judged against: the mark
+        # when there is one, else the price implied by its value. Without
+        # this a markless row would take a pence quote at face value.
+        ref = price if price > 0 else None
+        price_source = "statement"
+        outcome = "unquoted"
+        if last is None or not last > 0:
+            pass
+        elif _is_units_error(last, ref):
+            outcome = "rejected_units"
+            _log_units_reject(raw["symbol"], last, ref)
+        else:
+            outcome = "large_moves" if ref and abs(last / ref - 1.0) > REPRICE_SANITY else "quoted"
             price = last
             value = last * raw["quantity"]
+            price_source = "yahoo"
 
         cost = raw.get("average_cost")
         unrealised = (value - cost * raw["quantity"]) if cost is not None \
             else (raw.get("unrealized_pnl") or 0.0)
 
+        # A refused quote is refused everywhere: the day change must not be
+        # painted off the same pence-for-pounds print the price just declined.
+        refused = outcome == "rejected_units"
         change_pct, change_source = marketdata.day_change_pct(
-            prev_close=prev,
-            last_price=last,
+            prev_close=None if refused else prev,
+            last_price=None if refused else last,
             ibkr_price=mark,
             ibkr_daily_pnl=None,
             ibkr_market_value=value,
@@ -114,7 +194,15 @@ def compose_payload(*, quotes: dict | None = None, fx: dict | None = None,
                 spark=sparks.get(raw["con_id"], []),
                 to_gbp=to_gbp,
                 cost_gbp_tradedate=lots.tradedate_cost(raw["con_id"], raw["quantity"]),
+                price_source=price_source,
             ))
+            # Book the outcome only for a row that is actually priced: one
+            # that falls to unpriced below is counted in kpis.unpriced, not
+            # here, so the four buckets always add up to the priced rows.
+            if outcome in ("quoted", "large_moves"):
+                repricing["quoted"] += 1
+            if outcome != "quoted":
+                repricing[outcome].append(raw["symbol"])
         except derive.MissingRate as exc:
             log.error("no GBP rate for %s (%s); the row is kept unpriced", raw["symbol"], exc)
             positions.append(derive.unpriced_position(
@@ -153,12 +241,17 @@ def compose_payload(*, quotes: dict | None = None, fx: dict | None = None,
             "cost_convention": "flex-fifo@spot",
             "fx_missing": [p["symbol"] for p in positions if p.get("fx_missing")],
             "fx_source": fx_source,
+            "fx_intraday_skipped": sorted(fx_skipped or []),
+            # What the delayed quotes did to the statement: how many rows they
+            # priced, and by name which were kept at the mark (a units slip, no
+            # quote) or moved a long way. The pill reads this.
+            "repricing": repricing,
             "daily_pnl_source": agg["daily_pnl_source"],
             "gateway": "not-used",
             "source": "flex-eod",
             "positions_asof": asof,
         },
-        "kpis": agg["kpis"],
+        "kpis": derive.attach_headline_returns(agg["kpis"]),
         "positions": positions,
         "regions": agg["regions"],
         "sectors": agg["sectors"],
@@ -217,6 +310,11 @@ class FlexFeed:
                 "poll_seconds": self.poll_seconds,
                 "error": self._error,
                 "served_at": _now(),
+                # Open means the quote breaker has tripped and every row is
+                # sitting at its statement mark until it closes again — said
+                # here so the page can say it, rather than leaving frozen
+                # numbers to be noticed.
+                "quotes_breaker": resilience.get("yfinance.quotes").state,
             }
         if payload is None:
             return {"meta": {**meta, "warming_up": True}, "kpis": {}, "positions": [],
@@ -291,8 +389,17 @@ class FlexFeed:
             self._slow_at = time.monotonic()
 
         quotes = marketdata.prior_closes(con_ids)
-        payload = compose_payload(quotes=quotes, fx=self._fx,
-                                  fx_source=self._fx_source, sparks=self._sparks)
+        # The reference rates are a day old by design; the intraday prints
+        # ride on top each cycle so sterling values move with the rate, not
+        # only with the share price. Refused prints keep the reference.
+        currencies = sorted({r["currency"] for r in eod["positions"]
+                             if r.get("currency") and r["currency"] != "GBP"})
+        intraday = marketdata.fx_intraday(currencies)
+        fx, skipped = overlay_intraday_fx(self._fx, intraday)
+        applied = [c for c in intraday if c not in skipped]
+        fx_source = f"{self._fx_source}+intraday" if applied else self._fx_source
+        payload = compose_payload(quotes=quotes, fx=fx, fx_source=fx_source,
+                                  sparks=self._sparks, fx_skipped=skipped)
         with self._lock:
             self._payload = payload
             self._last_refresh = _now()

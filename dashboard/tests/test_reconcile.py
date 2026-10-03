@@ -192,9 +192,11 @@ def test_run_writes_quality_json_with_the_worst_status(data_dir):
     store.write_positions_eod([{"report_date": "2026-09-01", "con_id": 1, "symbol": "HSBA",
                                "quantity": 200, "value": 100, "currency": "GBP", "fx_to_base": 1}])
     report = reconcile.run(today=TODAY)
-    assert report["status"] == "warn"                       # ledger older than positions
+    # Share-count replay is warn; date lag on stores.asof is fail (≥10 weekdays).
+    assert report["status"] == "fail"
     by_id = {c["id"]: c["status"] for c in report["checks"]}
     assert by_id["positions.replay"] == "warn"
+    assert by_id["stores.asof"] == "fail"
     assert by_id["nav.continuity"] == "ok"
     assert by_id["flows.deposits"] == "pending"
     assert by_id["nav.composition"] == "pending"
@@ -222,3 +224,34 @@ def test_unknown_action_codes_and_unmarked_positions_are_named(data_dir):
     by_id = {c["id"]: c for c in reconcile.run(today=TODAY)["checks"]}
     assert by_id["actions.unbucketed"]["status"] == "warn" and "QQ" in by_id["actions.unbucketed"]["summary"]
     assert by_id["positions.unmarked"]["status"] == "warn"
+
+
+# ---------------------------------------------------------------- stores.asof
+
+def test_stores_asof_ok_when_ledger_reaches_positions():
+    rows = [tx(1, "BUY", 100, "2026-08-31", symbol="HSBA")]
+    cash = [{"date": "2026-08-31", "type": "Dividends", "amount": 1.0}]
+    check = reconcile.stores_asof(rows, cash, eod("2026-08-31", (1, "HSBA", 100, 1, 1)))
+    assert check["status"] == "ok"
+
+
+def test_stores_asof_warns_then_fails_on_weekday_lag():
+    # Positions Fri 2026-08-28; ledger ends Fri 2026-08-14 → 10 weekdays behind.
+    rows = [tx(1, "BUY", 100, "2026-08-14", symbol="HSBA")]
+    cash = [{"date": "2026-08-14", "type": "Dividends", "amount": 1.0}]
+    snap = eod("2026-08-28", (1, "HSBA", 100, 1, 1))
+    check = reconcile.stores_asof(rows, cash, snap)
+    assert check["status"] == "fail"
+    assert check["detail"]["tx_lag_weekdays"] == 10
+
+    # Three weekdays: Mon 2026-08-25 → Thu 2026-08-28 = Wed,Thu? 
+    # From Mon to Thu: Tue, Wed, Thu = 3 weekdays → warn
+    rows = [tx(1, "BUY", 100, "2026-08-25", symbol="HSBA")]
+    cash = [{"date": "2026-08-25", "type": "Dividends", "amount": 1.0}]
+    check = reconcile.stores_asof(rows, cash, snap)
+    assert check["status"] == "warn"
+    assert check["detail"]["tx_lag_weekdays"] == 3
+
+
+def test_stores_asof_pending_without_eod():
+    assert reconcile.stores_asof([], [], None)["status"] == "pending"

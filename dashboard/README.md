@@ -25,10 +25,23 @@ IB Gateway on `127.0.0.1:4001` (running, logged in, API clients enabled) is
 the *best* source, not a requirement: when it is unreachable, the page serves
 from the Flex-EOD feed instead — yesterday's Open Positions off the Flex Web
 Service, repriced every 60s by the same delayed yfinance quotes everything
-else uses (`adapter/flexfeed.py`). The feed chip shows amber
-`EOD · positions <date> · quotes delayed` in that state; the Gateway coming
-back upgrades it to LIVE without a restart. The Open Positions section must
-be enabled on the Activity Flex query — see `config.local.json.example`.
+else uses (`adapter/flexfeed.py`), with an intraday FX overlay from Yahoo's
+`=X` pairs laid over the day's reference rates each cycle (a print more than
+5% from its reference is refused and listed in `meta.fx_intraday_skipped`).
+Two rules decide whether a quote replaces a statement mark: ~100× either way
+is a units slip and the mark stands (`meta.repricing.rejected_units`, row
+`price_source: "statement"`, muted in the tables); anything else is applied,
+with moves beyond 50% listed under `meta.repricing.large_moves` rather than
+frozen. A refused quote is refused for the day change too. Quotes and FX
+have their own breakers (`yfinance.quotes`, `yfinance.fx`), so a run of
+failed headline fetches cannot pause repricing and one Yahoo outage is not
+counted twice; a closed FX market (no intraday prints) is not a failure at
+all. The feed chip reads amber
+`Repriced HH:MM · quotes up to 15 min late · book as of <date>` in that
+state, adding `N at statement mark` or `quotes paused` when it applies, and
+the page polls every 15s rather than 3s; the Gateway coming back upgrades it
+to LIVE without a restart. The Open Positions section must be enabled on the
+Activity Flex query — see `config.local.json.example`.
 
 ## How data gets in
 
@@ -50,9 +63,13 @@ HISTORY       IBKR Flex Web Service ── adapter/backfill.py ── nav_histor
 WORLD BOARD   openbb ─── adapter/markets.py ─── GET /api/markets ──► page polls 30s
 (60s)         11 index series; exposure folded in from the live feed above
 
-OUTLET        yfinance ── adapter/news.py ─── GET /api/news ──► page polls 5m
+NEWS BRIEF    yfinance ── adapter/news.py ─── GET /api/news ──► page polls 5m
 (20 min)      headlines for held markets/sectors, ranked by the book's own
               weights; earnings est-vs-actual rides along; cached to news.json
+
+RESEARCH      co-pilot agents ── data/research_findings.json ── adapter/research.py
+(scheduled)     ── GET /api/research ──► #research polls 60s, only while open.
+              Read only; a labelled sample stands in until the agents write.
 ```
 
 The three never block each other: the feed holds **clientId 11**, `build.py`
@@ -668,7 +685,11 @@ from the pinned references, each signed off by Mac:
   Log out and the collapse button — none of which did anything — are gone;
   the sidebar footer carries the feed truth and the theme toggle; titles are
   sentence case with the eyebrow demoted back to labelling figures; links
-  say where they go; the feed-down condition is said once per view.
+  say where they go; the feed-down condition is said once per view. Since
+  22 Sep 2026 the sidebar is the only navigation — the topbar's tab strip
+  duplicated four of its six links (and stacked a second nav row under it
+  below 1024px), so the topbar is now search and status alone, and a
+  sidebar click writes the hash so it is linkable and back-button-able.
 
 ## Two deliberate departures from `Design.pdf`
 
@@ -681,7 +702,10 @@ from the pinned references, each signed off by Mac:
    of the ticker text, the `+3`/`+1` badges are half-covered, and INTC's chip
    runs off the card edge. Four elements were being squeezed into a ~200px
    column. Every part now has a hard minimum and only the sparkline flexes;
-   spacing, colour and type are otherwise unchanged.
+   spacing, colour and type are otherwise unchanged. (Since 22 Sep 2026 the
+   movers strip spans the content width below the positions table, with each
+   column capped at 560px, so the squeeze no longer arises — the minimums
+   stay as the floor for narrow windows.)
 
 ## The Overview is viewport-locked
 
@@ -691,12 +715,23 @@ wants **1349 px** of height at a 1470 px width, against a real browser viewport
 of **801 px**. A PDF page has no viewport, which is why everything appears to
 fit there.
 
-So `#view-overview` is a grid whose rows carry the reference's measured
-proportions — **19.6 / 46.9 / 33.5** — inside `100vh`, and the display type
-scales with `vh` (`--t-hero` is `clamp(34px, 5.2vh, 64px)`, reaching its 64 px
-reference size at ~1230 px of viewport height). Below `700px` tall, or under the
-existing width breakpoints, the lock releases and the page scrolls rather than
-crushing the content.
+So `.ov-screen` (inside the scrolling `#view-overview`) is a grid sized to one
+screenful, its rows carrying the reference's measured proportions —
+**19.6 / 46.9 / 33.5** — as `auto / 1.35fr / 1fr`: the KPI row, the
+chart/allocation row, and a brief row of market news and upcoming dividends
+(`.brief-row`, same column split as `.mid-row` so the card edges line up).
+Positions used to be that third track; since 22 Sep 2026 the table, then a
+single movers strip, sit below the fold and start the moment you scroll.
+The news brief (three ranked stories, with the latest earnings surprise and
+the next report date in its head) is the Overview's only news surface — the
+full digest lives on Market watch, and the below-fold Outlet card that used
+to be a third copy is gone. The dividend brief reads the Performance tab's
+`api/desk` payload, polled every fifteen minutes. The display type scales
+with `vh`
+(`--t-hero` is `clamp(34px, 5.2vh, 64px)`, reaching its 64 px reference size
+at ~1230 px of viewport height). Below `700px` tall, or under the existing
+width breakpoints, the lock releases and the page scrolls rather than crushing
+the content.
 
 Two things that are easy to get wrong here:
 

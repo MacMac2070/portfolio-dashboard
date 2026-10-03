@@ -13,6 +13,9 @@ dashboard/config.local.json
 dashboard/data/*
 !dashboard/data/mock/
 !dashboard/data/README.md
+# The Research page's stand-in: invented findings, labelled is_sample, served
+# only while the agents' real research_findings.json is absent.
+!dashboard/data/research_findings.sample.json
 
 # Review screenshots show real account values; they stay local. The design
 # loop is described in dashboard/README.md and CLAUDE.md instead.

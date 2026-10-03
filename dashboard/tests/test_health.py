@@ -16,6 +16,7 @@ def data_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(store, "DATA_DIR", tmp_path)
     monkeypatch.setattr(store, "NAV_PATH", tmp_path / "nav_history.jsonl")
     monkeypatch.setattr(store, "TX_PATH", tmp_path / "transactions.jsonl")
+    monkeypatch.setattr(store, "CASH_PATH", tmp_path / "cash_transactions.jsonl")
     monkeypatch.setattr(store, "POSITIONS_PATH", tmp_path / "positions_eod.json")
     monkeypatch.setattr(store, "LAST_RUN_PATH", tmp_path / "last_run.json")
     monkeypatch.setattr(store, "QUALITY_PATH", tmp_path / "quality.json")
@@ -39,6 +40,11 @@ def nav_through(day):
 
 def positions_asof(day):
     store.write_positions_eod([{"report_date": day, "con_id": 1, "quantity": 1}])
+    # Ledger/cash must reach the same asof or the new lag checks fail the suite.
+    store.merge_transactions([{"con_id": 1, "side": "BUY", "quantity": 1,
+                               "time": f"{day}T12:00:00", "symbol": "X",
+                               "exchange": "NASDAQ", "asset": "STK"}])
+    store.merge_cash([{"date": day, "type": "Dividends", "amount": 1.0}])
 
 
 def by_id(report):

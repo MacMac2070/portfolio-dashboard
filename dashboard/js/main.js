@@ -21,6 +21,7 @@ import * as performance from "./performance.js";
 import { allocRing } from "./alloc.js";
 import * as allocationView from "./allocation.js";
 import * as transactions from "./transactions.js";
+import * as research from "./research.js";
 
 const DATA_URL = "data/portfolio.json";
 const NAV_URL = "data/nav_history.jsonl";
@@ -42,12 +43,22 @@ const WATCH_POLL_MS = 20000;
 const MARKETS_POLL_MS = 30000;
 // The outlet's cadence. Headlines age in hours; five minutes is plenty.
 const NEWS_POLL_MS = 5 * 60 * 1000;
+// Dividends move on ex-dates, not minutes; the desk composes them against
+// live positions per request, so ask sparingly.
+const DESK_POLL_MS = 15 * 60 * 1000;
+// Last good desk payload, so the brief can be redrawn when positions change.
+let deskCache = null;
 const HEALTH_POLL_MS = 60 * 1000;
 const MIN_CURVE_POINTS = 5;
 
 /* Live cadence. The feed recomposes every 3s, so five missed polls is a
  * generous window before we stop claiming the numbers are live. */
 const POLL_MS = 3000;
+// On the Flex feed the server recomposes once a minute, so asking every 3s
+// returned nineteen identical answers in twenty. The gateway feed moves every
+// 3s and gets the fast cadence back the moment it is the source again.
+const POLL_MS_EOD = 15000;
+let pollMs = POLL_MS;
 const LIVE_STALE_MS = 15000;
 /* Only used for the no-feed fallback, where the page is showing a snapshot
  * written by build.py rather than a live connection. */
@@ -202,8 +213,33 @@ function renderKpis(data) {
   countUp($("kpiNav"), k.net_liquidation, (v) => money(v));
   countUp($("kpiDay"), k.daily_pnl, (v) => moneySigned(v));
   countUp($("kpiUnreal"), k.unrealised_pnl, (v) => moneySigned(v));
-  countUp($("kpiInvested"), k.invested, (v) => money(v));
-  countUp($("kpiCash"), k.cash_available, (v) => money(v));
+
+  const cashSub = $("kpiCashSub");
+  if (cashSub) {
+    const cash = k.cash_available;
+    cashSub.textContent = cash == null ? "Cash —" : `Cash ${money(cash)}`;
+  }
+
+  // YTD is a fraction from the server (track TWR). Paint once; no count-up —
+  // a rolling percent looks like the return is still settling.
+  const ytdNode = $("kpiYtd");
+  const ytdChip = $("kpiYtdChip");
+  if (ytdNode) {
+    const ytd = k.ytd_twr;
+    if (ytd == null || !Number.isFinite(ytd)) {
+      ytdNode.textContent = "—";
+      ytdNode.classList.remove("pos", "neg", "flat");
+      if (ytdChip) { ytdChip.className = "chip kpi__chip chip--flat"; ytdChip.innerHTML = ""; }
+    } else {
+      const pctPts = ytd * 100;
+      ytdNode.textContent = pctSigned(pctPts, 1);
+      const dir = direction(pctPts);
+      ytdNode.classList.remove("pos", "neg", "flat");
+      ytdNode.classList.add(dir === "up" ? "pos" : dir === "down" ? "neg" : "flat");
+      paintChip(ytdChip, pctPts, { digits: 1 });
+      ytdNode.title = "Time-weighted YTD return — deposits and withdrawals excluded";
+    }
+  }
 
   const dayChip = $("kpiDayChip");
   const unrealChip = $("kpiUnrealChip");
@@ -441,6 +477,16 @@ function renderChart() {
     : bench.points?.length && bench.points[0]
       ? bench.points.map((v) => (v / bench.points[0] - 1) * 100)
       : null;
+  // Stroke follows the signed period move the foot already prints — never the
+  // raw first→last slope when funding dominates (that painted green on deposits).
+  let curveTone = "flat";
+  if (twr) {
+    const total = twr.at(-1).value;
+    curveTone = total > 0 ? "up" : total < 0 ? "down" : "flat";
+  } else if (!bench.funding && points.length >= 2) {
+    const delta = points.at(-1).value - points[0].value;
+    curveTone = delta > 0 ? "up" : delta < 0 ? "down" : "flat";
+  }
   equityCurve($("chartSvg"), twr ?? points, {
     tooltip: $("tip"),
     formatValue: twr ? (v, full) => pctSigned(v, full ? 2 : 1)
@@ -449,6 +495,7 @@ function renderChart() {
     benchmark: benchPoints,
     benchmarkName: benchmark?.name ?? "Benchmark",
     events: chartEventsOn ? chartEventList : null,
+    tone: curveTone,
   });
 
   const changeNode = $("chartChange");
@@ -565,6 +612,9 @@ async function loadChartEvents() {
  * the movers wear the same issuer plates the tables do, instead of sliced
  * monograms that turned "293" into "29". */
 let moverTiles = new Map();
+// Universe key -> display name, for rows that arrive as bare keys (dividend
+// events say "HSBA"; the position says "HSBAl").
+let universeNames = new Map();
 
 function moverRow(p) {
   const dir = direction(p.day_change_pct);
@@ -628,9 +678,9 @@ function renderCurrencies(data) {
     </div>`).join("");
 }
 
-/* ---------------- the outlet ----------------
+/* ---------------- news: helpers ----------------
  * Ranked headlines for the markets and sectors the book holds, with earnings
- * as figures on top. The server ranks; this only draws. Concentration moved
+ * as figures. The server ranks; this only draws. Concentration moved
  * wholesale to the Allocation view — the payload field lives on there. */
 
 const shortAge = (iso) => {
@@ -644,43 +694,115 @@ const shortAge = (iso) => {
 const fmtEps = (v) => (v == null ? "—"
   : Math.abs(v) >= 100 ? Math.round(v).toLocaleString("en-GB") : v.toFixed(2));
 
-function renderOutlet(data) {
-  const host = $("outletBody");
-  if (!host) return;
-  const items = (data?.items || []).slice(0, 12);
+// Calendar dates ("2026-09-28") are days, not instants: format in UTC so the
+// evening before never shows up as the day before.
+const fmtD = (d) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+
+// Earnings as one line in the news head: the latest report with its surprise,
+// and the next date on the calendar. The surprise chip is signed as well as
+// tinted — never hue alone.
+function renderEarningsMeta(data) {
+  const meta = $("ovNewsMeta");
+  if (!meta) return;
   const earn = data?.earnings || {};
-  const reported = (earn.reported || []).slice(0, 2);
-  const upcoming = (earn.upcoming || []).slice(0, 2);
-  if (!items.length && !reported.length && !upcoming.length) return;
-
-  const fmtD = (d) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
-  // The surprise chip is signed as well as tinted — never hue alone.
-  const chip = (r) => (r.surprise_pct == null ? "" : `
+  const r = (earn.reported || [])[0];
+  const u = (earn.upcoming || [])[0];
+  const chip = r?.surprise_pct == null ? "" : `
     <span class="outlet__chip ${r.surprise_pct >= 0 ? "pos" : "neg"} num">${
-      r.surprise_pct >= 0 ? "+" : "−"}${Math.abs(r.surprise_pct).toFixed(1)}%</span>`);
+      r.surprise_pct >= 0 ? "+" : "−"}${Math.abs(r.surprise_pct).toFixed(1)}%</span>`;
+  meta.innerHTML = [
+    r ? `<b class="num">${esc(r.key)}</b> EPS ${fmtEps(r.eps_reported)}${
+      r.eps_estimate != null ? ` vs ${fmtEps(r.eps_estimate)} est` : ""}${chip}` : "",
+    u ? `<b class="num">${esc(u.key)}</b> reports ${fmtD(u.date)}` : "",
+  ].filter(Boolean).join(" · ");
+}
 
-  const erows = [
-    ...reported.map((r) => `
-      <div class="outlet__earn">
-        <span class="outlet__esym num">${esc(r.key)}</span>
-        <span class="outlet__etext">EPS ${fmtEps(r.eps_reported)}${
-          r.eps_estimate != null ? ` vs ${fmtEps(r.eps_estimate)} est` : ""} · ${fmtD(r.date)}</span>
-        ${chip(r)}
-      </div>`),
-    ...upcoming.map((r) => `
-      <div class="outlet__earn">
-        <span class="outlet__esym num">${esc(r.key)}</span>
-        <span class="outlet__etext">reports ${fmtD(r.date)}</span>
-      </div>`),
-  ].join("");
+/* ---------------- the brief: news and dividends above the fold ----------------
+ * Two short lists in the locked screen. The news brief is the Overview's only
+ * news surface — three ranked stories with the earnings line in the head; the
+ * full digest lives on Market watch. The dividend brief is the income rail's
+ * "next payments", worn here with the holding's name so a bare ticker never
+ * has to be decoded. */
 
-  host.innerHTML = `${erows ? `<div class="outlet__earnings">${erows}</div>` : ""}
-    <div class="outlet__list">${items.map((n) => `
-      <a class="outlet__row" href="${esc(n.url || "#")}" target="_blank" rel="noopener">
-        <span class="outlet__tag outlet__tag--${esc(n.kind)}">${esc(n.tag)}</span>
-        <span class="outlet__title" title="${esc(n.title)}">${esc(n.title)}</span>
-        <span class="outlet__meta">${esc(n.publisher || "")}${n.publisher && n.at ? " · " : ""}${shortAge(n.at)}</span>
-      </a>`).join("")}</div>`;
+const collecting = (title, copy) => `
+  <div class="collecting"><h3>${title}</h3><p>${copy}</p></div>`;
+
+// Three stories with room to read, not eight lines to scan: the headline may
+// wrap to two lines, and the lens, source and age sit beneath it.
+function renderNewsBrief(data) {
+  const host = $("ovNewsBody");
+  if (!host) return;
+  const items = (data?.items || []).slice(0, 3);
+  host.innerHTML = items.length
+    ? `<div class="brief__list">${items.map((n) => `
+      <a class="story" href="${esc(n.url || "#")}" target="_blank" rel="noopener">
+        <span class="story__title">${esc(n.title)}</span>
+        <span class="story__meta">
+          <span class="outlet__tag outlet__tag--${esc(n.kind)}">${esc(n.tag)}</span>
+          <span>${esc(n.publisher || "")}${n.publisher && n.at ? " · " : ""}${shortAge(n.at)}</span>
+        </span>
+      </a>`).join("")}</div>`
+    : collecting("No headlines yet", "Headlines arrive on the first poll after launch.");
+}
+
+// `desk` is null when the request failed, so the copy can say so rather than
+// pretend the book pays nothing.
+function renderDividendBrief(desk) {
+  const host = $("ovDivBody");
+  if (!host) return;
+  if (!desk) {
+    host.innerHTML = collecting("Income feed unavailable",
+      "The desk did not answer. It is asked again every fifteen minutes.");
+    return;
+  }
+  const inc = desk.income;
+  if (!desk.meta?.ready || !inc) {
+    host.innerHTML = collecting("No desk data yet",
+      "Dividends appear once the daily job has run adapter/desk.py.");
+    return;
+  }
+  const events = (inc.next_events || []).slice(0, 4);
+  if (!events.length) {
+    host.innerHTML = collecting("No dividends scheduled",
+      "Nothing declared or projected for the holdings in the book.");
+    return;
+  }
+
+  // Universe first: desk keys are universe keys, and position symbols carry
+  // venue suffixes (HSBAl) that would never match. Positions are the fallback
+  // for anything the universe has not catalogued yet.
+  const nameOf = (key) => universeNames.get(key)
+    || portfolio?.positions?.find((p) => p.symbol === key)?.name || "";
+  // An estimate wears a tilde; a declared amount is quoted straight. The tier
+  // chip says it in words as well, so the tint is never the only signal.
+  const amount = (e) => (e.gbp != null
+    ? `${e.tier === "declared_date" ? "" : "~"}${money(e.gbp)}`
+    : `${Number(e.amount.toFixed(4))} ${esc(e.currency)}`);
+
+  // The totals live in the head, not a strip: the card is short and the
+  // rows are what it is for.
+  const meta = $("ovDivMeta");
+  if (meta) meta.innerHTML = [
+    inc.forward_12m_gbp ? `Next 12m<b class="num">~${money(inc.forward_12m_gbp)}</b>` : "",
+    inc.declared_gbp ? `declared<b class="num">${money(inc.declared_gbp)}</b>` : "",
+  ].filter(Boolean).join(" · ");
+
+  host.innerHTML = `
+    <div class="brief__list">${events.map((e) => {
+      const declared = e.tier === "declared_date";
+      return `
+      <div class="divrow">
+        <span class="divrow__who">
+          <span class="divrow__key num">${esc(e.key)}</span>
+          <span class="divrow__name">${esc(nameOf(e.key))}</span>
+        </span>
+        <span class="divrow__amt num">${amount(e)}</span>
+        <span class="divrow__when">
+          <span class="divrow__date num">${fmtD(e.date)}</span> ex-date
+          <span class="divrow__tier divrow__tier--${declared ? "declared" : "est"}">${
+            declared ? "declared" : "estimate"}</span>
+        </span>
+      </div>`; }).join("")}</div>`;
 }
 
 /* ---------------- holdings ---------------- */
@@ -783,11 +905,32 @@ function renderFreshness(data) {
     const asof = meta.positions_asof
       ? new Date(meta.positions_asof).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })
       : null;
+    // The Flex feed reprices the statement book from delayed quotes once a
+    // minute, so the pill says when it last did and how old the quotes can
+    // be — not "EOD", which read as if nothing moved all day. Rows kept at
+    // the statement mark (no quote, or one refused as a units slip) and a
+    // tripped quote breaker are counted here and named in the title.
+    const rep = meta.repricing || {};
+    const held = [...(rep.rejected_units || []), ...(rep.unquoted || [])];
+    const paused = meta.quotes_breaker && meta.quotes_breaker !== "closed";
+    const eodLabel = [
+      `Repriced ${clock(meta.last_refresh)}`,
+      "quotes up to 15 min late",
+      asof ? `book as of ${asof}` : "",
+      paused ? "quotes paused" : held.length ? `${held.length} at statement mark` : "",
+    ].filter(Boolean).join(" · ");
     label = stale
       ? (at ? `Disconnected · last live ${clock(meta.last_refresh)}` : "Disconnected")
       : eod
-        ? `EOD${asof ? ` · positions ${asof}` : ""} · quotes delayed`
+        ? eodLabel
         : `Live · ${clock(meta.last_refresh)} · delayed 15 min`;
+    $("feed").title = eod ? [
+      "Positions and cash are the statement's; prices are Yahoo's, up to 15 minutes late.",
+      "Day change is against Yahoo's previous close, which can differ from IBKR after a corporate action.",
+      held.length ? `At statement mark: ${held.join(", ")}.` : "",
+      (rep.large_moves || []).length ? `Moved more than 50% from the mark: ${rep.large_moves.join(", ")}.` : "",
+      paused ? "Yahoo quotes are paused after repeated failures; every row is at its statement mark." : "",
+    ].filter(Boolean).join("\n") : "";
     setText($("staleCopy"), at
       ? `Feed disconnected. These are the last values received at ${clock(meta.last_refresh)} — don't trade on them.`
       : "Feed disconnected — don't trade on these values.");
@@ -819,8 +962,9 @@ function renderFreshness(data) {
 /* ---------------- shell interactions ---------------- */
 
 function showTab(name) {
-  for (const tab of document.querySelectorAll(".tab")) {
-    tab.setAttribute("aria-selected", String(tab.dataset.tab === name));
+  for (const item of document.querySelectorAll(".nav-item[data-nav]")) {
+    if (item.dataset.nav === name) item.setAttribute("aria-current", "page");
+    else item.removeAttribute("aria-current");
   }
   for (const view of document.querySelectorAll(".view")) {
     view.hidden = view.id !== `view-${name}`;
@@ -839,18 +983,13 @@ function showTab(name) {
   if (name === "performance") performance.route();
   if (name === "allocation") allocationView.route();
   if (name === "transactions") transactions.route();
-  for (const item of document.querySelectorAll(".nav-item")) {
-    if (item.dataset.nav) {
-      item.toggleAttribute("aria-current", item.dataset.nav === name);
-      if (item.dataset.nav === name) item.setAttribute("aria-current", "page");
-      else item.removeAttribute("aria-current");
-    }
-  }
+  if (name === "research") research.route();
 }
 
-/** The hash owns which tab is showing, so #holdings/mag7 survives a reload. */
+/** The hash owns which tab is showing, so #holdings/mag7 survives a reload.
+ *  A query after the name (#research?urgency=high) belongs to the view. */
 function tabFromHash() {
-  const name = (location.hash || "").replace(/^#/, "").split("/")[0];
+  const name = (location.hash || "").replace(/^#/, "").split(/[/?]/)[0];
   return document.getElementById(`view-${name}`) ? name : null;
 }
 
@@ -880,12 +1019,17 @@ function initTheme() {
 }
 
 function wireShell() {
-  for (const tab of document.querySelectorAll(".tab")) {
-    tab.addEventListener("click", () => {
-      // Writing the hash drives showTab via hashchange, so a tab click is
-      // linkable and the back button steps through tabs.
-      if (tabFromHash() === tab.dataset.tab) showTab(tab.dataset.tab);
-      else location.hash = `#${tab.dataset.tab}`;
+  // The sidebar is the only navigation. Writing the hash drives showTab via
+  // hashchange, so a click is linkable and the back button steps through
+  // views; a click on the current view re-routes it (a #holdings/mag7 deep
+  // link returns to the plain list).
+  for (const item of document.querySelectorAll(".nav-item[data-nav]")) {
+    item.addEventListener("click", (event) => {
+      const name = item.dataset.nav;
+      if (!document.getElementById(`view-${name}`)) return;
+      event.preventDefault();
+      if (tabFromHash() === name) showTab(name);
+      else location.hash = `#${name}`;
     });
   }
 
@@ -904,15 +1048,6 @@ function wireShell() {
       renderChart();
     });
     loadChartEvents();
-  }
-  for (const item of document.querySelectorAll(".nav-item[data-nav]")) {
-    item.addEventListener("click", (event) => {
-      const name = item.dataset.nav;
-      if (document.getElementById(`view-${name}`)) {
-        event.preventDefault();
-        showTab(name);
-      }
-    });
   }
   // Scoped to [data-range]. `.range` is the shared pressed-button look and is
   // worn by other groups too — Market watch's sort order, Performance's income
@@ -960,6 +1095,9 @@ function wireShell() {
 
 async function boot() {
   wireShell();
+  // Before the portfolio await: Research reads its own endpoint, and its nav
+  // badge should not depend on portfolio.json loading.
+  research.init();
   try {
     [portfolio, navHistory] = await Promise.all([loadJSON(DATA_URL), loadNavHistory()]);
   } catch (error) {
@@ -1045,6 +1183,7 @@ async function boot() {
   startWatchlistPolling();
   startMarketsPolling();
   startNewsPolling();
+  startDeskPolling();
   startHealthPolling();
 }
 
@@ -1062,11 +1201,16 @@ async function pollWatchlist() {
       // do not always match universe keys (HSBA vs HSBAI) — the same reason
       // Holdings joins its live rows on con_id.
       moverTiles = new Map();
+      universeNames = new Map();
       for (const t of Object.values(tickers)) {
         const tile = { mono: t.mono, ink: t.ink, logo: t.logo };
         if (t.con_id != null) moverTiles.set(t.con_id, tile);
         moverTiles.set(t.key, tile);
+        if (t.name) universeNames.set(t.key, t.name);
       }
+      // The dividend brief names its rows off this map; redraw if it beat
+      // the first watchlist poll.
+      if (deskCache) renderDividendBrief(deskCache);
       // The movers list rebuilds only when its ticker set changes; tiles
       // arriving after its first paint would otherwise never show. Clearing
       // the gate lets the next live tick redraw the rows with their plates.
@@ -1114,13 +1258,15 @@ function startMarketsPolling() {
   tick();
 }
 
-/* The outlet re-asks every five minutes — the server itself only sweeps its
- * sources every twenty, so most polls are a cheap cache read. */
+/* The news brief re-asks every five minutes — the server itself only sweeps
+ * its sources every twenty, so most polls are a cheap cache read. */
 async function pollNews() {
   try {
     const res = await fetch(`api/news?t=${Date.now()}`, { cache: "no-store" });
     if (!res.ok) return false;          // older serve.py — stop asking
-    renderOutlet(await res.json());
+    const data = await res.json();
+    renderNewsBrief(data);
+    renderEarningsMeta(data);
     return true;
   } catch {
     return true;                         // transient; keep trying
@@ -1131,6 +1277,30 @@ function startNewsPolling() {
   const tick = async () => {
     const again = await pollNews();
     if (again) setTimeout(tick, NEWS_POLL_MS);
+  };
+  tick();
+}
+
+/* The dividend brief reads the same desk payload the Performance tab does.
+ * A missing endpoint stops the loop; a failed request shows as such and is
+ * retried on the next tick. */
+async function pollDesk() {
+  try {
+    const res = await fetch(`api/desk?t=${Date.now()}`, { cache: "no-store" });
+    if (res.status === 404) { renderDividendBrief(null); return false; }
+    if (res.ok) deskCache = await res.json();
+    renderDividendBrief(res.ok ? deskCache : null);
+    return true;
+  } catch {
+    renderDividendBrief(null);
+    return true;
+  }
+}
+
+function startDeskPolling() {
+  const tick = async () => {
+    const again = await pollDesk();
+    if (again) setTimeout(tick, DESK_POLL_MS);
   };
   tick();
 }
@@ -1218,6 +1388,7 @@ async function pollOnce() {
     return false;
   }
   livePolling = true;
+  pollMs = meta.source === "flex-eod" ? POLL_MS_EOD : POLL_MS;
 
   if (meta.connected && (live.positions || []).length) {
     // Keep the sparklines from the initial snapshot; the feed cannot supply a
@@ -1240,7 +1411,7 @@ function startPolling() {
   let timer = null;
   const tick = async () => {
     const again = await pollOnce();
-    if (again) timer = setTimeout(tick, POLL_MS);
+    if (again) timer = setTimeout(tick, pollMs);
   };
   tick();
 

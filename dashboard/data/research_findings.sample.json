@@ -1,0 +1,317 @@
+{
+  "meta": {
+    "generated_at": "2026-10-02T05:40:00+00:00",
+    "run_id": "sample-2026-10-02-am",
+    "status": "ok",
+    "next_run_at": "2026-10-02T17:00:00+00:00",
+    "held_count": 15,
+    "watched_count": 22,
+    "is_sample": true,
+    "errors": [],
+    "last_finding_at": "2026-10-02T05:31:00+00:00",
+    "note": "Made-up findings for building and testing the Research page. Not real research."
+  },
+  "findings": [
+    {
+      "id": "sample-intc-form4-cluster",
+      "ticker": "INTC",
+      "tier": "held",
+      "sector": "Semiconductors",
+      "urgency": "high",
+      "headline": "Three director share disposals filed in five days",
+      "why_it_matters": "Three Form 4 filings show directors reducing direct stakes ahead of the foundry update. Disposals on their own say little, but the clustering lands while the turnaround pillar is already under review.",
+      "bull": [
+        "Two of the three disposals were made under trading plans adopted in May",
+        "Combined size is under 3% of the directors' disclosed holdings"
+      ],
+      "bear": [
+        "Third cluster of director disposals this year",
+        "Timing sits two weeks before the foundry milestone update"
+      ],
+      "risk_views": {
+        "aggressive": "Reads the filings as routine plan activity with no bearing on the foundry timeline.",
+        "conservative": "Treats the clustering as worth tracking until the foundry update confirms the milestone dates.",
+        "neutral": "Notes that the plan adoption dates predate recent news, so the filings carry limited new information."
+      },
+      "evidence": [
+        { "label": "Form 4", "detail": "Three filings, 25 to 29 Sep, directors' direct holdings", "url": "https://www.sec.gov/edgar/search/", "kind": "filing" },
+        { "label": "Trading plan disclosure", "detail": "Plan adoption dates listed in the Q2 10-Q", "url": "https://www.sec.gov/edgar/search/", "kind": "filing" },
+        { "label": "Q2 call notes", "detail": "Foundry milestone language, from the local earnings archive", "url": null, "kind": "archive" }
+      ],
+      "pillars_touched": [
+        { "pillar": "Turnaround execution", "change": "steady" },
+        { "pillar": "Management alignment", "change": "weaker" }
+      ],
+      "first_seen": "2026-10-02T05:12:00+00:00",
+      "changed_since_last_run": true
+    },
+    {
+      "id": "sample-hy9h-hbm-second-customer",
+      "ticker": "HY9H",
+      "tier": "held",
+      "sector": "Semiconductors",
+      "urgency": "high",
+      "headline": "Disclosure points to a second large HBM customer for 2027 volumes",
+      "why_it_matters": "A regulatory disclosure and two press reports describe a supply agreement with a second accelerator maker. If it stands, the HBM leadership pillar rests on a broader customer base than it did last quarter.",
+      "bull": [
+        "Reduces reliance on a single accelerator customer",
+        "Agreement reportedly covers 2027 volumes, extending visibility"
+      ],
+      "bear": [
+        "Press reports differ on contract size",
+        "Pricing terms not disclosed"
+      ],
+      "risk_views": {
+        "aggressive": "Sees the agreement as confirming demand depth beyond one customer.",
+        "conservative": "Waits for the company's own figures, since press estimates of size vary widely.",
+        "neutral": "Records the disclosure as a positive data point with the scale still unknown."
+      },
+      "evidence": [
+        { "label": "DART disclosure", "detail": "Supply agreement notice, 1 Oct", "url": "https://dart.fss.or.kr/", "kind": "filing" },
+        { "label": "Korean press reports", "detail": "Two outlets, differing size estimates", "url": null, "kind": "news" }
+      ],
+      "pillars_touched": [
+        { "pillar": "HBM leadership", "change": "stronger" },
+        { "pillar": "Customer concentration", "change": "stronger" }
+      ],
+      "first_seen": "2026-10-02T05:31:00+00:00",
+      "changed_since_last_run": true
+    },
+    {
+      "id": "sample-mu-results-escalated",
+      "ticker": "MU",
+      "tier": "watchlist",
+      "sector": "Semiconductors",
+      "urgency": "high",
+      "headline": "Escalated: HBM revenue came in above the range implied in June",
+      "why_it_matters": "Quarterly results put HBM revenue above the range management implied three months ago, and the call raised the 2027 capacity plan. The watchlist scan escalated it for a full review because it also bears on the memory-cycle view behind two holdings.",
+      "bull": [
+        "HBM share of DRAM revenue rose for the fourth quarter running",
+        "Capacity plan raised with customer commitments cited"
+      ],
+      "bear": [
+        "Capital spending guide rose faster than revenue guide",
+        "Conventional DRAM pricing commentary was cautious"
+      ],
+      "risk_views": {
+        "aggressive": "Reads the results as evidence the memory upcycle is broadening.",
+        "conservative": "Focuses on the spending step-up and the cautious conventional DRAM tone.",
+        "neutral": "Notes the read-across to SK hynix and Samsung is supportive on HBM, mixed on commodity DRAM."
+      },
+      "evidence": [
+        { "label": "Results call", "detail": "Fiscal Q4 call, HBM and capacity remarks", "url": "https://investors.micron.com/", "kind": "call" },
+        { "label": "8-K", "detail": "Results release and guidance table", "url": "https://www.sec.gov/edgar/search/", "kind": "filing" }
+      ],
+      "pillars_touched": [],
+      "first_seen": "2026-10-01T17:20:00+00:00",
+      "changed_since_last_run": true
+    },
+    {
+      "id": "sample-smsn-hbm3e-wording",
+      "ticker": "SMSN",
+      "tier": "held",
+      "sector": "Semiconductors",
+      "urgency": "medium",
+      "headline": "HBM3E qualification wording softened on the results call",
+      "why_it_matters": "Management described qualification with a large customer as progressing, where last quarter it was expected to complete within the period. The catch-up pillar assumed completion this year.",
+      "bull": [
+        "Management reiterated volume shipments to other customers",
+        "Foundry losses narrowed for a second quarter"
+      ],
+      "bear": [
+        "Second quarter in a row with the timeline moved",
+        "No date given for the next qualification step"
+      ],
+      "risk_views": {
+        "aggressive": "Treats the wording change as timing noise inside a long qualification cycle.",
+        "conservative": "Reads a second slip as a pattern worth weighting in the catch-up pillar.",
+        "neutral": "Marks the pillar weaker for now, pending the next quarterly update."
+      },
+      "evidence": [
+        { "label": "Results call", "detail": "Memory division remarks, Q3", "url": "https://www.samsung.com/global/ir/", "kind": "call" },
+        { "label": "Prior call notes", "detail": "Q2 wording, from the local earnings archive", "url": null, "kind": "archive" }
+      ],
+      "pillars_touched": [
+        { "pillar": "HBM catch-up", "change": "weaker" }
+      ],
+      "first_seen": "2026-10-01T05:44:00+00:00",
+      "changed_since_last_run": true
+    },
+    {
+      "id": "sample-amzn-capex-guide",
+      "ticker": "AMZN",
+      "tier": "held",
+      "sector": "Big tech",
+      "urgency": "medium",
+      "headline": "AWS capital spending guide raised for the second quarter running",
+      "why_it_matters": "The 10-Q and call both lift the full-year spending range again, mostly for data centres. Cloud margin was steady this quarter, so the open question is how long margin keeps pace with the spending.",
+      "bull": [
+        "AWS operating margin steady quarter on quarter",
+        "Backlog growth outpaced revenue growth"
+      ],
+      "bear": [
+        "Free cash flow fell year on year",
+        "Depreciation will rise as new capacity comes online"
+      ],
+      "risk_views": {
+        "aggressive": "Sees the spending as matched by backlog and steady margins.",
+        "conservative": "Weights the free cash flow decline and the depreciation that follows.",
+        "neutral": "Records capex discipline as weaker while cloud margin stays steady."
+      },
+      "evidence": [
+        { "label": "10-Q", "detail": "Capital expenditure and commitments note", "url": "https://www.sec.gov/edgar/search/", "kind": "filing" },
+        { "label": "Results call", "detail": "CFO remarks on the spending range", "url": "https://ir.aboutamazon.com/", "kind": "call" }
+      ],
+      "pillars_touched": [
+        { "pillar": "Cloud margin", "change": "steady" },
+        { "pillar": "Capex discipline", "change": "weaker" }
+      ],
+      "first_seen": "2026-09-30T05:38:00+00:00",
+      "changed_since_last_run": false
+    },
+    {
+      "id": "sample-nvda-lead-times",
+      "ticker": "NVDA",
+      "tier": "watchlist",
+      "sector": "Semiconductors",
+      "urgency": "medium",
+      "headline": "Supplier filings cite longer lead times for next-generation boards",
+      "why_it_matters": "Two Taiwanese suppliers mention extended lead times for accelerator boards in their monthly reports. The scan flagged it because the same supply chain feeds HBM demand for two holdings.",
+      "bull": [
+        "Lead times usually lengthen when orders run ahead of capacity"
+      ],
+      "bear": [
+        "Could also reflect component shortages rather than demand"
+      ],
+      "risk_views": {
+        "aggressive": "Reads longer lead times as a demand signal.",
+        "conservative": "Notes the same signal can come from supply problems.",
+        "neutral": "Keeps it as context for the HBM holdings rather than a finding on its own."
+      },
+      "evidence": [
+        { "label": "Supplier monthly reports", "detail": "Two board makers, September", "url": null, "kind": "sector" },
+        { "label": "Trade press", "detail": "Lead time survey, late September", "url": null, "kind": "news" }
+      ],
+      "pillars_touched": [],
+      "first_seen": "2026-10-02T05:26:00+00:00",
+      "changed_since_last_run": true
+    },
+    {
+      "id": "sample-700-segment-restatement",
+      "ticker": "700",
+      "tier": "held",
+      "sector": "Big tech",
+      "urgency": "low",
+      "headline": "Interim report adds a separate line for mini-game revenue, splits domestic and international games, and restates two prior quarters on the new basis, so year-on-year games comparisons read differently for now",
+      "why_it_matters": "The restated segments do not change group totals, but the games pillar has been tracked on the old split. Comparisons need the restated quarters until four quarters exist on the new basis.",
+      "bull": [
+        "More detail on the fastest-growing games line"
+      ],
+      "bear": [
+        "Older notes in the archive use the previous split"
+      ],
+      "risk_views": {
+        "aggressive": "Welcomes the extra disclosure.",
+        "conservative": "Flags the comparison break for the next few quarters.",
+        "neutral": "Updates the games pillar baseline to the restated figures."
+      },
+      "evidence": [
+        { "label": "HKEX interim report", "detail": "Segment information note", "url": "https://www.hkexnews.hk/", "kind": "filing" },
+        { "label": "Sector data", "detail": "Mini-game market estimates, Q2", "url": null, "kind": "sector" }
+      ],
+      "pillars_touched": [
+        { "pillar": "Games growth", "change": "steady" }
+      ],
+      "first_seen": "2026-10-01T05:51:00+00:00",
+      "changed_since_last_run": true
+    },
+    {
+      "id": "sample-hsba-13f-changes",
+      "ticker": "HSBA",
+      "tier": "held",
+      "sector": "Financials",
+      "urgency": "low",
+      "headline": "Two large US institutions reduced ADR stakes in the latest 13F filings",
+      "why_it_matters": "Both reductions were under a fifth of each position and came in a quarter when several banks were trimmed across the same funds. It reads as sector positioning rather than anything specific to the company.",
+      "bull": [
+        "Total institutional ownership of the ADR rose overall"
+      ],
+      "bear": [
+        "Second consecutive quarter of reductions at one of the two funds"
+      ],
+      "risk_views": {
+        "aggressive": "Sees no company-specific signal.",
+        "conservative": "Notes the repeat reduction at one fund.",
+        "neutral": "Logs it as sector rotation."
+      },
+      "evidence": [
+        { "label": "13F-HR", "detail": "Two filers, quarter to 30 Jun", "url": "https://www.sec.gov/edgar/search/", "kind": "13f" }
+      ],
+      "pillars_touched": [
+        { "pillar": "Capital return", "change": "steady" }
+      ],
+      "first_seen": "2026-09-29T05:40:00+00:00",
+      "changed_since_last_run": false
+    },
+    {
+      "id": "sample-c6l-quiet",
+      "ticker": "C6L",
+      "tier": "held",
+      "sector": "Airlines",
+      "urgency": "quiet",
+      "headline": "Nothing material since the last run",
+      "why_it_matters": "Monthly operating statistics were in line with the recent trend. No filings or management remarks touched the thesis.",
+      "bull": [],
+      "bear": [],
+      "risk_views": {
+        "aggressive": "",
+        "conservative": "",
+        "neutral": "No change."
+      },
+      "evidence": [
+        { "label": "SGX announcement", "detail": "August operating statistics", "url": "https://www.sgx.com/securities/company-announcements", "kind": "sector" }
+      ],
+      "pillars_touched": [],
+      "first_seen": "2026-09-26T05:40:00+00:00",
+      "changed_since_last_run": false
+    },
+    {
+      "id": "sample-iucs-quiet",
+      "ticker": "IUCS",
+      "tier": "held",
+      "sector": "ETFs",
+      "urgency": "quiet",
+      "headline": "Quarterly index rebalance left the top ten weights unchanged",
+      "why_it_matters": "The fund tracked its index through the rebalance with no change to the largest constituents.",
+      "bull": [
+        "Tracking difference stayed within its usual range"
+      ],
+      "bear": [],
+      "risk_views": {
+        "aggressive": "",
+        "conservative": "",
+        "neutral": "No change."
+      },
+      "evidence": [
+        { "label": "LSE RNS", "detail": "Rebalance notice", "url": "https://www.londonstockexchange.com/news?tab=news-explorer", "kind": "filing" }
+      ],
+      "pillars_touched": [],
+      "first_seen": "2026-09-22T05:40:00+00:00",
+      "changed_since_last_run": false
+    }
+  ],
+  "watchlist_triage": [
+    { "ticker": "MU", "signals_flag": true, "narrative_flag": true, "escalated": true, "note": "Results above the June range; read-across to two holdings" },
+    { "ticker": "NVDA", "signals_flag": true, "narrative_flag": true, "escalated": true, "note": "Supplier lead times; feeds the HBM holdings" },
+    { "ticker": "AMD", "signals_flag": false, "narrative_flag": true, "escalated": false, "note": "Analyst day commentary only, no filings" },
+    { "ticker": "ASML", "signals_flag": true, "narrative_flag": false, "escalated": false, "note": "Routine 6-K, nothing new in it" },
+    { "ticker": "TSM", "signals_flag": false, "narrative_flag": false, "escalated": false, "note": "Monthly sales within the usual range" },
+    { "ticker": "BARC", "signals_flag": false, "narrative_flag": true, "escalated": false, "note": "Sector press coverage, no company filing" }
+  ],
+  "runs": [
+    { "run_id": "sample-2026-10-02-am", "at": "2026-10-02T05:40:00+00:00", "status": "ok", "agents_used": 214, "skipped": 0, "failed": 0 },
+    { "run_id": "sample-2026-10-01-pm", "at": "2026-10-01T17:00:00+00:00", "status": "partial", "agents_used": 206, "skipped": 4, "failed": 2 },
+    { "run_id": "sample-2026-10-01-am", "at": "2026-10-01T05:40:00+00:00", "status": "ok", "agents_used": 194, "skipped": 0, "failed": 0 },
+    { "run_id": "sample-2026-09-30-pm", "at": "2026-09-30T17:00:00+00:00", "status": "failed", "agents_used": 38, "skipped": 0, "failed": 12 }
+  ]
+}

@@ -96,7 +96,7 @@ TTL: dict[str, float] = {
 MAX_ENTRIES = 1024        # 35 symbols x ~12 groups ~= 420; this is a backstop
 FOLLOWER_WAIT = 6.0       # how long a second caller waits on the leader's fetch
 NEG_TTL = 60.0            # an empty answer is remembered this long, not the group's TTL
-BREAKER = "yfinance"      # shared with every other module that asks Yahoo
+BREAKER = "yfinance"      # shared by the panels; portfolio quotes and FX keep their own
 REQUEST_BUDGET = 8.0      # never hold an HTTP worker longer than this
 GATE_TIMEOUT = 90.0
 MAX_POINTS = 400          # MAX on INTC is 11,688 raw daily bars

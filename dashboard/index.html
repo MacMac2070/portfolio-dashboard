@@ -14,6 +14,7 @@
 <link rel="stylesheet" href="css/tokens.css">
 <link rel="stylesheet" href="css/base.css">
 <link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/research.css">
 </head>
 <body>
 
@@ -31,6 +32,18 @@
           <rect x="2.6" y="2.6" width="6" height="6" rx="1.6"/><rect x="11.4" y="2.6" width="6" height="6" rx="1.6"/>
           <rect x="2.6" y="11.4" width="6" height="6" rx="1.6"/><rect x="11.4" y="11.4" width="6" height="6" rx="1.6"/>
         </svg>Overview</a>
+      <a class="nav-item" href="#holdings" data-nav="holdings">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6">
+          <path d="M3.2 5.2h13.6M3.2 10h13.6M3.2 14.8h9.2"/>
+        </svg>Holdings</a>
+      <a class="nav-item" href="#transactions" data-nav="transactions">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6">
+          <rect x="3.2" y="3.2" width="13.6" height="13.6" rx="2"/><path d="M6.4 7.2h7.2M6.4 10h7.2M6.4 12.8h4.4"/>
+        </svg>Transactions</a>
+      <a class="nav-item" href="#market" data-nav="market">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">
+          <path d="M2.8 14.8 7 9.8l3.2 2.8 5.2-6.4"/><path d="M12.4 6.2h3.2v3.2"/>
+        </svg>Market watch</a>
     </nav>
 
     <nav class="nav-group" aria-label="Analysis">
@@ -44,6 +57,14 @@
         </svg>Allocation</a>
     </nav>
 
+    <nav class="nav-group" aria-label="Research">
+      <a class="nav-item" href="#research" data-nav="research">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M11 2.8H5.4a1.6 1.6 0 0 0-1.6 1.6v11.2a1.6 1.6 0 0 0 1.6 1.6h2.8"/><path d="M6.6 6.6h4.4M6.6 9.4h2.4"/>
+          <circle cx="13.2" cy="12.4" r="2.9"/><path d="m15.3 14.5 2.1 2.1"/>
+        </svg>Research<span class="rs-badge num" id="rsBadge" hidden><span id="rsBadgeCount">0</span><span class="u-sr"> unread</span></span></a>
+    </nav>
+
     <div class="sidebar__foot">
       <p class="foot-meta" id="footMeta">—</p>
       <button class="foot-theme" type="button" id="themeToggle"
@@ -54,14 +75,8 @@
   <!-- ================= main ================= -->
   <main class="main">
 
+    <!-- One navigation, the sidebar. The topbar is search and status only. -->
     <header class="topbar">
-      <div class="tabs" role="tablist" aria-label="Sections">
-        <button class="tab" role="tab" data-tab="overview" aria-selected="true">Overview</button>
-        <button class="tab" role="tab" data-tab="holdings" aria-selected="false">Watchlist</button>
-        <button class="tab" role="tab" data-tab="transactions" aria-selected="false">Transactions</button>
-        <button class="tab" role="tab" data-tab="market" aria-selected="false">Market watch</button>
-      </div>
-
       <!-- Instrument search. Lives in the shared topbar, so it is reachable
            from every view rather than only Overview. -->
       <div class="search" id="search">
@@ -121,7 +136,7 @@
     <div class="views">
 
       <!-- ---------------- Overview ---------------- -->
-      <section class="view" id="view-overview" role="tabpanel" aria-label="Overview">
+      <section class="view" id="view-overview" role="region" aria-label="Overview">
 
         <!-- Everything above the fold. This wrapper owns the viewport-locked
              grid that used to live on #view-overview itself, so the three rows
@@ -145,6 +160,7 @@
               </svg>Net liquidation
             </p>
             <p class="kpi__value num" id="kpiNav">£0</p>
+            <p class="kpi__sub num" id="kpiCashSub">Cash —</p>
           </article>
 
           <article class="card kpi reveal" style="animation-delay:40ms">
@@ -160,13 +176,10 @@
           </article>
 
           <article class="card kpi reveal" style="animation-delay:120ms">
-            <p class="eyebrow kpi__label">Invested</p>
-            <p class="kpi__value num" id="kpiInvested">£0</p>
-          </article>
-
-          <article class="card kpi reveal" style="animation-delay:160ms">
-            <p class="eyebrow kpi__label">Cash available</p>
-            <p class="kpi__value num" id="kpiCash">£0</p>
+            <p class="eyebrow kpi__label">YTD return</p>
+            <p class="kpi__value num" id="kpiYtd">—</p>
+            <span class="chip kpi__chip" id="kpiYtdChip"></span>
+            <p class="kpi__sub" title="Time-weighted return; deposits excluded">TWR · deposits out</p>
           </article>
         </div>
 
@@ -245,32 +258,36 @@
           </section>
         </div>
 
-        <!-- movers / currency / concentration -->
-        <div class="bottom-row">
-          <section class="card reveal" style="animation-delay:280ms" aria-labelledby="moversTitle">
+        <!-- Second tape of the locked screen: what the market is saying under
+             the curve, what the book pays next under the ring. Same column
+             split as .mid-row so the four card edges line up. -->
+        <div class="brief-row">
+          <section class="card reveal" style="animation-delay:240ms" aria-labelledby="ovNewsTitle">
             <div class="card__head">
-              <h2 class="card-title" id="moversTitle">Top movers</h2>
-              <a class="link-all" href="#holdings">Watchlist <span aria-hidden="true">→</span></a>
+              <h2 class="card-title" id="ovNewsTitle">Market news</h2>
+              <span class="brief__hmeta" id="ovNewsMeta"></span>
+              <a class="link-all" href="#market">Digest <span aria-hidden="true">→</span></a>
             </div>
-            <div class="movers__cols">
-              <div><p class="eyebrow movers__head movers__head--up">Gainers</p><div id="gainers"></div></div>
-              <div><p class="eyebrow movers__head movers__head--down">Losers</p><div id="losers"></div></div>
+            <div class="brief" id="ovNewsBody">
+              <div class="brief__sk" aria-hidden="true">
+                <span class="sk sk--brow"></span><span class="sk sk--brow"></span>
+                <span class="sk sk--brow"></span><span class="sk sk--brow"></span>
+                <span class="sk sk--brow"></span>
+              </div>
             </div>
           </section>
 
-          <!-- The outlet: headlines ranked by the book's own weights — a
-               market or sector's pull is the £ share sitting behind it — with
-               earnings as figures on top. Concentration lives on Allocation;
-               currency exposure moved to the Performance appendix. -->
-          <section class="card reveal" style="animation-delay:320ms" aria-labelledby="outletTitle">
+          <section class="card reveal" style="animation-delay:260ms" aria-labelledby="ovDivTitle">
             <div class="card__head">
-              <h2 class="card-title" id="outletTitle">Outlet</h2>
-              <a class="link-all" href="#market">Digest <span aria-hidden="true">→</span></a>
+              <h2 class="card-title" id="ovDivTitle">Upcoming dividends</h2>
+              <span class="brief__hmeta" id="ovDivMeta"></span>
+              <a class="link-all" href="#performance">Income <span aria-hidden="true">→</span></a>
             </div>
-            <div class="outlet" id="outletBody">
-              <div class="collecting">
-                <h3>No headlines yet</h3>
-                <p>The outlet warms up on the first poll after launch.</p>
+            <div class="brief" id="ovDivBody">
+              <div class="brief__sk" aria-hidden="true">
+                <span class="sk sk--brow"></span><span class="sk sk--brow"></span>
+                <span class="sk sk--brow"></span><span class="sk sk--brow"></span>
+                <span class="sk sk--brow"></span>
               </div>
             </div>
           </section>
@@ -278,23 +295,15 @@
 
         </div><!-- /.ov-screen -->
 
-        <!-- Below the fold: what you actually hold, largest first. Overlaid so
-             it reflows nothing above it; fades out once you scroll. -->
-        <button class="ov-cue" id="ovCue" type="button">
-          <span>Positions</span>
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"
-               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M8 3.5v9M4.5 9l3.5 3.5L11.5 9"/>
-          </svg>
-        </button>
-
+        <!-- Positions lead the scroll: the first screen is the figures, the
+             book starts the moment you move. -->
         <section class="positions ovpos" id="ovHoldings" aria-labelledby="ovBandTitle">
           <div class="band">
             <h2 class="band__title" id="ovBandTitle">Positions</h2>
             <span class="band__count" id="ovCount">—</span>
             <span class="band__rule" aria-hidden="true"></span>
             <span class="band__hint" id="ovHint">Largest first</span>
-            <a class="band__action" href="#holdings">Watchlist <span aria-hidden="true">→</span></a>
+            <a class="band__action" href="#holdings">All holdings <span aria-hidden="true">→</span></a>
           </div>
           <div class="positions__scroll">
             <div class="positions__inner">
@@ -304,17 +313,40 @@
           </div>
           <p class="positions__foot" id="ovFoot">—</p>
         </section>
+
+        <button class="ov-cue" id="ovCue" type="button">
+          <span>Positions</span>
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M8 3.5v9M4.5 9l3.5 3.5L11.5 9"/>
+          </svg>
+        </button>
+
+        <!-- Below the fold, after the book: the day's movers as one strip.
+             News lives on the first screen and on Market watch; it used to
+             have a third copy here. -->
+        <section class="card ov-below reveal" style="animation-delay:280ms" aria-labelledby="moversTitle">
+          <div class="card__head">
+            <h2 class="card-title" id="moversTitle">Top movers</h2>
+            <a class="link-all" href="#holdings">Holdings <span aria-hidden="true">→</span></a>
+          </div>
+          <div class="movers__cols">
+            <div><p class="eyebrow movers__head movers__head--up">Gainers</p><div id="gainers"></div></div>
+            <div><p class="eyebrow movers__head movers__head--down">Losers</p><div id="losers"></div></div>
+          </div>
+        </section>
+
       </section>
 
       <!-- ---------------- Holdings ---------------- -->
-      <section class="view" id="view-holdings" role="tabpanel" aria-label="Watchlist" hidden>
+      <section class="view" id="view-holdings" role="region" aria-label="Holdings" hidden>
 
         <nav class="sectors" id="sectorNav" aria-label="Sectors"></nav>
 
         <section class="hero-sector" aria-labelledby="sectorName">
           <div class="hero-sector__top">
             <div class="hero-sector__id">
-              <span class="hero-sector__eyebrow">Watchlist · sector</span>
+              <span class="hero-sector__eyebrow">Holdings · sector</span>
               <h1 class="hero-sector__name" id="sectorName">—</h1>
               <span class="hero-sector__meta" id="sectorMeta"></span>
             </div>
@@ -384,7 +416,7 @@
         </section>
       </section>
 
-      <section class="view view--scroll" id="view-transactions" role="tabpanel"
+      <section class="view view--scroll" id="view-transactions" role="region"
                aria-label="Transactions" hidden>
         <section class="card card--anchor tx-card" aria-labelledby="txTitle">
           <div class="card__head">
@@ -417,7 +449,7 @@
            #performance long before there was a view to land on. NAV
            attribution and the income/cost breakdowns are all answers to the
            same question — where did the money go — so they share one view. -->
-      <section class="view view--scroll" id="view-performance" role="tabpanel"
+      <section class="view view--scroll" id="view-performance" role="region"
                aria-label="Performance" hidden>
 
         <!-- ============ Screen 1: the Double Spread ============
@@ -577,7 +609,7 @@
       </section>
 
       <!-- ---------------- Market watch ---------------- -->
-      <section class="view view--scroll" id="view-allocation" role="tabpanel"
+      <section class="view view--scroll" id="view-allocation" role="region"
                aria-label="Allocation" hidden>
 
         <section class="card card--anchor alloc-card" aria-labelledby="allocViewTitle">
@@ -651,7 +683,7 @@
         </div>
       </section>
 
-      <section class="view view--scroll" id="view-market" role="tabpanel" aria-label="Market watch" hidden>
+      <section class="view view--scroll" id="view-market" role="region" aria-label="Market watch" hidden>
 
         <!-- One screenful exactly: hero, bar and the 4x2 board share the
              viewport; the desk context and the news digest live below the
@@ -730,10 +762,10 @@
       <!-- Reached by drilling in (#stock/<KEY>), so it has no tab and no nav
            item. tabFromHash() resolves the tab from the hash's first segment,
            which makes the deep link work without one. -->
-      <section class="view" id="view-stock" role="tabpanel" aria-label="Stock detail">
+      <section class="view" id="view-stock" role="region" aria-label="Stock detail" hidden>
 
         <nav class="crumb" id="stockCrumb" aria-label="Breadcrumb">
-          <a class="crumb__link" href="#holdings" id="stockCrumbRoot">Watchlist</a>
+          <a class="crumb__link" href="#holdings" id="stockCrumbRoot">Holdings</a>
           <span class="crumb__sep" aria-hidden="true">/</span>
           <a class="crumb__link" href="#holdings" id="stockCrumbSector">—</a>
           <span class="crumb__sep" aria-hidden="true">/</span>
@@ -917,10 +949,10 @@
       </section>
 
       <!-- ---------------- Company financials ---------------- -->
-      <section class="view" id="view-financials" role="tabpanel" aria-label="Company financials">
+      <section class="view" id="view-financials" role="region" aria-label="Company financials" hidden>
 
         <nav class="crumb" id="finCrumb" aria-label="Breadcrumb">
-          <a class="crumb__link" href="#holdings">Watchlist</a>
+          <a class="crumb__link" href="#holdings">Holdings</a>
           <span class="crumb__sep" aria-hidden="true">/</span>
           <a class="crumb__link" id="finCrumbStock" href="#stock/INTC">—</a>
           <span class="crumb__sep" aria-hidden="true">/</span>
@@ -992,6 +1024,144 @@
           <p class="fintable__foot" id="finNote">—</p>
         </section>
 
+      </section>
+
+      <!-- ---------------- Research ----------------
+           The co-pilot's findings, read only (adapter/research.py serves them
+           at /api/research). Static scaffolding here; js/research.js fills the
+           hosts. Every class carries an rs- prefix and no control uses
+           data-sort or .range: marketwatch.js and main.js bind both page-wide. -->
+      <section class="view view--scroll" id="view-research" role="region"
+               aria-label="Research" hidden>
+        <div class="rs" id="rsRoot" data-phase="loading" data-sheet="closed">
+
+          <header class="rs-hero reveal">
+            <div class="rs-hero__id">
+              <span class="rs-hero__eyebrow">Research co-pilot</span>
+              <h1 class="rs-hero__title">Research briefing</h1>
+            </div>
+            <dl class="rs-hero__runs">
+              <div class="rs-hero__run"><dt>Last run</dt><dd class="num" id="rsLastRun">Loading</dd></div>
+              <div class="rs-hero__run"><dt>Next run</dt><dd class="num" id="rsNextRun">Loading</dd></div>
+            </dl>
+            <div class="rs-hero__chips">
+              <span class="health-chip" id="rsRunChip" data-state="pending" hidden>
+                <i class="health-chip__dot" aria-hidden="true"></i><span id="rsRunLabel">Run</span>
+              </span>
+              <span class="health-chip" id="rsFeedChip" data-state="pending">
+                <i class="health-chip__dot" aria-hidden="true"></i><span id="rsFeedLabel">Loading</span>
+              </span>
+            </div>
+          </header>
+
+          <p class="rs-banner rs-banner--sample" id="rsSample" role="status" hidden>
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
+              <circle cx="8" cy="8" r="6.2"/><path d="M8 7.4v3.6M8 5v.1"/>
+            </svg>
+            <span>Sample data. Not real findings.</span>
+          </p>
+          <p class="rs-banner rs-banner--stale" id="rsStale" role="status" hidden>
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M8 2.2 14.4 13.4H1.6Z"/><path d="M8 6.6v3M8 11.4v.1"/>
+            </svg>
+            <span id="rsStaleCopy"></span>
+          </p>
+
+          <section class="rs-glance" aria-label="Today at a glance">
+            <article class="card kpi rs-kpi reveal" style="--rs-i:1">
+              <p class="eyebrow kpi__label"><i class="rs-glyph" data-urgency="high" aria-hidden="true"></i>Needs attention</p>
+              <p class="kpi__value num" id="rsKpiAttention">0</p>
+              <p class="kpi__sub" id="rsKpiAttentionSub">High and medium urgency</p>
+            </article>
+            <article class="card kpi rs-kpi reveal" style="--rs-i:2">
+              <p class="eyebrow kpi__label">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M13.4 6.4A5.6 5.6 0 0 0 3 5.2M2.6 9.6A5.6 5.6 0 0 0 13 10.8"/><path d="M3 2.4v2.8h2.8M13 13.6v-2.8h-2.8"/>
+                </svg>Changed since last visit</p>
+              <p class="kpi__value num" id="rsKpiChanged">0</p>
+              <p class="kpi__sub" id="rsKpiChangedSub">Since your last visit</p>
+            </article>
+            <article class="card kpi rs-kpi reveal" style="--rs-i:3">
+              <p class="eyebrow kpi__label"><i class="rs-glyph" data-urgency="quiet" aria-hidden="true"></i>Quiet</p>
+              <p class="kpi__value num" id="rsKpiQuiet">0</p>
+              <p class="kpi__sub" id="rsKpiQuietSub">No material change</p>
+            </article>
+          </section>
+
+          <div class="rs-filters card reveal" id="rsFilters" role="search" aria-label="Filter findings" style="--rs-i:4">
+            <div class="rs-seg" role="group" aria-label="Urgency">
+              <button class="rs-seg__btn" type="button" data-rs-urgency="high" aria-pressed="false"><i class="rs-glyph" data-urgency="high" aria-hidden="true"></i>High</button>
+              <button class="rs-seg__btn" type="button" data-rs-urgency="medium" aria-pressed="false"><i class="rs-glyph" data-urgency="medium" aria-hidden="true"></i>Medium</button>
+              <button class="rs-seg__btn" type="button" data-rs-urgency="low" aria-pressed="false"><i class="rs-glyph" data-urgency="low" aria-hidden="true"></i>Low</button>
+              <button class="rs-seg__btn" type="button" data-rs-urgency="quiet" aria-pressed="false"><i class="rs-glyph" data-urgency="quiet" aria-hidden="true"></i>Quiet</button>
+            </div>
+            <div class="rs-seg" role="group" aria-label="Held or watchlist">
+              <button class="rs-seg__btn" type="button" data-rs-tier="" aria-pressed="true">All</button>
+              <button class="rs-seg__btn" type="button" data-rs-tier="held" aria-pressed="false">Held</button>
+              <button class="rs-seg__btn" type="button" data-rs-tier="watchlist" aria-pressed="false">Watchlist</button>
+            </div>
+            <label class="rs-field">
+              <span class="u-sr">Source type</span>
+              <select class="rs-select" id="rsSource">
+                <option value="">All sources</option>
+                <option value="filing">Filings</option>
+                <option value="call">Calls</option>
+                <option value="13f">13F</option>
+                <option value="news">News</option>
+                <option value="sector">Sector</option>
+                <option value="archive">Archive</option>
+              </select>
+            </label>
+            <label class="rs-field">
+              <span class="u-sr">Sector</span>
+              <select class="rs-select" id="rsSector">
+                <option value="">All sectors</option>
+              </select>
+            </label>
+            <button class="rs-seg__btn rs-toggle" type="button" id="rsUnread" aria-pressed="false">Unread only</button>
+            <input class="rs-search" id="rsSearch" type="search" placeholder="Search ticker or headline"
+                   aria-label="Search findings by ticker or headline" autocomplete="off" spellcheck="false">
+            <button class="rs-clear" type="button" id="rsClear" hidden>Clear filters</button>
+          </div>
+
+          <div class="rs-split">
+            <section class="rs-feed card reveal" id="rsFeed" aria-labelledby="rsFeedTitle" style="--rs-i:5">
+              <div class="card__head rs-feed__head">
+                <h2 class="card-title" id="rsFeedTitle">Findings</h2>
+                <span class="rs-muted num" id="rsFeedCount"></span>
+              </div>
+              <div class="rs-feed__body" id="rsFeedBody"></div>
+            </section>
+            <aside class="rs-detail card reveal" id="rsDetail" aria-labelledby="rsDetailTitle" style="--rs-i:6">
+              <div class="rs-detail__bar">
+                <button class="rs-back" type="button" id="rsBack">
+                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.2 5.2 8l4.8 4.8"/></svg>
+                  Back to findings
+                </button>
+              </div>
+              <div class="rs-detail__body" id="rsDetailBody"></div>
+            </aside>
+          </div>
+
+          <section class="rs-triage card" aria-labelledby="rsTriageTitle">
+            <div class="card__head">
+              <h2 class="card-title" id="rsTriageTitle">Watchlist triage</h2>
+              <span class="rs-muted" id="rsTriageNote">Signals are what was filed; narrative is what was said.</span>
+            </div>
+            <dl class="rs-tally" id="rsTally"></dl>
+            <div class="rs-table-wrap" id="rsTriageBody"></div>
+          </section>
+
+          <details class="rs-runs card" id="rsRuns">
+            <summary class="rs-runs__summary">
+              <span class="card-title">Run history</span>
+              <span class="rs-muted num" id="rsRunsCount"></span>
+              <svg class="rs-runs__caret" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
+            </summary>
+            <div class="rs-table-wrap" id="rsRunsBody"></div>
+          </details>
+
+        </div>
       </section>
 
     </div>

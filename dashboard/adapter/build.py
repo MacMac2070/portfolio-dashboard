@@ -106,7 +106,7 @@ def build() -> dict:
             "daily_pnl_source": agg["daily_pnl_source"],
             "gateway": "ok",
         },
-        "kpis": agg["kpis"],
+        "kpis": derive.attach_headline_returns(agg["kpis"]),
         "positions": positions,
         "regions": agg["regions"],
         "sectors": agg["sectors"],

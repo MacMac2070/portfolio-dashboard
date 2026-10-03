@@ -39,7 +39,7 @@ PORTFOLIO_PATH = DATA_DIR / "portfolio.json"
 
 POLL_SECONDS = 1200          # headlines cadence; a newsroom, not a ticker
 FIRST_RETRY_SECONDS = 60
-BREAKER = "yfinance"         # shared with every other module that asks Yahoo
+BREAKER = "yfinance"         # shared by the panels; portfolio quotes and FX keep their own
 FETCH_PAUSE = 0.4            # same pacing courtesy desk.py pays Yahoo
 EARNINGS_STALE_HOURS = 20    # earnings figures move once a day at most
 KEEP_ITEMS = 40

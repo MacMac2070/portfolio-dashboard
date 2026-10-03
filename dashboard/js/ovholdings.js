@@ -1,9 +1,9 @@
 /* Overview's holdings section — what you actually hold, below the fold.
  *
- * The Watchlist tab merges held positions with the twenty names you only
+ * The Holdings tab merges held positions with the twenty names you only
  * track. This is the other question: of the things I own, what is each one
  * worth and what is it doing. Owned only, largest first, no sorting — the
- * Watchlist tab keeps the sortable headers for when you want to reorder.
+ * Holdings tab keeps the sortable headers for when you want to reorder.
  *
  * Rows come from `holdings.positionRow`, so a position looks identical wherever
  * you meet it, and the ownership rail, the tile and the click-through to
@@ -140,6 +140,14 @@ function patch(host, rows) {
     const cells = row.querySelectorAll(".pstack");
     // 1: last price + currency, 2: qty + avg cost, 3: value + cost, 4: P/L + return
     const priceCell = cells[0]?.querySelector(".pstack__main");
+    // Statement-mark rows are muted, with the reason on hover — the same
+    // attribute holdings.js sets, so the two tables agree.
+    if (priceCell) {
+      const held = r.priceSource === "statement";
+      if (held) priceCell.dataset.priceSource = "statement";
+      else priceCell.removeAttribute("data-price-source");
+      priceCell.title = held ? "Statement mark — no delayed quote, or one refused as a units slip" : "";
+    }
     const prev = lastPrice.get(r.con_id);
     if (Number.isFinite(r.price)) lastPrice.set(r.con_id, r.price);
     // Flash only on a real move. `wrote` alone is not enough: price() rounds,
@@ -203,12 +211,13 @@ export function init() {
   };
   view.addEventListener("scroll", onScroll, { passive: true });
 
-  cue.addEventListener("click", () => {
+  const reveal = (el) => {
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    $("ovHoldings")?.scrollIntoView({
-      behavior: reduce ? "auto" : "smooth", block: "start",
-    });
-  });
+    el?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+  };
+  // Positions are the first thing below the locked screen, so the cue
+  // reveals them; the movers strip follows on the same scroll.
+  cue.addEventListener("click", () => reveal($("ovHoldings") || document.querySelector(".ov-below")));
 
   onScroll();
 }

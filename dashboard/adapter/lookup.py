@@ -43,7 +43,7 @@ log = logging.getLogger("lookup")
 
 TTL = 15 * 60.0        # a name's identity does not move
 NEG_TTL = 60.0         # a miss cached briefly, so a typo is not re-fetched
-BREAKER = "yfinance"   # shared with every other module that asks Yahoo
+BREAKER = "yfinance"   # shared by the panels; portfolio quotes and FX keep their own
 MAX_ENTRIES = 512
 FOLLOWER_WAIT = 3.0
 MIN_QUERY = 2

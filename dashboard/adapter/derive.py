@@ -81,7 +81,7 @@ def unpriced_position(*, con_id: int, symbol: str, currency: str, exchange: str,
         "value_gbp": None, "cost_gbp": None, "unrealised_gbp": None, "unrealised_pct": None,
         "cost_gbp_tradedate": None, "unrealised_gbp_tradedate": None, "fx_pnl_gbp": None,
         "day_change_pct": None, "day_pnl_gbp": None, "day_change_source": "none",
-        "spark": spark or [], "fx_missing": True,
+        "spark": spark or [], "fx_missing": True, "price_source": "none",
     }
 
 
@@ -90,8 +90,13 @@ def make_position(*, con_id: int, symbol: str, currency: str, exchange: str,
                   average_cost: float, unrealized_pnl: float,
                   day_change_pct: float | None, day_change_source: str,
                   spark: list[float], to_gbp,
-                  cost_gbp_tradedate: float | None = None) -> dict:
+                  cost_gbp_tradedate: float | None = None,
+                  price_source: str = "broker") -> dict:
     """One position row, with everything converted to GBP.
+
+    `price_source` says whose price this is: "broker" for a gateway mark,
+    "yahoo" for a delayed quote laid over a statement, "statement" when the
+    statement mark was kept (no quote, or one rejected as a units error).
 
     Two cost conventions ride every row. `cost_gbp` is the broker's cost in
     the instrument's currency converted at today's rate — what the position
@@ -148,6 +153,7 @@ def make_position(*, con_id: int, symbol: str, currency: str, exchange: str,
         "day_change_pct": day_change_pct,
         "day_pnl_gbp": day_pnl_gbp,
         "day_change_source": day_change_source,
+        "price_source": price_source,
         "spark": spark,
     }
 
@@ -247,6 +253,12 @@ def aggregate(positions: list[dict], *, nav: float, cash: float,
     movable = [p for p in positions if p["day_change_pct"] is not None]
     movable.sort(key=lambda p: -p["day_change_pct"])
 
+    # Herfindahl–Hirschman on weight percent — shipped so Allocation does not
+    # recompute a second HHI that can drift from the payload.
+    hhi = (sum((p["value_gbp"] / invested * 100.0) ** 2 for p in positions)
+           if invested else None)
+    effective_n = (10000.0 / hhi) if hhi else None
+
     return {
         "daily_pnl_source": day_source,
         "kpis": {
@@ -261,6 +273,10 @@ def aggregate(positions: list[dict], *, nav: float, cash: float,
             "invested": invested,
             "cash_available": cash,
             "unpriced": len(unpriced),
+            # Filled by attach_headline_returns() from the NAV store (TWR).
+            "ytd_twr": None,
+            "mtd_twr": None,
+            "si_twr": None,
         },
         "regions": region_rows,
         "sectors": sector_rows,
@@ -272,9 +288,52 @@ def aggregate(positions: list[dict], *, nav: float, cash: float,
             "positions": len(positions) + len(unpriced),
             "markets": len({p["region"] for p in positions}),
             "cash_weight_pct": pct(cash, nav),
+            "hhi": round(hhi, 2) if hhi is not None else None,
+            "effective_n": round(effective_n, 2) if effective_n is not None else None,
         },
         "movers": {
             "gainers": [p for p in movable if p["day_change_pct"] > 0][:3],
             "losers": [p for p in reversed(movable) if p["day_change_pct"] < 0][:3],
         },
     }
+
+
+def attach_headline_returns(kpis: dict) -> dict:
+    """Attach YTD / MTD / SI TWR fractions from the NAV store onto KPIs.
+
+    Kept out of `aggregate` so unit tests stay free of the NAV file. Callers
+    that compose a live payload (build / feed / flexfeed / serve) run this
+    once the book is priced.
+    """
+    out = dict(kpis or {})
+    try:
+        import track  # noqa: PLC0415 — same adapter/ path as the callers
+        series = track.daily_series()
+        if len(series) < 5:
+            return out
+        st = track.stats(series, None, None)
+    except Exception:
+        return out
+    if not st:
+        return out
+    out["ytd_twr"] = st.get("ytd")
+    out["mtd_twr"] = st.get("mtd")
+    out["si_twr"] = st.get("si")
+    return out
+
+
+def enrich_snapshot(payload: dict) -> dict:
+    """Ensure headline returns and concentration maths are present on a payload."""
+    if not isinstance(payload, dict):
+        return payload
+    kpis = attach_headline_returns(payload.get("kpis") or {})
+    conc = dict(payload.get("concentration") or {})
+    if conc.get("hhi") is None:
+        positions = [p for p in (payload.get("positions") or [])
+                     if p.get("value_gbp") is not None]
+        invested = sum(p["value_gbp"] for p in positions)
+        if invested:
+            hhi = sum((p["value_gbp"] / invested * 100.0) ** 2 for p in positions)
+            conc["hhi"] = round(hhi, 2)
+            conc["effective_n"] = round(10000.0 / hhi, 2) if hhi else None
+    return {**payload, "kpis": kpis, "concentration": conc}

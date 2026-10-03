@@ -36,7 +36,7 @@ QUOTE_SECONDS = 60.0
 MAX_SYMBOLS = 200
 HISTORY_DAYS = 30
 FIRST_RETRY_SECONDS = 15.0
-BREAKER = "yfinance"        # shared with every other module that asks Yahoo
+BREAKER = "yfinance"        # shared by the panels; portfolio quotes and FX keep their own
 
 log = logging.getLogger("watchlist")
 

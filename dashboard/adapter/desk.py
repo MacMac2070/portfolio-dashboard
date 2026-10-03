@@ -38,7 +38,7 @@ import universe
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 DESK_PATH = DATA_DIR / "desk.json"
-BREAKER = "yfinance"       # shared with every other module that asks Yahoo
+BREAKER = "yfinance"       # shared by the panels; portfolio quotes and FX keep their own
 
 NEWS_PER_SYMBOL = 8
 FETCH_PAUSE = 0.4          # be a polite Yahoo citizen across ~15 symbols

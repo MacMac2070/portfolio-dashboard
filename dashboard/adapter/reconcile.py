@@ -13,6 +13,7 @@ it after the stores are refreshed; `python adapter/reconcile.py` runs it by
 hand and exits 0 / 1 / 2 for ok / warn / fail.
 
     positions.replay   the ledger replayed vs positions_eod.json
+    stores.asof        ledger / cash dates lagging positions even when share counts match
     nav.continuity     duplicates, missing weekdays, zeros, lag, unreplaced snapshots
     flows.deposits     cash deposits vs the Change in NAV's own figure, per period
     nav.composition    positions × FX vs the NAV row's stock; total vs stock + cash + accruals
@@ -42,6 +43,11 @@ TOTAL_TOLERANCE_GBP = 1.0     # stock + cash + accruals vs total
 LIVE_TOLERANCE_PCT = 5.0      # intraday moves and delayed quotes explain this much
 UNREPLACED_SNAPSHOT_WEEKDAYS = 3
 FLEX_REACH_DAYS = 360         # Flex statements reach back about a year; older rows are ours alone
+# Ledger/cash can still agree on share counts while trailing the positions
+# file by weeks — that used to stay green. Three weekdays is a warn; ten is
+# a fail so a multi-week Flex Trades gap cannot look healthy.
+STORE_ASOF_WARN_WEEKDAYS = 3
+STORE_ASOF_FAIL_WEEKDAYS = 10
 
 # Ledger rows that are positions. FX conversions sit in the same file (asset
 # CASH, venue IDEALFX); legacy rows carry no asset at all, so the venue is the
@@ -138,6 +144,79 @@ def ledger_latest(tx_rows: list[dict]) -> str | None:
     dates = [(r.get("time") or "")[:10] for r in tx_rows if is_position_row(r)]
     dates = [d for d in dates if d]
     return max(dates) if dates else None
+
+
+def cash_latest(cash_rows: list[dict]) -> str | None:
+    dates = [r.get("date") for r in cash_rows if r.get("date")]
+    dates = [d for d in dates if d]
+    return max(dates) if dates else None
+
+
+def _weekdays_between(earlier: str, later: str) -> int | None:
+    """Weekdays strictly after `earlier` up to and including `later`."""
+    try:
+        a, b = date.fromisoformat(earlier[:10]), date.fromisoformat(later[:10])
+    except ValueError:
+        return None
+    if b < a:
+        return 0
+    behind = 0
+    day = a
+    while day < b:
+        day += timedelta(days=1)
+        if day.weekday() < 5:
+            behind += 1
+    return behind
+
+
+def stores_asof(tx_rows: list[dict], cash_rows: list[dict], eod: dict | None) -> dict:
+    """Fail loudly when the ledger or cash store trails positions by date.
+
+    Share-count replay can still be OK after a multi-week Flex Trades gap —
+    nothing traded, quantities match, chip stays green. This check is the
+    date gap that replay does not see.
+    """
+    if not eod or not eod.get("asof"):
+        return _check("stores.asof", "pending",
+                      "No EOD positions to compare store freshness against")
+    pos_asof = eod["asof"]
+    tx_asof = ledger_latest(tx_rows)
+    cash_asof = cash_latest(cash_rows)
+    detail = {"positions": pos_asof, "transactions": tx_asof, "cash": cash_asof,
+              "tx_lag_weekdays": None, "cash_lag_weekdays": None}
+    status = "ok"
+    problems = []
+
+    for label, asof, key in (("transactions", tx_asof, "tx_lag_weekdays"),
+                             ("cash", cash_asof, "cash_lag_weekdays")):
+        if not asof:
+            status = _worst(status, "warn")
+            problems.append(f"no {label} date")
+            continue
+        lag = _weekdays_between(asof, pos_asof)
+        detail[key] = lag
+        if lag is None:
+            status = _worst(status, "warn")
+            problems.append(f"{label} date unreadable")
+            continue
+        if lag >= STORE_ASOF_FAIL_WEEKDAYS:
+            status = _worst(status, "fail")
+            problems.append(f"{label} ends {asof}, {lag} weekdays behind positions")
+        elif lag >= STORE_ASOF_WARN_WEEKDAYS:
+            status = _worst(status, "warn")
+            problems.append(f"{label} ends {asof}, {lag} weekdays behind positions")
+
+    if status == "ok":
+        return _check("stores.asof", "ok",
+                      f"Ledger and cash reach the positions asof {pos_asof}",
+                      detail=detail)
+    return _check(
+        "stores.asof", status,
+        "; ".join(problems),
+        detail=detail,
+        hint="Merge the Flex Trades / Cash Transactions sections via the nightly "
+             "job, or run adapter/backfill.py for a longer gap",
+    )
 
 
 def check_replay(tx_rows: list[dict], eod: dict | None,
@@ -523,6 +602,7 @@ def build(*, today: date | None = None, live: dict | None = None,
 
     checks = [
         check_replay(tx_rows, eod, actions),
+        stores_asof(tx_rows, cash_rows, eod),
         nav_continuity(nav_rows, today=today, now=now),
         deposits_vs_nav_change(cash_rows, change_rows),
         positions_vs_nav(eod, nav_for_asof, fx=(live or {}).get("fx")),

@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Research page wireframe</title>
+<style>
+:root{--bg:#0a0c0f;--surf:#0f1215;--surf2:#14181e;--line:rgba(255,255,255,.14);--text:#f5f7fa;--body:#b9c1cb;--muted:#8b95a2;--brand:#8d5bff;--bfaint:rgba(109,46,245,.12)}
+*{box-sizing:border-box;margin:0}
+body{background:var(--bg);color:var(--body);font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+.wrap{max-width:1100px;margin:0 auto;padding:24px 16px 56px}
+h1{color:var(--text);font-size:22px;letter-spacing:-.02em}
+.lede{color:var(--muted);margin:6px 0 20px;max-width:68ch}
+.page{display:grid;grid-template-columns:150px 1fr;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.nav{background:var(--surf);border-right:1px dashed var(--line);padding:14px;color:var(--muted);font-size:12px;display:flex;flex-direction:column;gap:8px}
+.nav i{font-style:normal;padding:6px 8px;border-radius:6px}
+.nav .cur{border:1px dashed var(--brand);color:var(--text)}
+.body{padding:14px;display:grid;gap:12px;min-width:0}
+.box{border:1.5px dashed var(--line);border-radius:10px;padding:10px 12px;position:relative;background:var(--surf)}
+.box.hl{border-color:var(--brand);background:var(--bfaint)}
+.tag{position:absolute;top:-10px;left:10px;background:var(--bg);color:var(--brand);font-size:11px;font-weight:700;padding:0 6px;letter-spacing:.04em}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.ph{border:1px dashed var(--line);border-radius:6px;padding:3px 9px;font-size:12px;color:var(--muted)}
+.cols{display:grid;grid-template-columns:1.5fr 1fr;gap:12px}
+.item{border-bottom:1px dashed var(--line);padding:8px 0;display:grid;grid-template-columns:28px 1fr 64px;gap:10px;font-size:12.5px}
+.item:last-child{border:0}
+.sq{width:28px;height:28px;border:1px dashed var(--line);border-radius:6px}
+.item b{color:var(--text);font-weight:600}
+.small{font-size:12px;color:var(--muted)}
+.three{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.states{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-top:16px}
+.states div{border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13px;background:var(--surf)}
+.states b{display:block;color:var(--text);margin-bottom:2px}
+.legend{margin-top:20px;border:1px solid var(--line);border-radius:12px;padding:16px;background:var(--surf)}
+.legend h2{color:var(--text);font-size:15px;margin-bottom:8px}
+.legend ol{margin-left:18px}.legend li{margin-bottom:8px}.legend b{color:var(--text)}
+@media(max-width:760px){.page{grid-template-columns:1fr}.nav{display:none}.cols,.three{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Research page: rough map</h1>
+<p class="lede">A low-detail layout, top to bottom. Dashed boxes are zones, not designs. The purple ones are the parts that matter most.</p>
+
+<div class="page">
+ <div class="nav"><i>Overview</i><i>Holdings</i><i>Transactions</i><i>Market watch</i><i>Performance</i><i>Allocation</i><i class="cur">Research</i></div>
+ <div class="body">
+
+  <div class="box"><span class="tag">1 · HEADER</span>
+   <div class="row" style="justify-content:space-between"><span class="ph">Title: Research briefing</span><span class="row"><span class="ph">Last run, 06:40</span><span class="ph">Next run, 18:00</span><span class="ph">Feed status</span></span></div>
+  </div>
+
+  <div class="box hl"><span class="tag">2 · TODAY AT A GLANCE</span>
+   <div class="three">
+    <div class="ph" style="padding:10px">Count: needs attention</div>
+    <div class="ph" style="padding:10px">Count: changed since last visit</div>
+    <div class="ph" style="padding:10px">Count: quiet (no change)</div>
+   </div>
+  </div>
+
+  <div class="box"><span class="tag">3 · FILTER BAR</span>
+   <div class="row"><span class="ph">Urgency</span><span class="ph">Held / Watchlist</span><span class="ph">Source type</span><span class="ph">Sector</span><span class="ph">Unread only</span><span class="ph">Search</span></div>
+  </div>
+
+  <div class="cols">
+   <div class="box hl"><span class="tag">4 · FINDINGS FEED (ranked)</span>
+    <div class="item"><div class="sq"></div><div><b>Headline</b><div class="small">One line: what happened, why it may matter</div><div class="row" style="margin-top:4px"><span class="ph">source</span><span class="ph">source</span></div></div><div class="small">Ticker<br>Urgency</div></div>
+    <div class="item"><div class="sq"></div><div><b>Headline</b><div class="small">One line summary</div></div><div class="small">Ticker<br>Urgency</div></div>
+    <div class="item"><div class="sq"></div><div><b>Headline</b><div class="small">One line summary</div></div><div class="small">Ticker<br>Urgency</div></div>
+    <div class="small" style="padding-top:6px">Grouped: Needs attention, Changed, Quiet (collapsed)</div>
+   </div>
+
+   <div class="box hl"><span class="tag">5 · DETAIL PANEL (selected)</span>
+    <div class="ph" style="margin-bottom:8px">Headline + ticker, link to stock page</div>
+    <div class="ph" style="margin-bottom:8px">Plain-English "why it might matter"</div>
+    <div class="row" style="margin-bottom:8px"><span class="ph" style="flex:1">Bull reading</span><span class="ph" style="flex:1">Bear reading</span></div>
+    <div class="ph" style="margin-bottom:8px">Three risk views (aggressive, conservative, neutral)</div>
+    <div class="ph" style="margin-bottom:8px">Evidence list, each linked to its source</div>
+    <div class="ph">Thesis pillars touched, and "what changed"</div>
+   </div>
+  </div>
+
+  <div class="box"><span class="tag">6 · WATCHLIST TRIAGE</span>
+   <div class="row"><span class="ph">Names scanned: 35</span><span class="ph">Flagged for a deep look: 3</span><span class="ph">Signals (filed)</span><span class="ph">Narrative (said)</span></div>
+   <div class="small" style="margin-top:6px">Compact table: ticker, signals flag, narrative flag, "escalated to full run?"</div>
+  </div>
+
+  <div class="box"><span class="tag">7 · RUN HISTORY (footer)</span>
+   <div class="small">Past runs, agents used, anything that failed or was skipped. Small and collapsed by default.</div>
+  </div>
+
+ </div>
+</div>
+
+<div class="states">
+ <div><b>Loading</b>Skeleton rows in the feed, no layout shift.</div>
+ <div><b>Empty</b>"Nothing new today" with the date of the last real finding.</div>
+ <div><b>Stale or failed run</b>Banner at the top: "Last run failed, showing 30 Sep".</div>
+ <div><b>Phone</b>One column: glance, filters, feed. Tapping a finding opens the detail as a full screen.</div>
+</div>
+
+<div class="legend">
+ <h2>How to read it</h2>
+ <ol>
+  <li><b>Header</b> tells you whether to trust what you see: when it last ran and whether the data feed is healthy.</li>
+  <li><b>At a glance</b> is the answer to "do I need to read anything today?" in three numbers.</li>
+  <li><b>Filter bar</b> keeps it usable once there are dozens of findings.</li>
+  <li><b>Feed</b> is the main reading area, ranked by urgency, with quiet holdings collapsed so they do not add noise.</li>
+  <li><b>Detail panel</b> shows the reasoning and sources for whichever finding is selected, with no buy or sell advice.</li>
+  <li><b>Watchlist triage</b> keeps the 35 cheaper-checked names in one table, so you can see what got escalated and why.</li>
+  <li><b>Run history</b> is for debugging, not reading.</li>
+ </ol>
+</div>
+</div>
+</body>
+</html>

@@ -269,6 +269,32 @@ export function clock(iso) {
   return d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
+/**
+ * "3h ago", "in 6h", "just now": a gap from now, past or future. Unlike the
+ * formatters above it never falls back to a dash; a missing time is said in
+ * words, because the Research page shows these beside run times that can
+ * legitimately be absent.
+ */
+export function relative(iso, now = Date.now()) {
+  const t = iso ? new Date(iso).getTime() : NaN;
+  if (Number.isNaN(t)) return "not recorded";
+  const minutes = Math.round((t - now) / 60000);
+  const size = Math.abs(minutes);
+  if (size < 1) return "just now";
+  const unit = size < 60 ? `${size}m`
+    : size < 48 * 60 ? `${Math.round(size / 60)}h`
+    : `${Math.round(size / 1440)}d`;
+  return minutes > 0 ? `in ${unit}` : `${unit} ago`;
+}
+
+/** "Fri 2 Oct, 06:40" in the viewer's zone, or words when there is no time. */
+export function moment(iso) {
+  const d = iso ? new Date(iso) : null;
+  if (!d || Number.isNaN(d.getTime())) return "an unknown time";
+  const date = d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+  return `${date}, ${clock(iso)}`;
+}
+
 /** Two-letter avatar for a ticker chip. */
 export function initials(symbol) {
   return String(symbol || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 2).toUpperCase();

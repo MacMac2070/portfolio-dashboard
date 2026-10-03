@@ -173,6 +173,18 @@ def check_stores(today: date, now: datetime | None = None) -> list[dict]:
     out.append(_lag("positions.asof", "EOD positions", (eod or {}).get("asof"), today,
                     hint="Run the nightly job; positions come from the Flex Open Positions section",
                     now=now))
+    # Calendar lag for ledger/cash (reconcile.stores.asof covers lag vs positions).
+    tx_dates = [(r.get("time") or "")[:10] for r in store._read(store.TX_PATH)
+                if (r.get("time") or "")[:10]]
+    cash_dates = [r.get("date") for r in store._read(store.CASH_PATH) if r.get("date")]
+    out.append(_lag("transactions.asof", "Trade ledger",
+                    max(tx_dates) if tx_dates else None, today,
+                    hint="Merge the Flex Trades section, or run adapter/backfill.py",
+                    now=now))
+    out.append(_lag("cash.asof", "Cash transactions",
+                    max(cash_dates) if cash_dates else None, today,
+                    hint="Merge the Flex Cash Transactions section via the nightly job",
+                    now=now))
     return out
 
 

@@ -61,8 +61,8 @@
    * screen without becoming unreadable. The floor is what fits an 801px
    * browser; the ceiling is the size measured off Design.pdf, reached at
    * roughly 1230px of viewport height. */
-  --t-hero:   clamp(34px, 5.2vh, 64px);   /* net liquidation */
-  --t-kpi:    clamp(22px, 3.2vh, 36px);   /* remaining KPI values */
+  --t-hero:   clamp(30px, 4.2vh, 52px);   /* net liquidation */
+  --t-kpi:    clamp(20px, 2.7vh, 32px);   /* remaining KPI values */
   --t-donut:  clamp(20px, 3.0vh, 36px);   /* donut centre value */
   --t-title:  clamp(15px, 2.1vh, 20px);   /* card titles */
   --t-body:   14px;
@@ -313,6 +313,17 @@
   --pos-bg:       rgba(52, 211, 153, 0.13);
   --neg-bg:       rgba(251, 113, 133, 0.14);
 
+  /* Research urgency: a status scale, so never P&L rose or emerald and never
+   * the brand violet. Validated with the dataviz checker against rose, violet
+   * and each other on --surface-2, all pairs: CVD worst dE 12.2 deutan,
+   * normal-vision floor 15.7, contrast 7.2 to 15.5:1. Colour only ever marks
+   * the glyph; every glyph is a distinct shape beside a text label, and the
+   * label itself wears text ink (dataviz: text never wears the status colour). */
+  --urg-high:  #ffa53a;
+  --urg-med:   #f3e6a0;
+  --urg-low:   #6fa8ec;
+  --urg-quiet: var(--text-3);
+
   /* The verdict rail's atmosphere: violet breath top-left, a teal answer
    * bottom-right, grain to keep the plate from banding. The hero glows only
    * in the dark — light mode reads by ink alone, so both glows go
@@ -406,6 +417,18 @@
   --pos-bg:       rgba(4, 120, 87, 0.10);
   --neg-bg:       rgba(190, 18, 60, 0.10);
 
+  /* Urgency on white. Orange and gold cannot both clear text contrast and
+   * stay apart under protanopia, so the order flips: high is the lighter,
+   * brighter orange and medium the darker olive gold, which separates them by
+   * lightness. Worst pair is medium against rose at dE 7.4 deutan, inside the
+   * band the checker allows with secondary encoding (shape plus label, always
+   * present). Glyphs only, so the bar is 3:1: 3.03 to 7.29:1 on the surfaces.
+   * They sit on the card itself, never on a tinted chip (high drops to 2.87). */
+  --urg-high:  #d6750a;
+  --urg-med:   #5f5800;
+  --urg-low:   #2a64b8;
+  --urg-quiet: var(--text-3);
+
   --rail-ambient-1: rgba(83, 20, 214, 0.07);
   --rail-ambient-2: rgba(8, 117, 132, 0.05);
   --rail-grain-opacity: 0.025;
@@ -448,6 +471,7 @@
     --fin-1: #087584; --fin-2: #6a3fd6; --fin-3: #8a5d0e;
     --flow-in: #087584; --flow-kept: #6a3fd6; --flow-cost: #8a5d0e;
     --pos-bg: rgba(4,120,87,.10); --neg-bg: rgba(190,18,60,.10);
+    --urg-high: #d6750a; --urg-med: #5f5800; --urg-low: #2a64b8; --urg-quiet: var(--text-3);
     --bench-line: rgba(16,20,26,.50);
     --rail-ambient-1: rgba(83,20,214,.07); --rail-ambient-2: rgba(8,117,132,.05);
     --rail-grain-opacity: 0.025;

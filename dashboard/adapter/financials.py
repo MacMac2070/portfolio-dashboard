@@ -80,7 +80,7 @@ TTL = {
 }
 MAX_ENTRIES = 512
 NEG_TTL = 15 * 60.0       # an empty statement is remembered this long, not 12 h and not 0
-BREAKER = "yfinance"      # shared with every other module that asks Yahoo
+BREAKER = "yfinance"      # shared by the panels; portfolio quotes and FX keep their own
 FOLLOWER_WAIT = 8.0
 REQUEST_BUDGET = 12.0     # statements are slower than quotes; three calls deep
 GATE_TIMEOUT = 90.0

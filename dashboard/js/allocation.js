@@ -349,10 +349,13 @@ function renderRules() {
     add(`${ccy} exposure`, w, `≤ ${cap}%`, w <= cap);
   }
 
-  // The concentration figures: computed, not thresholds.
+  // Concentration maths ship on the snapshot (derive.aggregate). Fall back to
+  // a local HHI only when an older payload lacks the fields.
   if (positions.length && invested) {
-    const hhi = HHI(positions, invested);
-    rows.push({ label: "Effective positions", value: (10000 / hhi).toFixed(1),
+    const conc = data.concentration || {};
+    const hhi = conc.hhi != null ? conc.hhi : HHI(positions, invested);
+    const eff = conc.effective_n != null ? conc.effective_n : (10000 / hhi);
+    rows.push({ label: "Effective positions", value: Number(eff).toFixed(1),
                 limit: `of ${positions.length}`, ok: null });
     rows.push({ label: "HHI", value: Math.round(hhi).toString(), limit: "", ok: null });
   }

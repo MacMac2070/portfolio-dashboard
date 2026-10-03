@@ -243,7 +243,7 @@ export function donutActive(svg, activeIndex, centre = {}) {
  */
 export function equityCurve(svg, points, {
   tooltip, formatValue, formatDate, benchmark = null, benchmarkName = "Benchmark",
-  events = null,
+  events = null, tone = null,
 } = {}) {
   svg.replaceChildren();
   if (!points || points.length < 2) return;
@@ -295,8 +295,17 @@ export function equityCurve(svg, points, {
   const x = (i) => padL + (i / (points.length - 1)) * (w - padL - padR);
   const y = (v) => padT + (1 - (v - lo) / (hi - lo)) * (h - padT - padB);
 
-  const rising = values[values.length - 1] >= values[0];
-  const stroke = rising ? "var(--pos)" : "var(--neg)";
+  // Prefer an explicit tone from the caller (period P&L / funding gate). The
+  // old first→last slope painted green when deposits lifted NAV even as day
+  // P&L and the change chip were red or flat.
+  let stroke;
+  if (tone === "up") stroke = "var(--pos)";
+  else if (tone === "down") stroke = "var(--neg)";
+  else if (tone === "flat") stroke = "var(--flat)";
+  else {
+    const rising = values[values.length - 1] >= values[0];
+    stroke = rising ? "var(--pos)" : "var(--neg)";
+  }
   const id = `curve-${Math.random().toString(36).slice(2, 9)}`;
 
   // gridlines + y labels — fewer of them when the plot is short, so the

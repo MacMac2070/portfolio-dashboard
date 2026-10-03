@@ -35,7 +35,7 @@ import store
 QUOTE_SECONDS = 60.0
 HISTORY_DAYS = 30
 FIRST_RETRY_SECONDS = 15.0
-BREAKER = "yfinance"        # shared with every other module that asks Yahoo
+BREAKER = "yfinance"        # shared by the panels; portfolio quotes and FX keep their own
 # The sterling crosses the benchmark restates a foreign index with. Yahoo's
 # GBPUSD=X is dollars per pound; a rate into GBP is its reciprocal.
 FX_SYMBOLS = ("GBPUSD=X", "GBPEUR=X", "GBPHKD=X", "GBPSGD=X", "GBPJPY=X", "GBPKRW=X")

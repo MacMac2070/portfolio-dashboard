@@ -52,11 +52,93 @@ QUOTE_SYMBOLS: dict[int, str] = {
 
 BASE = "GBP"
 FX_CURRENCIES = ("USD", "HKD", "EUR", "SGD", "JPY")
-BREAKER = "yfinance"        # shared with every other module that asks Yahoo
+# Its own breaker, not the "yfinance" one news, the watchlist and the markets
+# panel share: three failed headline fetches must not freeze repricing.
+BREAKER = "yfinance.quotes"
+# FX on its own again: the feed asks for quotes and then FX every cycle, and
+# one Yahoo outage must not be counted twice against the same breaker.
+FX_BREAKER = "yfinance.fx"
+# An intraday FX print this far from the day's reference rate is a bad tick,
+# not a market move — sterling does not gap 5% in a lunchtime.
+FX_INTRADAY_TOLERANCE = 0.05
+
+_unmapped_logged: set[int] = set()
 
 
 def _obb():
     return providers.obb()
+
+
+def quote_symbol(con_id: int) -> str | None:
+    """The yfinance symbol for a held contract, or None if nobody knows it.
+
+    QUOTE_SYMBOLS wins: it carries the venue lines that took probing to find
+    (SMSN.IL, HY9H.F). The universe fills in any contract the dict has not
+    met, so a new holding is repriced from the day it appears rather than
+    sitting silently at its statement mark until someone edits this file.
+    """
+    symbol = QUOTE_SYMBOLS.get(con_id)
+    if symbol:
+        return symbol
+    import universe  # deferred: universe pulls regions and the venue table
+    for t in universe.TICKERS.values():
+        if t.con_id == con_id and t.symbol:
+            return t.symbol
+    if con_id not in _unmapped_logged:
+        _unmapped_logged.add(con_id)
+        log.warning("no yfinance symbol for conId %s; it stays at its statement mark", con_id)
+    return None
+
+
+def _wanted(con_ids: list[int]) -> dict[int, str]:
+    out = {}
+    for con_id in con_ids:
+        symbol = quote_symbol(con_id)
+        if symbol:
+            out[con_id] = symbol
+    return out
+
+
+def fx_intraday(currencies) -> dict[str, float]:
+    """Delayed intraday {currency: rate into GBP} from yfinance's =X pairs.
+
+    openbb's quote endpoint returns only a prior close for currency pairs, so
+    this goes to the library directly, the way desk.py does. Anything that is
+    not a finite positive number is left out; the caller overlays what comes
+    back on the day's reference rates and keeps those for the rest.
+    """
+    pairs = {c.upper(): f"{BASE}{c.upper()}=X" for c in currencies
+             if c and c.upper() != BASE}
+    if not pairs:
+        return {}
+    breaker = resilience.get(FX_BREAKER)
+    if not breaker.allow():
+        log.info("intraday FX: %s; keeping the reference rates", breaker.reason())
+        return {}
+    out: dict[str, float] = {}
+    try:
+        import yfinance as yf
+        tickers = yf.Tickers(" ".join(pairs.values())).tickers
+        for currency, pair in pairs.items():
+            ticker = tickers.get(pair)
+            if ticker is None:
+                continue
+            try:
+                per_pound = _finite(ticker.fast_info.last_price)
+            except Exception as exc:
+                log.debug("intraday FX %s failed: %s", pair, exc)
+                continue
+            if per_pound and per_pound > 0:
+                out[currency] = 1.0 / per_pound
+        # No prints at all is a closed market (a weekend, a holiday), not an
+        # outage: the reference rates carry on and the breaker is left alone.
+        # Only a failed request counts against it.
+        if out:
+            breaker.record_success()
+    except Exception as exc:
+        log.warning("intraday FX unavailable: %s", exc)
+        breaker.record_failure(exc)
+    return out
 
 
 def _finite(value) -> float | None:
@@ -74,7 +156,7 @@ def fx_rates(fallback: dict[str, float]) -> tuple[dict[str, float], str]:
     want is its reciprocal.
     """
     rates = {BASE: 1.0}
-    breaker = resilience.get(BREAKER)
+    breaker = resilience.get(FX_BREAKER)
     if not breaker.allow():
         log.info("FX: %s; using the broker's rates", breaker.reason())
     else:
@@ -133,7 +215,7 @@ def prior_closes(con_ids: list[int]) -> dict[int, dict]:
     Either value may be None — thinly-quoted ETFs routinely return a prior close
     with no live price, which the caller repairs using IBKR's market price.
     """
-    wanted = {c: QUOTE_SYMBOLS[c] for c in con_ids if c in QUOTE_SYMBOLS}
+    wanted = _wanted(con_ids)
     if not wanted:
         return {}
 
@@ -188,7 +270,7 @@ def price_series(con_ids: list[int], days: int = 30) -> dict[int, list[float]]:
     """
     from datetime import date, timedelta
 
-    wanted = {c: QUOTE_SYMBOLS[c] for c in con_ids if c in QUOTE_SYMBOLS}
+    wanted = _wanted(con_ids)
     if not wanted:
         return {}
 

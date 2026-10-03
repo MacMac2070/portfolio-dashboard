@@ -609,7 +609,7 @@ class LiveFeed:
                 "gross_position_value": gross,
                 "gateway": "ok",
             },
-            "kpis": agg["kpis"],
+            "kpis": derive.attach_headline_returns(agg["kpis"]),
             "positions": positions,
             "regions": agg["regions"],
             "sectors": agg["sectors"],
