@@ -121,6 +121,9 @@ TRADES = (
     (("deposit", 2, 1), "HY9H", "BUY", 80), (("deposit", 2, 2), "IUCS", "BUY", 250),
     (("deposit", 3, 1), "AAPL", "BUY", 3),
     (32, "293", "SELL", 300), (55, "INTC", "SELL", 10), (72, "AMZN", "SELL", 2.5),
+    # Late in the window, so the ledger reaches the positions' date and
+    # reconcile's stores.asof check (ledger lag vs positions) has a fresh store.
+    (88, "AAPL", "BUY", 2),
 )
 
 # (key, ex-date index, pay-date index, gross rate per share, withholding rate)
@@ -131,6 +134,7 @@ DIVIDENDS = (
     ("3115", 60, 74, 0.40, 0.0), ("C6L", 58, 66, 0.30, 0.0),
     ("ES3", 62, 68, 0.06, 0.0), ("SMSN", 50, 63, 0.25, WHT_RATE),
     ("HY9H", 66, 75, 0.60, WHT_RATE),
+    ("GOOGL", 80, 88, 0.21, WHT_RATE),     # keeps the cash store current too
 )
 MARKET_DATA_FEE_USD = -4.50
 
